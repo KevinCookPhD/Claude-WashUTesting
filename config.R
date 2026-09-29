@@ -10,7 +10,7 @@ dataDir <- paste0(baseDir,'/data')
 figureDir <- paste0(dataDir,'/figures')
 
 # Input files (inside dataDir). Edit the filename to match yours.
-actigraphyFile <- paste0(dataDir,'/actigraphy.csv')
+actigraphyFile <- paste0(dataDir,'/WashU_Actigraphy_Total.csv')
 
 # Any count below this is shown as "<minCell" in printed diagnostics,
 # so output is safe to paste back into the chat.
