@@ -1,0 +1,19 @@
+# Data must never enter the repo. Data lives in the OneDrive project folder (see config.R).
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.rds
+*.rda
+*.RData
+*.sav
+*.gt3x
+*.agd
+*.nii
+*.nii.gz
+data/
+
+# R session files
+.Rhistory
+.Rproj.user/
+.Rapp.history
