@@ -71,8 +71,7 @@ SAVE_FIGS                 <- FALSE  # TRUE: write .tif files to figureDir
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
-RUN_MAIN_EFFECT_FDR       <- TRUE   # slow (~15 min): lmer + car for ALL edges -> Table 3 footnotes
-RUN_SENSITIVITY           <- TRUE   # section 9 (each scan ~1-2 min)
+RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges (slow serially; fast with N_CORES, cached)
 RUN_QC_COVARIATE_CONTROL  <- FALSE  # needs finalVol / tSNR for fetal scans (section 9e)
 N_CORES                   <- max(1, parallel::detectCores() - 1, na.rm = TRUE)  # cores for the edge-wise loops; 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
@@ -643,58 +642,47 @@ show_fig("Homotopic2Groups_UPDATE.tiff", 19.5, 6, function() print(p_homo))
 ###############################################################################
 # 5. PRETERM ONLY: PMA x DEGREE OF PREMATURITY, ALL EDGES
 #    Model (per edge):  FC ~ scanner + PMA * BirthCat,  random intercept/infant
-#    Interaction tested with a 2-df Wald chi-square (= 2 x the lme F), then FDR
-#    across all 3,003 edges. In this parameterization the PMA coefficient is the
-#    EPT slope and the interaction coefficients are VPT/MPT slope minus EPT slope.
+#    Fit with lmer; the interaction is tested with a Type II Wald chi-square
+#    (car::Anova, 2 df), then FDR across all 3,003 edges. The same test supplies
+#    the Table 3 statistics, so selection and reporting use one method. In this
+#    parameterization the PMA coefficient is the EPT slope and the interaction
+#    coefficients are VPT/MPT slope minus EPT slope.
 ###############################################################################
 
-# Generic scan over all edges: Wald chi-square for one model term (REML lme).
+# Generic scan over all edges: Type II Wald chi-square for one term of an lmer model
+# (REML fit, random intercept per infant added to the fixed-effects formula `fml`).
+# Used for the sensitivity analyses in section 9; the primary scan below is
+# the same test computed together with the Table 3 statistics.
 wald_scan <- function(d0, fml, term) {
-  key <- paste(data_key, paste(deparse(fml), collapse = ""), term, table_key(d0))
+  key <- paste(data_key, paste(deparse(fml), collapse = ""), term, table_key(d0), "lmer+car")
   cached("waldScan", key = key, wald_scan_run(d0, fml, term))
 }
 wald_scan_run <- function(d0, fml, term) {
+  fml_re <- update(fml, . ~ . + (1 | shortID))
   out <- par_lapply(allConn, function(cn) {
     d <- d0; d$FCz <- as.numeric(goodFCData[d$longID, cn])
-    m <- tryCatch(lme(fml, random = ~ 1 | shortID, data = d, method = "REML", control = ctrl), error = function(e) NULL)
-    if (is.null(m)) return(c(chi = NA, df = NA, p = NA))
-    an  <- anova(m, Terms = term)
-    chi <- an[["numDF"]] * an[["F-value"]]
-    c(chi = chi, df = an[["numDF"]], p = pchisq(chi, an[["numDF"]], lower.tail = FALSE))
+    tryCatch({
+      m  <- suppressMessages(suppressWarnings(lmer(fml_re, data = d)))
+      an <- car::Anova(m, type = "II", test = "Chisq")
+      c(chi = an[term, "Chisq"], df = an[term, "Df"], p = an[term, "Pr(>Chisq)"])
+    }, error = function(e) c(chi = NA, df = NA, p = NA))
   })
   res <- data.frame(Connection = allConn, do.call(rbind, out), row.names = NULL)
   res$pAdj <- p.adjust(res$p, "fdr")
   res
 }
 
-fml_main <- FCz ~ scanner + ScanPMA * BirthCat
-intxRes  <- wald_scan(pt, fml_main, "ScanPMA:BirthCat")                 # ~75 seconds
-sigEdges <- intxRes$Connection[intxRes$pAdj < .05 & !is.na(intxRes$pAdj)]
-c(failed_fits = sum(is.na(intxRes$p)), uncorrected_p05 = sum(intxRes$p < .05, na.rm = TRUE), fdr05 = length(sigEdges))
+fml_main <- FCz ~ scanner + ScanPMA * BirthCat       # also used for Panel B and the slope tables
 
-# Order for tables and figures: orbitofrontal/rectus-only edges first, then the rest.
-# Set `edge_order` to a vector of edge names to override.
-edge_order <- NULL
-if (is.null(edge_order)) {
-  if (length(sigEdges) > 0) {
-  is_orb <- sapply(strsplit(sigEdges, "_", fixed = TRUE), function(p) all(grepl("^(ORB|REC)", p)))
-  sigEdges <- c(sigEdges[is_orb], sigEdges[!is_orb])
-  }
-} else {
-  stopifnot(setequal(edge_order, sigEdges)); sigEdges <- edge_order
-}
-intxRes[match(sigEdges, intxRes$Connection), ]
-
-## ---- 5a. Table 3 -------------------------------------------------------------
-# For each edge: lmer + Type II Wald chi-square (the paper's reported statistics).
+## ---- 5a. Statistics for every edge (primary scan + Table 3 columns) ---------
 #   PMA_B / Scanner_B : fixed-effect coefficients (PMA = EPT slope; scanner = 3T - 1.5T)
-#   Prem_chi2         : main effect of prematurity group, chi2(2)
-#   Intx_chi2         : PMA x prematurity, chi2(2)
+#   Prem_chi2         : main effect of prematurity group, chi2(2)  (Type II)
+#   Intx_chi2         : PMA x prematurity, chi2(2)                 (Type II)
 tab3_row <- function(cn) {
   na_row <- data.frame(Connection = cn, PMA_B = NA, PMA_p = NA, Scanner_B = NA, Scanner_p = NA,
                        Prem_chi2 = NA, Prem_p = NA, Intx_chi2 = NA, Intx_p = NA)
   d <- pt; d$FC <- as.numeric(goodFCData[d$longID, cn])
-  out <- tryCatch({
+  tryCatch({
     m  <- suppressMessages(suppressWarnings(lmer(FC ~ ScanPMA + scanner + BirthCat + ScanPMA:BirthCat + (1 | shortID), data = d)))
     cf <- summary(m)$coefficients
     an <- car::Anova(m, type = "II", test = "Chisq")
@@ -704,26 +692,37 @@ tab3_row <- function(cn) {
                Prem_chi2 = an["BirthCat", "Chisq"], Prem_p = an["BirthCat", "Pr(>Chisq)"],
                Intx_chi2 = an["ScanPMA:BirthCat", "Chisq"], Intx_p = an["ScanPMA:BirthCat", "Pr(>Chisq)"])
   }, error = function(e) na_row)
-  out
 }
 
-tab3 <- do.call(rbind, lapply(sigEdges, tab3_row))
-tab3$Intx_pAdj <- intxRes$pAdj[match(tab3$Connection, intxRes$Connection)]   # FDR over 3,003 edges (lme-based test above)
+# ~10-20 min on one core; parallel + cached after the first run
+tab3_all <- cached("tab3_all", key = paste(data_key, "tab3_row"),
+                   do.call(rbind, par_lapply(allConn, tab3_row, export = c("goodFCData", "scn_term", "pt"))))
+for (v in c("PMA", "Scanner", "Prem", "Intx")) tab3_all[[paste0(v, "_pAdj")]] <- p.adjust(tab3_all[[paste0(v, "_p")]], "fdr")
 
-if (RUN_MAIN_EFFECT_FDR) {
-  # Same statistics for ALL edges so every column can be FDR-corrected over 3,003 edges.
-  tab3_all <- cached("tab3_all", key = paste(data_key, "tab3_row"),
-                     do.call(rbind, par_lapply(allConn, tab3_row,
-                                               export = c("goodFCData", "scn_term", "pt"))))
-  for (v in c("PMA", "Scanner", "Prem", "Intx")) tab3_all[[paste0(v, "_pAdj")]] <- p.adjust(tab3_all[[paste0(v, "_p")]], "fdr")
-  adj_cols <- c("PMA_pAdj", "Scanner_pAdj", "Prem_pAdj")
-  tab3[adj_cols] <- tab3_all[match(tab3$Connection, tab3_all$Connection), adj_cols]
-  # Footnote numbers: smallest FDR-adjusted p among the significant edges, for each effect
-  print(sapply(tab3[adj_cols], min, na.rm = TRUE))
-  # Consistency check: how many edges are FDR-significant for the interaction under lmer + car?
-  print(c(fdr05_lmer_car = sum(tab3_all$Intx_pAdj < .05, na.rm = TRUE),
-          overlap_with_sigEdges = sum(tab3_all$Connection[tab3_all$Intx_pAdj < .05] %in% sigEdges)))
+## ---- 5b. Primary result: PMA x prematurity, FDR across all edges ------------
+intxRes  <- data.frame(Connection = tab3_all$Connection, chi = tab3_all$Intx_chi2, df = 2,
+                       p = tab3_all$Intx_p, pAdj = tab3_all$Intx_pAdj)
+sigEdges <- intxRes$Connection[intxRes$pAdj < .05 & !is.na(intxRes$pAdj)]
+c(failed_fits = sum(is.na(intxRes$p)), uncorrected_p05 = sum(intxRes$p < .05, na.rm = TRUE), fdr05 = length(sigEdges))
+
+# Order for tables and figures: orbitofrontal/rectus-only edges first, then the rest.
+# Set `edge_order` to a vector of edge names to override.
+edge_order <- NULL
+if (is.null(edge_order)) {
+  if (length(sigEdges) > 0) {
+    is_orb <- sapply(strsplit(sigEdges, "_", fixed = TRUE), function(p) all(grepl("^(ORB|REC)", p)))
+    sigEdges <- c(sigEdges[is_orb], sigEdges[!is_orb])
+  }
+} else {
+  stopifnot(setequal(edge_order, sigEdges)); sigEdges <- edge_order
 }
+intxRes[match(sigEdges, intxRes$Connection), ]
+
+## ---- 5c. Table 3 -------------------------------------------------------------
+tab3 <- tab3_all[match(sigEdges, tab3_all$Connection), ]
+# Footnote numbers: smallest FDR-adjusted p among the significant edges, for each effect
+adj_cols <- c("PMA_pAdj", "Scanner_pAdj", "Prem_pAdj")
+sapply(tab3[adj_cols], min, na.rm = TRUE)
 
 tab3_display <- data.frame(
   `Region 1` = sapply(strsplit(tab3$Connection, "_", fixed = TRUE), function(p) full_name(p[1])),
