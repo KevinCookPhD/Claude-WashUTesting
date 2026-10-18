@@ -7,6 +7,8 @@
 # Replaces protectTrajectoriesAnalyses.R and the code blocks developed in chat.
 # Run it interactively (RStudio: Ctrl+Enter by section, or Source with Echo) so
 # the summary numbers print; results are also kept in named objects.
+# SPEED: the edge-wise loops run in parallel (N_CORES) and slow results are saved
+# to figureDir/cache and reloaded on later runs (USE_CACHE); see section 0.
 #
 # DESIGN IN ONE PARAGRAPH
 #   Fetal scans (all 1.5T) and preterm scans (1.5T or 3T; 1-4 scans per infant)
@@ -72,6 +74,8 @@ RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (s
 RUN_MAIN_EFFECT_FDR       <- TRUE   # slow (~15 min): lmer + car for ALL edges -> Table 3 footnotes
 RUN_SENSITIVITY           <- TRUE   # section 9 (each scan ~1-2 min)
 RUN_QC_COVARIATE_CONTROL  <- FALSE  # needs finalVol / tSNR for fetal scans (section 9e)
+N_CORES                   <- max(1, parallel::detectCores() - 1, na.rm = TRUE)  # cores for the edge-wise loops; 1 = serial
+USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
 
 ## ---- Paths -----------------------------------------------------------------
 mainDirs <- c("C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/Projects/Active Projects/Protect Trajectories",
@@ -129,6 +133,48 @@ show_fig <- function(file, w, h, draw, res = 600) {
 
 # p-value formatting for tables: "<.001" or ".034"
 fmt_p <- function(p) ifelse(p < .001, "<.001", sub("^0", "", sprintf("%.3f", p)))
+
+## ---- Speed: parallel loops and cached results -------------------------------
+# par_lapply(): lapply() over edges, spread across N_CORES. Linux/Mac use forked
+# workers (they see all objects); Windows starts a cluster and sends it the
+# objects named in `export` (the data and settings the edge functions use).
+# Progress messages are only printed when N_CORES = 1.
+par_lapply <- function(X, FUN, export = c("goodFCData", "ctrl", "scn_term", "scanInfo", "pt"), ...) {
+  if (N_CORES <= 1) return(lapply(X, FUN, ...))
+  message("Fitting ", length(X), " edges on ", N_CORES, " cores...")
+  if (.Platform$OS.type == "unix") {
+    res <- parallel::mclapply(X, FUN, ..., mc.cores = N_CORES)
+    bad <- vapply(res, inherits, NA, what = "try-error")
+    if (any(bad)) stop("Parallel worker failed: ", as.character(res[[which(bad)[1]]]))
+    return(res)
+  }
+  cl <- parallel::makeCluster(N_CORES)
+  on.exit(parallel::stopCluster(cl))
+  parallel::clusterEvalQ(cl, { library(nlme); library(lmerTest); library(car) })
+  parallel::clusterExport(cl, export, envir = globalenv())
+  parallel::parLapply(cl, X, FUN, ...)
+}
+
+# cached(): run `expr` once and save the result to figureDir/cache. Next time the
+# same name + key is found on disk and loaded instead of recomputed. The key
+# fingerprints the data, so changed data gets a new file automatically. If you
+# change the MODEL CODE itself, delete figureDir/cache (or set USE_CACHE <- FALSE).
+cache_dir <- file.path(figureDir, "cache")
+dir.create(cache_dir, showWarnings = FALSE)
+cached <- function(name, key, expr) {
+  h <- sprintf("%08x", as.integer(sum(utf8ToInt(key) * seq_along(utf8ToInt(key))) %% 2^31))
+  f <- file.path(cache_dir, paste0(name, "_", h, ".rds"))
+  if (USE_CACHE && file.exists(f)) { message("Loaded cached result: ", basename(f)); return(readRDS(f)) }
+  val <- expr                                   # evaluated only when there is no cache
+  if (USE_CACHE) saveRDS(val, f)
+  val
+}
+# Fingerprint of a scan table: row count plus sums of its numeric columns and factor codes
+table_key <- function(d) {
+  num <- sum(vapply(d[vapply(d, is.numeric, NA)], sum, 0, na.rm = TRUE))
+  fac <- sum(vapply(d[vapply(d, is.factor, NA)], function(f) sum(as.integer(f), na.rm = TRUE), 0))
+  sprintf("n%d_%.8g_%.8g", nrow(d), num, fac)
+}
 
 
 ###############################################################################
@@ -253,7 +299,8 @@ harmDemoTemp  <- subset(harmDemo, select = -c(finalVol, scanDate, kidokoro, birt
 finalHarmData <- merge(harmDemoTemp, harmFC, by.x = "fullID", by.y = "row.names")
 featCols      <- (ncol(harmDemoTemp) + 1):ncol(finalHarmData)
 
-combat_result <- longCombat(
+combat_result <- cached("longCombat", key = paste(table_key(finalHarmData[, -featCols]), sum(as.matrix(finalHarmData[, featCols]))),
+                        longCombat(
   idvar    = "shortID",
   timevar  = "scanNo",
   batchvar = "scanner",
@@ -262,7 +309,7 @@ combat_result <- longCombat(
   ranef    = "(1|shortID) + (0 + preterm | subgroup_pt)",
   data     = finalHarmData,
   verbose  = TRUE
-)
+))
 harmonized <- combat_result$data_combat
 
 ## ---- Harmonization checks (supplement) -------------------------------------
@@ -381,6 +428,9 @@ pt <- droplevels(scanInfo[is_pt, ])
 stopifnot(!anyNA(pt$BirthCat),
           all(tapply(pt$BirthPMA, pt$shortID, function(x) diff(range(x))) < 1e-8))   # one birth PMA per infant
 
+# Fingerprint of the analysis data; used to name cached results
+data_key <- paste(table_key(scanInfo), table_key(pt), nrow(goodFCData), ncol(goodFCData), sum(as.matrix(goodFCData)))
+
 ## ---- 3d. Table 1: sample description (infant level) ------------------------
 group_counts <- function(d) rbind(scans   = table(d$BirthCat),
                                   infants = tapply(d$shortID, d$BirthCat, function(x) length(unique(x))))
@@ -461,10 +511,9 @@ fit_fetal_edge <- function(cn, extra = character(0), data = scanInfo) {
              emmMean.Fetal = eF[1], emmSE.Fetal = eF[2], emmMean.Preterm = eP[1], emmSE.Preterm = eP[2])
 }
 
-fetalRes <- do.call(rbind, lapply(seq_along(allConn), function(i) {
-  if (i %% 250 == 0) message("Fetal vs preterm: edge ", i, " of ", length(allConn))
-  fit_fetal_edge(allConn[i])
-}))
+fetalRes <- cached("fetalRes", key = paste(data_key, "FC~ScanPMA+scanner+scanType"),
+                   do.call(rbind, par_lapply(allConn, fit_fetal_edge,
+                                             export = c("goodFCData", "ctrl", "scn_term", "scanInfo"))))
 fetalRes$scanPMAp.Adj  <- p.adjust(fetalRes$scanPMAp,  method = "fdr")
 fetalRes$scanTypep.Adj <- p.adjust(fetalRes$scanTypep, method = "fdr")
 
@@ -599,7 +648,11 @@ show_fig("Homotopic2Groups_UPDATE.tiff", 19.5, 6, function() print(p_homo))
 
 # Generic scan over all edges: Wald chi-square for one model term (REML lme).
 wald_scan <- function(d0, fml, term) {
-  out <- lapply(allConn, function(cn) {
+  key <- paste(data_key, paste(deparse(fml), collapse = ""), term, table_key(d0))
+  cached("waldScan", key = key, wald_scan_run(d0, fml, term))
+}
+wald_scan_run <- function(d0, fml, term) {
+  out <- par_lapply(allConn, function(cn) {
     d <- d0; d$FCz <- as.numeric(goodFCData[d$longID, cn])
     m <- tryCatch(lme(fml, random = ~ 1 | shortID, data = d, method = "REML", control = ctrl), error = function(e) NULL)
     if (is.null(m)) return(c(chi = NA, df = NA, p = NA))
@@ -657,10 +710,9 @@ tab3$Intx_pAdj <- intxRes$pAdj[match(tab3$Connection, intxRes$Connection)]   # F
 
 if (RUN_MAIN_EFFECT_FDR) {
   # Same statistics for ALL edges so every column can be FDR-corrected over 3,003 edges.
-  tab3_all <- do.call(rbind, lapply(seq_along(allConn), function(i) {
-    if (i %% 250 == 0) message("Table 3 statistics: edge ", i, " of ", length(allConn))
-    tab3_row(allConn[i])
-  }))
+  tab3_all <- cached("tab3_all", key = paste(data_key, "tab3_row"),
+                     do.call(rbind, par_lapply(allConn, tab3_row,
+                                               export = c("goodFCData", "scn_term", "pt"))))
   for (v in c("PMA", "Scanner", "Prem", "Intx")) tab3_all[[paste0(v, "_pAdj")]] <- p.adjust(tab3_all[[paste0(v, "_p")]], "fdr")
   adj_cols <- c("PMA_pAdj", "Scanner_pAdj", "Prem_pAdj")
   tab3[adj_cols] <- tab3_all[match(tab3$Connection, tab3_all$Connection), adj_cols]
