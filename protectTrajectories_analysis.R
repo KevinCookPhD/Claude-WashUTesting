@@ -705,24 +705,39 @@ intxRes  <- data.frame(Connection = tab3_all$Connection, chi = tab3_all$Intx_chi
 sigEdges <- intxRes$Connection[intxRes$pAdj < .05 & !is.na(intxRes$pAdj)]
 c(failed_fits = sum(is.na(intxRes$p)), uncorrected_p05 = sum(intxRes$p < .05, na.rm = TRUE), fdr05 = length(sigEdges))
 
-# Order for tables and figures (top to bottom / left to right):
-#   1) other frontal edges, 2) orbitofrontal/rectus-only edges, 3) the three "oddballs"
-#   (precentral, superior parietal-Heschl, supramarginal).
-# Set `edge_order` to a vector of edge names to override.
-oddball_edges <- c("PreCG.L_ORBmid.R", "SPG.L_HES.R", "SMG.L_SMG.R")
-edge_order <- NULL
-if (is.null(edge_order)) {
-  if (length(sigEdges) > 0) {
-    is_orb <- sapply(strsplit(sigEdges, "_", fixed = TRUE), function(p) all(grepl("^(ORB|REC)", p)))
-    is_odd <- sigEdges %in% oddball_edges
-    sigEdges <- c(sigEdges[!is_orb & !is_odd],            # other frontal edges
-                  sigEdges[is_orb & !is_odd],             # orbitofrontal / rectus
-                  oddball_edges[oddball_edges %in% sigEdges])
-  }
-} else {
-  stopifnot(setequal(edge_order, sigEdges)); sigEdges <- edge_order
+# ORDER OF THE SIGNIFICANT EDGES for Table 3, Fig. 3B (left to right, top to bottom),
+# the BrainNet file and the slope tables. EDIT THIS LIST to reorder: keep one edge
+# name per line, in the order you want. It must contain exactly the significant
+# edges; if the data change and the set changes, the script stops and tells you
+# which edges to add or remove.
+edge_order <- c(
+  # other frontal
+  "ORBinf.L_OLF.R",
+  # orbitofrontal / rectus
+  "ORBsupb.L_ORBsupb.R",
+  "ORBsupb.L_ORBmid.R",
+  "ORBsupb.L_REC.L",
+  "ORBsupb.L_REC.R",
+  "ORBsupb.R_ORBmid.R",
+  "ORBsupb.R_REC.L",
+  "ORBmid.L_ORBmid.R",
+  "ORBmid.L_REC.L",
+  "ORBmid.L_REC.R",
+  "ORBmid.R_REC.L",
+  "ORBmid.R_REC.R",
+  "REC.L_REC.R",
+  # oddballs
+  "PreCG.L_ORBmid.R",
+  "SPG.L_HES.R",
+  "SMG.L_SMG.R"
+)
+if (!setequal(edge_order, sigEdges)) {
+  stop("edge_order does not match the significant edges.\n  Missing from edge_order: ",
+       paste(setdiff(sigEdges, edge_order), collapse = ", "),
+       "\n  In edge_order but not significant: ", paste(setdiff(edge_order, sigEdges), collapse = ", "))
 }
-sigEdges
+stopifnot(!anyDuplicated(edge_order))
+sigEdges <- edge_order
 intxRes[match(sigEdges, intxRes$Connection), ]
 
 ## ---- 5c. Table 3 -------------------------------------------------------------
