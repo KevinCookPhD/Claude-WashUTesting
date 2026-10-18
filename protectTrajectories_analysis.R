@@ -742,7 +742,7 @@ tab3_display
 # 6. FIG. 3 PANEL B: GROUP TRAJECTORIES FOR THE SIGNIFICANT EDGES (Fisher z)
 #    Points: scans, adjusted to the average of the two scanners.
 #    Lines: model-estimated trends over each group's observed ages (no
-#    extrapolation). Layout: 5 columns; the legend fills the first empty slot.
+#    extrapolation). Layout: panel_ncol columns with one shared legend below.
 ###############################################################################
 
 # Appearance (tune here)
@@ -753,6 +753,7 @@ pt_alpha        <- 0.45    # point opacity
 line_w          <- 1.1     # colored line width
 halo_w          <- 0.2     # extra width of the white halo under each line
 axis_title_size <- 6.5     # used for BOTH axis titles
+panel_ncol      <- 4       # panels per row; 16 edges fit a 4x4 grid exactly (legend goes below the grid)
 
 panel_data <- function(cn) {
   d <- pt; d$FCz <- as.numeric(goodFCData[d$longID, cn])
@@ -806,6 +807,7 @@ make_panel_b <- function(edges) {
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
       coord_cartesian(xlim = c(24, 49), ylim = ylim) +
       labs(x = "PMA at scan (weeks)", y = ylab_for(cn), color = NULL, fill = NULL) +
+      guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, linewidth = 1.2)), fill = "none") +
       theme_classic(base_size = 8) +
       theme(axis.line = element_line(color = "#000000", linewidth = .5),
             axis.ticks = element_line(color = "#000000", linewidth = .4),
@@ -814,18 +816,18 @@ make_panel_b <- function(edges) {
             axis.title.y = element_text(size = axis_title_size, color = "#000000"),
             plot.margin = margin(4, 8, 2, 2),
             panel.grid.major.y = element_line(color = "#e6e6e6", linewidth = .3),
-            legend.position = "none")
+            legend.position = "bottom", legend.text = element_text(size = 7))
   }
   plots <- lapply(seq_along(edges), function(j) edge_plot(edges[j], lab_order[j]))
-  leg <- ggpubr::as_ggplot(ggpubr::get_legend(
-    plots[[1]] + guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, linewidth = 1.2)), fill = "none") +
-      theme(legend.position = "right", legend.text = element_text(size = 7))))
-  nrow_fig <- ceiling((length(plots) + 1) / 5)
-  list(fig = ggpubr::ggarrange(plotlist = c(plots, list(leg)), ncol = 5, nrow = nrow_fig, align = "hv"), nrow = nrow_fig)
+  nrow_fig <- ceiling(length(plots) / panel_ncol)
+  # One shared legend below the grid (taken from the first panel)
+  list(fig = ggpubr::ggarrange(plotlist = plots, ncol = panel_ncol, nrow = nrow_fig, align = "hv",
+                               common.legend = TRUE, legend = "bottom"),
+       nrow = nrow_fig)
 }
 
 panelB <- make_panel_b(sigEdges)
-show_fig("Figure3_PanelB.tiff", 11, 2.5 * panelB$nrow, function() print(panelB$fig))
+show_fig("Figure3_PanelB.tiff", 2.6 * panel_ncol, 2.5 * panelB$nrow + 0.5, function() print(panelB$fig))   # width x height in inches
 
 
 ###############################################################################
