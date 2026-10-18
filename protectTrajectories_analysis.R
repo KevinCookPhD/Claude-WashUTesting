@@ -616,10 +616,12 @@ isHomotopic <- sub("-[LR]$", "", columnMembershipCortOnly$ROI1) == sub("-[LR]$",
 homo <- fetalRes[match(allConn[isHomotopic], fetalRes$Connection), ]
 homo$ROI <- sub("-[LR]$", "", columnMembershipCortOnly$ROI1[isHomotopic])
 homo <- homo[match(bilatROI[bilatROI %in% homo$ROI], homo$ROI), ]       # lobe order
-table2 <- data.frame(Region = sapply(homo$ROI, function(r) roiData$LongLabel[match(paste0(r, "-L"), roiData$FullLabel)]),
+table2 <- data.frame(Region = unname(sapply(homo$ROI, function(r) roiData$LongLabel[match(paste0(r, "-L"), roiData$FullLabel)])),
                      B = round(homo$scanTypeb, 3), SE = round(homo$scanTypese, 3),
                      p = fmt_p(homo$scanTypep), p_FDR = fmt_p(homo$scanTypep.Adj),
-                     Direction = ifelse(homo$scanTypeb > 0, "Preterm > Fetal", "Fetal > Preterm"))
+                     Direction = ifelse(homo$scanTypep.Adj >= .05, "n.s.",          # not significant after FDR
+                                        ifelse(homo$scanTypeb > 0, "Preterm > Fetal", "Fetal > Preterm")),
+                     row.names = NULL)
 table2                                                              # B = Preterm - Fetal (Fisher z); FDR across all 3,003 edges
 c(homotopic_edges = nrow(homo), significant = sum(homo$scanTypep.Adj < .05),
   preterm_greater = sum(homo$scanTypep.Adj < .05 & homo$scanTypeb > 0))
