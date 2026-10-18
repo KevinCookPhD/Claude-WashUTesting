@@ -132,6 +132,8 @@ show_fig <- function(file, w, h, draw, res = 600) {
 
 # p-value formatting for tables: "<.001" or ".034"
 fmt_p <- function(p) ifelse(p < .001, "<.001", sub("^0", "", sprintf("%.3f", p)))
+# 3-decimal formatting that never prints a negative zero ("-0.000" -> "0.000")
+fmt3 <- function(x) sub("^-(0\\.000)$", "\\1", sprintf("%.3f", x))
 
 ## ---- Speed: parallel loops and cached results -------------------------------
 # par_lapply(): lapply() over edges, spread across N_CORES. Linux/Mac use forked
@@ -749,8 +751,8 @@ sapply(tab3[adj_cols], min, na.rm = TRUE)
 tab3_display <- data.frame(
   `Region 1` = sapply(strsplit(tab3$Connection, "_", fixed = TRUE), function(p) full_name(p[1])),
   `Region 2` = sapply(strsplit(tab3$Connection, "_", fixed = TRUE), function(p) full_name(p[2])),
-  `PMA B` = sprintf("%.3f", tab3$PMA_B), `PMA p` = fmt_p(tab3$PMA_p),
-  `Scanner B` = sprintf("%.3f", tab3$Scanner_B), `Scanner p` = fmt_p(tab3$Scanner_p),
+  `PMA B` = fmt3(tab3$PMA_B), `PMA p` = fmt_p(tab3$PMA_p),
+  `Scanner B` = fmt3(tab3$Scanner_B), `Scanner p` = fmt_p(tab3$Scanner_p),
   `Prematurity chi2(2)` = sprintf("%.2f", tab3$Prem_chi2), `Prematurity p` = fmt_p(tab3$Prem_p),
   `Interaction chi2(2)` = sprintf("%.2f", tab3$Intx_chi2),
   `Interaction p` = paste0(fmt_p(tab3$Intx_p), ifelse(!is.na(tab3$Intx_pAdj) & tab3$Intx_pAdj < .05, "*", "")),   # * = FDR < .05
@@ -910,7 +912,7 @@ slope_table <- function(d0, edges, fml, pre = "ScanPMA") {
 
 # Wide display table: "slope [95% CI]" per group and contrast, plus contrast p-values
 slope_wide <- function(tl) {
-  fmt <- function(r) sprintf("%.3f [%.3f, %.3f]", r$est, r$lo, r$hi)
+  fmt <- function(r) sprintf("%s [%s, %s]", fmt3(r$est), fmt3(r$lo), fmt3(r$hi))
   g   <- function(term) tl[tl$term == term, ]
   data.frame(Connection = g("slope_EPT")$Connection,
              EPT = fmt(g("slope_EPT")), VPT = fmt(g("slope_VPT")), MPT = fmt(g("slope_MPT")),
