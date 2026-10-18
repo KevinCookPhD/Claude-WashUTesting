@@ -705,17 +705,24 @@ intxRes  <- data.frame(Connection = tab3_all$Connection, chi = tab3_all$Intx_chi
 sigEdges <- intxRes$Connection[intxRes$pAdj < .05 & !is.na(intxRes$pAdj)]
 c(failed_fits = sum(is.na(intxRes$p)), uncorrected_p05 = sum(intxRes$p < .05, na.rm = TRUE), fdr05 = length(sigEdges))
 
-# Order for tables and figures: orbitofrontal/rectus-only edges first, then the rest.
+# Order for tables and figures (top to bottom / left to right):
+#   1) other frontal edges, 2) orbitofrontal/rectus-only edges, 3) the three "oddballs"
+#   (precentral, superior parietal-Heschl, supramarginal).
 # Set `edge_order` to a vector of edge names to override.
+oddball_edges <- c("PreCG.L_ORBmid.R", "SPG.L_HES.R", "SMG.L_SMG.R")
 edge_order <- NULL
 if (is.null(edge_order)) {
   if (length(sigEdges) > 0) {
     is_orb <- sapply(strsplit(sigEdges, "_", fixed = TRUE), function(p) all(grepl("^(ORB|REC)", p)))
-    sigEdges <- c(sigEdges[is_orb], sigEdges[!is_orb])
+    is_odd <- sigEdges %in% oddball_edges
+    sigEdges <- c(sigEdges[!is_orb & !is_odd],            # other frontal edges
+                  sigEdges[is_orb & !is_odd],             # orbitofrontal / rectus
+                  oddball_edges[oddball_edges %in% sigEdges])
   }
 } else {
   stopifnot(setequal(edge_order, sigEdges)); sigEdges <- edge_order
 }
+sigEdges
 intxRes[match(sigEdges, intxRes$Connection), ]
 
 ## ---- 5c. Table 3 -------------------------------------------------------------
