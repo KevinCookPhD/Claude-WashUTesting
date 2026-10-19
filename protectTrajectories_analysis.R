@@ -31,7 +31,7 @@
 #   1  Read data and scan-level QA
 #   2  Fetal controls + LongComBat harmonization (+ harmonization checks)
 #   3  Analysis data: connection table, scan table, preterm table, Table 1
-#   4  Fetal vs. preterm, all edges (Fig. 2: matrices, chords, homotopic bars; Table 2)
+#   4  Fetal vs. preterm, all edges (Fig. 2: matrices, chords, homotopic bars; Table 2; SI Fig. 2 mean matrices)
 #   5  Preterm only: PMA x prematurity, all edges (Fig. 3, Table 3)
 #   6  Fig. 3 Panel B (group trajectories)
 #   7  Fig. 3 Panel A (BrainNet Viewer edge file)
@@ -878,6 +878,88 @@ if (homo_show_stars) {       # * = FDR-corrected p < .05 (say so in the caption)
              size = homo_star_pt / ggplot2::.pt, color = "#000000")
 }
 show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
+
+## ---- 4f. SI Fig. 2: mean connectivity matrices, one per group (Fetal, EPT, VPT, MPT) ----
+# Full symmetric matrices of mean connectivity (r = tanh of the mean Fisher z per edge, averaged over the
+# group's scans). ROIs are ordered by lobe (same order as the Fig. 2 matrices); the diagonal runs bottom-left
+# to top-right and is drawn gray. Lobe boundaries are black lines; lobe color bars sit on top and on the right.
+# One file per group plus a separate colorbar; panel letters and titles are added by hand (Illustrator).
+RUN_SI_MATRICES <- TRUE
+MAT_SOURCE      <- "harmonized"   # "harmonized" (LongComBat, as in all analyses) or "unharmonized" (data before ComBat)
+mat_lim         <- 1              # color scale runs from -mat_lim to +mat_lim
+mat_ramp        <- c(low = "#2b2d9e", mid = "#ffffff", high = "#e4281f")
+mat_diag_col    <- "#7f7f7f"      # diagonal cells
+mat_label_pt    <- 4              # ROI tick-label size (points); 78 labels per axis need a small size
+mat_line_w      <- 0.25           # lobe boundary lines
+mat_bar_len_in  <- 1.7            # colorbar length, inches
+mat_bar_w_in    <- 0.2            # colorbar width, inches
+
+if (RUN_SI_MATRICES) {
+  fc_mat_src <- if (MAT_SOURCE == "unharmonized") combFCData else goodFCData
+  mat_groups <- list(Fetal = scanInfo$longID[scanInfo$scanType == "Fetal"],
+                     EPT   = scanInfo$longID[scanInfo$BirthCat %in% "EPT"],
+                     VPT   = scanInfo$longID[scanInfo$BirthCat %in% "VPT"],
+                     MPT   = scanInfo$longID[scanInfo$BirthCat %in% "MPT"])
+  stopifnot(all(unlist(mat_groups) %in% rownames(fc_mat_src)))
+  edge_i <- match(sapply(strsplit(allConn, "_", fixed = TRUE), `[`, 1), roi_levels)
+  edge_j <- match(sapply(strsplit(allConn, "_", fixed = TRUE), `[`, 2), roi_levels)
+  stopifnot(!anyNA(edge_i), !anyNA(edge_j))
+  roi_tick <- gsub(".", "-", roi_levels, fixed = TRUE)                              # "PreCG.L" -> "PreCG-L"
+
+  mat_long <- function(ids) {
+    r <- tanh(colMeans(as.matrix(fc_mat_src[ids, allConn])))
+    data.frame(x = c(edge_i, edge_j), y = c(edge_j, edge_i), r = c(r, r))
+  }
+  mat_plot <- function(ids, lobe_labels = FALSE, margin_pt = c(6, 6, 2, 2)) {
+    d    <- mat_long(ids)
+    bnd  <- lobe_end[-length(lobe_end)] + 0.5
+    gap  <- tri_strip_gap; thick <- tri_strip_thick; K <- length(lobe_start); sp <- tri_strip_split / 2
+    seg_lo <- lobe_start - 0.5 + c(0, rep(sp, K - 1)); seg_hi <- lobe_end + 0.5 - c(rep(sp, K - 1), 0)
+    mid  <- (lobe_start + lobe_end) / 2
+    edge <- n_roi + 0.5 + gap + thick                                               # outer edge of the lobe bars
+    p <- ggplot() +
+      geom_tile(data = d, aes(x, y, fill = r), width = 1, height = 1) +
+      geom_tile(data = data.frame(x = seq_len(n_roi)), aes(x, x), fill = mat_diag_col, width = 1, height = 1) +
+      scale_fill_gradient2(low = mat_ramp[["low"]], mid = mat_ramp[["mid"]], high = mat_ramp[["high"]],
+                           midpoint = 0, limits = c(-mat_lim, mat_lim), guide = "none") +
+      geom_hline(yintercept = bnd, linewidth = mat_line_w) + geom_vline(xintercept = bnd, linewidth = mat_line_w) +
+      annotate("rect", xmin = seg_lo, xmax = seg_hi, ymin = n_roi + 0.5 + gap, ymax = edge, fill = lobe_pal[lobe_runs$values]) +   # top bar
+      annotate("rect", xmin = n_roi + 0.5 + gap, xmax = edge, ymin = seg_lo, ymax = seg_hi, fill = lobe_pal[lobe_runs$values]) +   # right bar
+      scale_x_continuous(breaks = seq_len(n_roi), labels = roi_tick, expand = c(0, 0)) +
+      scale_y_continuous(breaks = seq_len(n_roi), labels = roi_tick, expand = c(0, 0)) +
+      coord_cartesian(xlim = c(0.5, n_roi + 0.5), ylim = c(0.5, n_roi + 0.5), expand = FALSE, clip = "off") +
+      labs(x = "ROI1", y = "ROI2") +
+      theme_classic(base_size = 8) +
+      theme(aspect.ratio = 1, plot.margin = margin(margin_pt[1], margin_pt[2], margin_pt[3], margin_pt[4], "pt"),
+            axis.line = element_blank(), panel.border = element_rect(color = "#000000", fill = NA, linewidth = 0.5),
+            axis.ticks = element_line(color = "#000000", linewidth = 0.2), axis.ticks.length = unit(1, "pt"),
+            axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = mat_label_pt, color = "#000000"),
+            axis.text.y = element_text(size = mat_label_pt, color = "#000000"),
+            axis.title = element_text(size = 5, color = "#000000"))
+    if (lobe_labels) p <- p +                                                      # lobe names with leader lines (right of the right bar)
+      annotate("segment", x = edge + 0.5, xend = edge + 6, y = mid, yend = mid, linewidth = 0.3) +
+      annotate("text", x = edge + 7, y = mid, label = lobe_runs$values, hjust = 0, size = 3.4)
+    p
+  }
+  mat_bar <- ggplot(data.frame(y = seq(-mat_lim, mat_lim, length.out = 200)), aes(1, y, fill = y)) +
+    geom_raster() +
+    scale_fill_gradient2(low = mat_ramp[["low"]], mid = mat_ramp[["mid"]], high = mat_ramp[["high"]],
+                         midpoint = 0, limits = c(-mat_lim, mat_lim), guide = "none") +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(position = "right", breaks = seq(-mat_lim, mat_lim, length.out = 5), expand = c(0, 0)) +
+    labs(y = "r") +
+    theme_classic(base_size = 8) +
+    theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.line.x = element_blank(),
+          axis.line.y = element_blank(), axis.title.y.right = element_text(angle = 0, vjust = 0.5, size = 9),
+          axis.text.y.right = element_text(size = 8, color = "#000000"), axis.ticks.y.right = element_line(color = "#000000", linewidth = 0.3),
+          panel.border = element_rect(color = "#000000", fill = NA, linewidth = 0.5))
+
+  print(sapply(mat_groups, length))                                                 # scans per group
+  show_fig("SIFig2_matrix_fetal", 6.8, 6, function() print(mat_plot(mat_groups$Fetal, lobe_labels = TRUE, margin_pt = c(6, 60, 2, 2))))
+  for (g in c("EPT", "VPT", "MPT"))
+    local({ gg <- g; show_fig(paste0("SIFig2_matrix_", tolower(gg)), 6, 6, function() print(mat_plot(mat_groups[[gg]]))) })
+  show_fig("SIFig2_colorbar", mat_bar_w_in + 0.9, mat_bar_len_in + 0.3, function() print(mat_bar))
+}
 
 
 ###############################################################################
