@@ -871,17 +871,15 @@ show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 ## ---- 4f. Figure 2 assembled: A = preterm (top), B = fetal (bottom), C = homotopic bars -------------
 # Each piece (chord diagram + triangular matrix per group, and the homotopic chart) is drawn at its own design size
 # (the sizes used for the separate files above), trimmed, and placed in one figure, so the proportions of the text
-# stay as in the separate pieces. Boxes with rounded corners frame A, B and C. The chords are placed as pictures; the
+# stay as in the separate pieces. The chords are placed as pictures; the
 # separate Fig2_chord_* files remain available as vectors for editing. Whole-figure size is set by fig2_box_h_in.
 RUN_FIG2_ASSEMBLY <- TRUE
 fig2_box_h_in   <- 4.2    # base height of a box, inches: sets the size of the matrices (and the first guess for the chords)
+fig2_matrix_scale <- 0.97 # matrix height relative to the base height (content_h); 1.1 makes it larger next to the chord
 fig2_chord_scale <- 1.15  # chord diagram height relative to that (1 = same as before); the boxes, and panel C, grow with it. The figure gets wider and taller
 fig2_title_h_in <- 0.5    # band at the top of each box for the title (Preterm / Fetal)
-fig2_pad_in     <- 0.15   # space inside the boxes
-fig2_gap_in     <- 0.2    # space between boxes
-fig2_boxes      <- TRUE   # TRUE: rounded frames around A, B and C; FALSE: none (the letters and white space separate the panels)
-fig2_box_col    <- "#808080"   # frame color
-fig2_box_lwd    <- 0.7    # frame line width
+fig2_pad_in     <- 0.15   # space around the pieces
+fig2_gap_in     <- 0.3    # space between the A and B rows and before C
 fig2_title_pt   <- 18     # box titles (points)
 fig2_letter_pt  <- 18     # panel letters (points)
 fig2_dpi        <- 220    # resolution at which the pieces are drawn before they are placed (their design sizes are 6-10 in)
@@ -900,7 +898,7 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
   content_h <- fig2_box_h_in - fig2_title_h_in - fig2_pad_in                   # height available to a matrix
   chord_h   <- content_h * fig2_chord_scale                                    # the chord can be larger than the matrix; the boxes grow to fit it
   box_h     <- fig2_title_h_in + fig2_pad_in + chord_h
-  ch_w  <- chord_h * asp(ch[[1]]); mx_h <- content_h * 0.97; mx_w <- mx_h * asp(mx[[1]])
+  ch_w  <- chord_h * asp(ch[[1]]); mx_h <- content_h * fig2_matrix_scale; mx_w <- mx_h * asp(mx[[1]])
   left_w  <- fig2_pad_in + ch_w + 0.1 + mx_w + fig2_pad_in
   homo_h  <- 2 * box_h + fig2_gap_in - 2 * fig2_pad_in - 0.3
   homo_w  <- homo_h * asp(hm)
@@ -910,21 +908,17 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
   draw_fig2 <- function() {
     grid::grid.newpage()
     u <- function(v) grid::unit(v, "in")
-    box <- function(x, y, w, h) if (fig2_boxes) grid::grid.roundrect(x = u(x), y = u(y), width = u(w), height = u(h), just = c("left", "bottom"),
-                                                      r = grid::unit(0.12, "in"), gp = grid::gpar(col = fig2_box_col, fill = NA, lwd = fig2_box_lwd))
     img <- function(im, x, y, w, h) grid::grid.raster(im, x = u(x), y = u(y), width = u(w), height = u(h), just = c("left", "bottom"), interpolate = TRUE)
     txt <- function(label, x, y, pt, just = "centre") grid::grid.text(label, x = u(x), y = u(y), just = just, gp = grid::gpar(fontsize = pt, fontface = "bold"))
     x0 <- 0.05
     for (k in 1:2) {                                              # k = 1: preterm (top), 2: fetal (bottom)
       y_bot <- 0.05 + (2 - k) * (box_h + fig2_gap_in)
-      box(x0, y_bot, left_w, box_h)
       img(ch[[k]], x0 + fig2_pad_in, y_bot + fig2_pad_in * 0.5, ch_w, chord_h)
       img(mx[[k]], x0 + fig2_pad_in + ch_w + 0.1, y_bot + fig2_pad_in * 0.5 + (chord_h - mx_h) / 2, mx_w, mx_h)
       txt(c("Preterm", "Fetal")[k], x0 + left_w / 2, y_bot + box_h - fig2_title_h_in / 2, fig2_title_pt)
       txt(c("A", "B")[k], x0 + 0.1, y_bot + box_h - 0.08, fig2_letter_pt, just = c("left", "top"))
     }
     xc <- x0 + left_w + fig2_gap_in
-    box(xc, 0.05, right_w, 2 * box_h + fig2_gap_in)
     img(hm, xc + fig2_pad_in, 0.05 + fig2_pad_in, homo_w, homo_h)
     txt("C", xc + 0.1, 0.05 + 2 * box_h + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
   }
