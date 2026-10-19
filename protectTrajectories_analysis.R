@@ -1304,53 +1304,90 @@ if (RUN_EXTRA_CONTROLS) {
 
 ## ---- 9i. Do the fetal-vs-preterm differences depend on distance between ROIs? ----
 # Connectivity usually falls off with distance, so a group difference could simply be larger for
-# short or long connections. For every edge we take the Euclidean distance between the two ROI
-# centroids (coordinate template for gestational age `dist_ga`; the old script used 40 weeks) and
-# relate it to (a) the fetal-vs-preterm difference (beta, preterm minus fetal) and (b) each group's
-# own adjusted mean FC. Spearman correlations are tested with a permutation (Mantel-type) test that
-# shuffles ROI labels, because edges sharing an ROI are not independent; ordinary p-values over
-# 3,003 edges would be far too small.
+# short or long connections. Distances are Euclidean distances between ROI centroids from the
+# age-specific coordinate templates in labelsAndCoords (GA 23-37 and 40 weeks).
+#   (1) Edge level: relate each edge's fetal-vs-preterm difference (beta) and each group's adjusted
+#       mean FC to distance (Spearman; Mantel-type permutation p-values that shuffle ROI labels,
+#       because edges sharing an ROI are not independent).
+#   (2) Sensitivity: the same correlation with distances from every template age.
+#   (3) Scan level: for each scan, the Spearman correlation between its FC and edge distance (using
+#       the template nearest its own PMA) = how strongly its FC falls off with distance. The two
+#       groups are compared with a mixed model adjusted for PMA and scanner.
 if (RUN_DISTANCE_CONTROL) {
-  dist_ga      <- 40       # which coordinate template to use (files ga23..ga37 and ga40 in labelsAndCoords)
-  n_perm       <- 5000     # permutations
-  coord_file   <- file.path(dataDir, "labelsAndCoords", sprintf("ga%dCoords_reformat.csv", dist_ga))
-  coords       <- read.csv(coord_file, stringsAsFactors = FALSE)
-  coord_cols   <- intersect(c("X", "Y", "Z"), names(coords))
-  stopifnot("ROI" %in% names(coords), all(c("X", "Y") %in% coord_cols))
-  message("Distances use coordinate columns: ", paste(coord_cols, collapse = ", "), " (template GA ", dist_ga, ")")
-  xyz <- as.matrix(coords[, coord_cols, drop = FALSE]); rownames(xyz) <- coords$ROI
+  ga_avail <- c(23:37, 40)       # templates that exist (no 38 or 39)
+  dist_ga  <- NA                 # template for part (1); NA = the template nearest the median scan PMA
+  n_perm   <- 5000               # permutations
+  nearest_ga <- function(pma) ga_avail[apply(abs(outer(pma, ga_avail, "-")), 1, which.min)]
+  if (is.na(dist_ga)) dist_ga <- nearest_ga(median(scanInfo$ScanPMA))
 
+  read_xyz <- function(ga) {
+    cd <- read.csv(file.path(dataDir, "labelsAndCoords", sprintf("ga%dCoords_reformat.csv", ga)), stringsAsFactors = FALSE)
+    cc <- intersect(c("X", "Y", "Z"), names(cd))
+    stopifnot("ROI" %in% names(cd), all(c("X", "Y") %in% cc))
+    m <- as.matrix(cd[, cc, drop = FALSE]); rownames(m) <- cd$ROI; m
+  }
   e1 <- columnMembershipCortOnly$ROI1; e2 <- columnMembershipCortOnly$ROI2          # "PreCG-L" format, same order as allConn
-  stopifnot(identical(fetalRes$Connection, allConn), all(c(e1, e2) %in% rownames(xyz)))
-  nodes   <- sort(unique(c(e1, e2)))
-  Dmat    <- as.matrix(dist(xyz[nodes, , drop = FALSE]))                              # node-by-node distances
-  i1 <- match(e1, nodes); i2 <- match(e2, nodes)
-  edge_dist  <- Dmat[cbind(i1, i2)]
-  same_hemi  <- substr(e1, nchar(e1), nchar(e1)) == substr(e2, nchar(e2), nchar(e2))
+  stopifnot(identical(fetalRes$Connection, allConn))
+  nodes <- sort(unique(c(e1, e2))); i1 <- match(e1, nodes); i2 <- match(e2, nodes)
+  Dnode <- lapply(ga_avail, function(ga) {
+    xyz <- read_xyz(ga); stopifnot(all(nodes %in% rownames(xyz)))
+    as.matrix(dist(xyz[nodes, , drop = FALSE]))                                     # node-by-node distances
+  })
+  names(Dnode) <- ga_avail
+  Dedge <- sapply(Dnode, function(D) D[cbind(i1, i2)])                               # edges x templates
+  message("Distances use coordinate columns: ", paste(colnames(read_xyz(ga_avail[1])), collapse = ", "),
+          "; part (1) uses the GA ", dist_ga, " template")
+  same_hemi <- substr(e1, nchar(e1), nchar(e1)) == substr(e2, nchar(e2), nchar(e2))
+  subsets   <- list(`All edges` = seq_along(allConn), `Within hemisphere` = which(same_hemi), `Between hemispheres` = which(!same_hemi))
 
-  outcomes <- list(`Group difference (beta, preterm - fetal)` = fetalRes$scanTypeb,
-                   `Fetal mean FC (adjusted)`   = fetalRes$emmMean.Fetal,
-                   `Preterm mean FC (adjusted)` = fetalRes$emmMean.Preterm)
-
-  # Spearman rho between distance and an outcome, with a node-label permutation p-value
+  ## ---- (1) edge level, one template ----
+  Dmat      <- Dnode[[as.character(dist_ga)]]
+  edge_dist <- Dedge[, as.character(dist_ga)]
+  outcomes  <- list(`Group difference (beta, preterm - fetal)` = fetalRes$scanTypeb,
+                    `Fetal mean FC (adjusted)`   = fetalRes$emmMean.Fetal,
+                    `Preterm mean FC (adjusted)` = fetalRes$emmMean.Preterm)
   mantel_rho <- function(y, idx, nperm = n_perm) {
-    ry  <- rank(y[idx]); obs <- cor(rank(edge_dist[idx]), ry)
+    ry <- rank(y[idx]); obs <- cor(rank(edge_dist[idx]), ry)
     set.seed(2026)
     perm <- replicate(nperm, { p <- sample(length(nodes)); cor(rank(Dmat[cbind(p[i1[idx]], p[i2[idx]])]), ry) })
     c(rho = obs, p_perm = (1 + sum(abs(perm) >= abs(obs))) / (1 + nperm), n_edges = length(idx))
   }
-  subsets <- list(`All edges` = seq_along(allConn), `Within hemisphere` = which(same_hemi), `Between hemispheres` = which(!same_hemi))
   dist_tab <- do.call(rbind, lapply(names(outcomes), function(o) do.call(rbind, lapply(names(subsets), function(g)
     data.frame(Outcome = o, Edges = g, t(mantel_rho(outcomes[[o]], subsets[[g]])), check.names = FALSE)))))
   dist_tab$rho <- round(dist_tab$rho, 3); dist_tab$p_perm <- round(dist_tab$p_perm, 4)
   print(dist_tab)
 
-  # Are the significant fetal-greater and preterm-greater edges at different distances?
-  dir_sig <- ifelse(fetalRes$scanTypeb[sigFetal] > 0, "Preterm greater", "Fetal greater")
+  dir_sig <- ifelse(fetalRes$scanTypeb[sigFetal] > 0, "Preterm greater", "Fetal greater")      # distance of the significant edges, by direction
   print(tapply(edge_dist[sigFetal], dir_sig, function(x) round(c(n = length(x), median = median(x), q25 = quantile(x, .25, names = FALSE), q75 = quantile(x, .75, names = FALSE)), 1)))
   print(wilcox.test(edge_dist[sigFetal] ~ dir_sig))
 
-  # Figure: group difference by distance (binned means with 95% CI, over the scatter of all edges)
+  ## ---- (2) sensitivity: distances from every template age ----
+  rho_by_ga <- data.frame(GA = ga_avail,
+                          rho_beta = sapply(as.character(ga_avail), function(g) cor(Dedge[, g], fetalRes$scanTypeb, method = "spearman")))
+  rho_by_ga$rho_beta <- round(rho_by_ga$rho_beta, 3); rownames(rho_by_ga) <- NULL
+  print(rho_by_ga)
+
+  ## ---- (3) scan level: how strongly does each scan's FC fall off with distance? ----
+  FCm      <- as.matrix(goodFCData[scanInfo$longID, allConn])
+  scan_ga  <- nearest_ga(scanInfo$ScanPMA)                                           # template for each scan
+  coupling <- function(idx) {                                                        # Spearman rho of FC vs distance, per scan
+    R <- t(apply(FCm[, idx, drop = FALSE], 1, rank)); out <- numeric(nrow(scanInfo))
+    for (g in unique(scan_ga)) { sc <- which(scan_ga == g)
+      out[sc] <- cor(t(R[sc, , drop = FALSE]), rank(Dedge[idx, as.character(g)]))[, 1] }
+    out
+  }
+  coup_tab <- do.call(rbind, lapply(names(subsets), function(g) {
+    d <- scanInfo; d$coupling <- coupling(subsets[[g]])
+    m  <- lme(coupling ~ ScanPMA + scanner + scanType, random = ~ 1 | shortID, data = d, control = ctrl)
+    tt <- summary(m)$tTable["scanTypePreterm", ]
+    data.frame(Edges = g, fetal_mean_rho = mean(d$coupling[d$scanType == "Fetal"]),
+               preterm_mean_rho = mean(d$coupling[d$scanType == "Preterm"]),
+               b_preterm_minus_fetal = unname(tt["Value"]), se = unname(tt["Std.Error"]), p = unname(tt["p-value"]))
+  }))
+  coup_tab[-1] <- lapply(coup_tab[-1], function(x) signif(x, 3))
+  print(coup_tab)                       # negative rho = FC falls with distance; b > 0 means a weaker fall-off in preterm scans
+
+  ## ---- Figures ----
   dd <- data.frame(dist = edge_dist, beta = fetalRes$scanTypeb)
   dd$bin <- cut(dd$dist, breaks = unique(quantile(dd$dist, seq(0, 1, 0.1))), include.lowest = TRUE)
   bin_df <- do.call(rbind, lapply(split(dd, dd$bin), function(g) data.frame(dist = mean(g$dist), mean = mean(g$beta), se = sd(g$beta) / sqrt(nrow(g)))))
@@ -1360,9 +1397,18 @@ if (RUN_DISTANCE_CONTROL) {
     geom_errorbar(data = bin_df, aes(x = dist, y = mean, ymin = mean - 1.96 * se, ymax = mean + 1.96 * se), width = 0, color = col_preterm, linewidth = 0.6) +
     geom_line(data = bin_df, aes(x = dist, y = mean), color = col_preterm, linewidth = 0.6) +
     geom_point(data = bin_df, aes(x = dist, y = mean), color = col_preterm, size = 1.6) +
-    labs(x = "Distance between ROIs (template units)", y = "Preterm - fetal difference (Fisher z)") +
+    labs(x = paste0("Distance between ROIs (GA ", dist_ga, " template units)"), y = "Preterm - fetal difference (Fisher z)") +
     theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4))
   show_fig("SuppFig_distance", 3.4, 3.0, function() print(p_dist))
+
+  dc <- scanInfo; dc$coupling <- coupling(subsets[["All edges"]])
+  p_coup <- ggplot(dc, aes(ScanPMA, coupling, color = scanType)) +
+    geom_point(alpha = 0.5, size = 0.9, stroke = 0) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.8) +
+    scale_color_manual(values = c(Fetal = col_fetal, Preterm = col_preterm)) +
+    labs(x = "PMA at scan (weeks)", y = "Distance dependence of FC (Spearman rho)", color = NULL) +
+    theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4), legend.position = "bottom")
+  show_fig("SuppFig_distance_coupling", 3.4, 3.2, function() print(p_coup))
 }
 
 ###############################################################################
