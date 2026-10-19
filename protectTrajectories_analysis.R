@@ -874,7 +874,8 @@ show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 # stay as in the separate pieces. Boxes with rounded corners frame A, B and C. The chords are placed as pictures; the
 # separate Fig2_chord_* files remain available as vectors for editing. Whole-figure size is set by fig2_box_h_in.
 RUN_FIG2_ASSEMBLY <- TRUE
-fig2_box_h_in   <- 4.2    # height of the A and B boxes, inches (everything else scales from this)
+fig2_box_h_in   <- 4.2    # base height of a box, inches: sets the size of the matrices (and the first guess for the chords)
+fig2_chord_scale <- 1.3   # chord diagram height relative to that (1 = same as before); the boxes, and panel C, grow with it. The figure gets wider and taller
 fig2_title_h_in <- 0.5    # band at the top of each box for the title (Preterm / Fetal)
 fig2_pad_in     <- 0.15   # space inside the boxes
 fig2_gap_in     <- 0.2    # space between boxes
@@ -893,13 +894,15 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
   hm  <- trim_white(render_piece(function() print(p_homo_h), 6.2, 10))
   asp <- function(im) dim(im)[2] / dim(im)[1]
 
-  content_h <- fig2_box_h_in - fig2_title_h_in - fig2_pad_in
-  ch_w  <- content_h * asp(ch[[1]]); mx_h <- content_h * 0.97; mx_w <- mx_h * asp(mx[[1]])
+  content_h <- fig2_box_h_in - fig2_title_h_in - fig2_pad_in                   # height available to a matrix
+  chord_h   <- content_h * fig2_chord_scale                                    # the chord can be larger than the matrix; the boxes grow to fit it
+  box_h     <- fig2_title_h_in + fig2_pad_in + chord_h
+  ch_w  <- chord_h * asp(ch[[1]]); mx_h <- content_h * 0.97; mx_w <- mx_h * asp(mx[[1]])
   left_w  <- fig2_pad_in + ch_w + 0.1 + mx_w + fig2_pad_in
-  homo_h  <- 2 * fig2_box_h_in + fig2_gap_in - 2 * fig2_pad_in - 0.3
+  homo_h  <- 2 * box_h + fig2_gap_in - 2 * fig2_pad_in - 0.3
   homo_w  <- homo_h * asp(hm)
   right_w <- homo_w + 2 * fig2_pad_in
-  W2 <- left_w + fig2_gap_in + right_w + 0.1; H2 <- 2 * fig2_box_h_in + fig2_gap_in + 0.1
+  W2 <- left_w + fig2_gap_in + right_w + 0.1; H2 <- 2 * box_h + fig2_gap_in + 0.1
 
   draw_fig2 <- function() {
     grid::grid.newpage()
@@ -910,17 +913,17 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
     txt <- function(label, x, y, pt, just = "centre") grid::grid.text(label, x = u(x), y = u(y), just = just, gp = grid::gpar(fontsize = pt, fontface = "bold"))
     x0 <- 0.05
     for (k in 1:2) {                                              # k = 1: preterm (top), 2: fetal (bottom)
-      y_bot <- 0.05 + (2 - k) * (fig2_box_h_in + fig2_gap_in)
-      box(x0, y_bot, left_w, fig2_box_h_in)
-      img(ch[[k]], x0 + fig2_pad_in, y_bot + fig2_pad_in * 0.5, ch_w, content_h)
-      img(mx[[k]], x0 + fig2_pad_in + ch_w + 0.1, y_bot + fig2_pad_in * 0.5 + (content_h - mx_h) / 2, mx_w, mx_h)
-      txt(c("Preterm", "Fetal")[k], x0 + left_w / 2, y_bot + fig2_box_h_in - fig2_title_h_in / 2, fig2_title_pt)
-      txt(c("A", "B")[k], x0 + 0.1, y_bot + fig2_box_h_in - 0.08, fig2_letter_pt, just = c("left", "top"))
+      y_bot <- 0.05 + (2 - k) * (box_h + fig2_gap_in)
+      box(x0, y_bot, left_w, box_h)
+      img(ch[[k]], x0 + fig2_pad_in, y_bot + fig2_pad_in * 0.5, ch_w, chord_h)
+      img(mx[[k]], x0 + fig2_pad_in + ch_w + 0.1, y_bot + fig2_pad_in * 0.5 + (chord_h - mx_h) / 2, mx_w, mx_h)
+      txt(c("Preterm", "Fetal")[k], x0 + left_w / 2, y_bot + box_h - fig2_title_h_in / 2, fig2_title_pt)
+      txt(c("A", "B")[k], x0 + 0.1, y_bot + box_h - 0.08, fig2_letter_pt, just = c("left", "top"))
     }
     xc <- x0 + left_w + fig2_gap_in
-    box(xc, 0.05, right_w, 2 * fig2_box_h_in + fig2_gap_in)
+    box(xc, 0.05, right_w, 2 * box_h + fig2_gap_in)
     img(hm, xc + fig2_pad_in, 0.05 + fig2_pad_in, homo_w, homo_h)
-    txt("C", xc + 0.1, 0.05 + 2 * fig2_box_h_in + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
+    txt("C", xc + 0.1, 0.05 + 2 * box_h + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
   }
   show_fig("Fig2_assembled", W2, H2, draw_fig2, save = TRUE)   # always written to file: drawing this many large pictures in the RStudio plot pane times out
 }
