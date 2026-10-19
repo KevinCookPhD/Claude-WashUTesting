@@ -1140,6 +1140,17 @@ slopesMain_wide
 # 9. SENSITIVITY ANALYSES AND CONTROLS
 #    Each repeats the PMA x prematurity scan under a different specification and
 #    compares the FDR-significant set with the primary result (`sigEdges`).
+#
+#    OVERVIEW (what each check tests and what it showed; details above each block)
+#      9a  clinical cutoffs ........ 9 of the edges FDR-significant; 8 of the 16 hold (cutoff-dependent set)
+#      9b  continuous birth GA ..... 0 significant (the effect is a step, not a linear gradient)
+#      9c  scans after 32 wk PMA ... 6 of 16 hold; same slope pattern (less power)
+#      9d  within/between infant ... omnibus not significant (underpowered); within-infant slopes match
+#      9e  QC covariates ........... NOT RUN (needs finalVol for fetal scans, tSNR, motion)
+#      9f  age-matched fetal/preterm  robust (1,174-1,354 of 1,404 edges stay significant; all same direction)
+#      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted)
+#      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
+#      9i  distance between ROIs ... group differences unrelated to distance
 ###############################################################################
 
 compare_sets <- function(res_alt) {
@@ -1153,6 +1164,15 @@ compare_sets <- function(res_alt) {
 if (RUN_SENSITIVITY) {
 
   ## ---- 9a. Clinical cutoff convention (EPT <28 | VPT 28-<32 | MPT >=32) -----
+  # WHAT IT TESTS: whether the PMA x prematurity result depends on where the group boundaries fall.
+  #   The paper's rule puts infants born at exactly 28.0 wk in EPT and exactly 32.0 wk in VPT; the usual
+  #   clinical convention puts them one group up (6 infants at 28.0 wk, 5 at 32.0 wk). Only group
+  #   membership changes; harmonization is not rerun.
+  # RESULT: 9 edges FDR-significant (primary: 16). 8 of the 16 hold (ORBsupb.L_ORBsupb.R, ORBsupb.L_REC.L,
+  #   ORBsupb.L_REC.R, ORBsupb.R_REC.L, ORBmid.R_REC.R, REC.L_REC.R, SPG.L_HES.R, SMG.L_SMG.R); 1 new edge
+  #   (SFGmed.R_REC.R). The 8 that drop have adjusted p of .055-.234 (two sit just above .05).
+  # INTERPRETATION: the pattern is stable but the exact FDR set depends on the cutoff convention. Report
+  #   the 8 edges that survive both rules as the cutoff-robust core, and state the boundary rule in Methods.
   # Changes group membership of the infants born at exactly 28.0 and 32.0 weeks.
   # Harmonization is NOT rerun (it used the paper's cutoffs).
   pt_clin <- pt; pt_clin$BirthCat <- birth_cat(pt_clin$BirthPMA, rule = "clinical")
@@ -1161,11 +1181,24 @@ if (RUN_SENSITIVITY) {
   cmp_clin <- compare_sets(res_clin); print(cmp_clin)
 
   ## ---- 9b. Birth GA as a continuous moderator (no cutoffs; 1 df) ------------
+  # WHAT IT TESTS: the same question with no cutoffs at all, using birth GA as a continuous moderator
+  #   of the PMA slope (1 df).
+  # RESULT: 0 edges FDR-significant (smallest adjusted p among the 16 edges: .238); 292 edges at raw p < .05.
+  # INTERPRETATION: the effect is a step (MPT differs from EPT and VPT), not a linear gradient across
+  #   birth GA, so a 1-df linear test is the wrong shape and has little power for it. This does not argue
+  #   against the step; report it as a limitation (no linear dose-response with gestational age).
   pt_cont <- pt; pt_cont$GA <- pt_cont$BirthPMA - mean(pt_cont$BirthPMA)
   res_cont <- wald_scan(pt_cont, FCz ~ scanner + ScanPMA * GA, "ScanPMA:GA")
   cmp_cont <- compare_sets(res_cont); print(cmp_cont)
 
   ## ---- 9c. Scans after 32 weeks PMA only ------------------------------------
+  # WHAT IT TESTS: whether the effect depends on the earliest scans (before 32 wk PMA), which exist only in
+  #   EPT and VPT infants and could drive the group differences in slope.
+  # RESULT: 301 scans from 176 infants remain (45 scans dropped). 6 of the 16 edges stay FDR-significant;
+  #   several of the 10 that drop are near misses (adjusted p .052-.081). The group slopes (EPT and VPT near
+  #   zero, MPT steep) and the MPT-EPT contrasts are essentially unchanged.
+  # INTERPRETATION: the pattern does not depend on the earliest scans; the lower count of significant edges
+  #   reflects fewer scans (less power).
   # Drops the earliest EPT/VPT scans (all MPT scans are already later).
   pt32 <- droplevels(pt[pt$ScanPMA > 32, ])
   print(c(scans = nrow(pt32), infants = nlevels(pt32$shortID), dropped = nrow(pt) - nrow(pt32)))
@@ -1175,6 +1208,16 @@ if (RUN_SENSITIVITY) {
   slopes_gt32_wide <- slope_wide(slope_table(pt32, sigEdges, fml_main)); print(slopes_gt32_wide)
 
   ## ---- 9d. Within- vs. between-infant PMA effects ---------------------------
+  # WHAT IT TESTS: whether the MPT steepening reflects change WITHIN infants over time or differences
+  #   BETWEEN infants scanned at different ages. PMA is split into an infant's mean (between) and each
+  #   scan's deviation from that mean (within).
+  # RESULT: infants with 2+ scans: EPT 47, VPT 53, MPT 23. Within-infant omnibus interaction: 0 edges
+  #   FDR-significant (smallest adjusted p .095; 215 edges at raw p < .05). Between-infant: 0 (smallest .61).
+  #   The within-infant slopes show the same pattern as the full sample (MPT about +0.04 to +0.10 per week,
+  #   EPT and VPT near zero), e.g. ORBsupb.L_ORBsupb.R MPT 0.094 within vs. 0.091 overall.
+  # INTERPRETATION: the MPT steepening appears within the same infants, not only between infants, but only
+  #   23 MPT infants have repeat scans, so the omnibus test is underpowered. Report as supportive, not as
+  #   an FDR-significant replication.
   # Splits PMA into an infant's mean (between) and the deviation of each scan
   # from that mean (within). The within term tests change inside the same infants.
   ptw <- pt
@@ -1195,6 +1238,11 @@ if (RUN_SENSITIVITY) {
 }
 
 ## ---- 9e. Fetal vs. preterm with data-quality covariates (pending data) ------
+# WHAT IT TESTS: whether the fetal-vs-preterm group difference is explained by differences in the amount
+#   or quality of data (volumes retained, tSNR, motion) between fetal and preterm scans.
+# STATUS: NOT RUN. Needs a finalVol value for every fetal scan, and tSNR / motion for both groups.
+# EXPECTED USE: compare the number of FDR-significant edges, the direction agreement and the correlation of
+#   the betas with the primary result (same summary as 9f).
 # Adds covariates to the fetal-vs-preterm model and compares the group effect.
 # Requires the covariate for BOTH fetal and preterm scans. finalVol is already in
 # scanInfo (fetal values must be present); add tSNR / motion as new columns, e.g.:
@@ -1238,6 +1286,15 @@ if (RUN_EXTRA_CONTROLS) {
   }
 
   ## ---- 9f. Age-matched fetal vs. preterm (control #3) ---------------------------
+  # WHAT IT TESTS: whether the fetal-vs-preterm difference is an artifact of the groups covering different
+  #   ages (fetal 18.7-40.0 wk, preterm 25.7-48.1 wk). The primary model adjusts for PMA, but this removes
+  #   the age mismatch by design.
+  # RESULT: (A) shared PMA range, 25.7-40.0 wk (171 fetal / 273 preterm scans): 1,416 FDR-significant edges;
+  #   1,354 of the primary 1,404 remain; all 1,404 keep the same direction; correlation of betas 0.997.
+  #   (B) 1:1 matching within 1 wk (166 pairs, PMA 34.2 vs 34.3 wk, SD about 3): 1,196 significant; 1,174 of
+  #   the primary 1,404 remain; all same direction; r = 0.988.
+  # INTERPRETATION: the group difference is not explained by age differences between the groups. Fewer
+  #   significant edges in (B) reflect fewer scans, not a change in the effect.
   # The primary model adjusts for PMA, but the groups do not cover the same ages. Two checks:
   #  A. restrict both groups to the PMA range they share;
   #  B. 1:1 nearest-neighbor matching on PMA within a caliper (greedy, without replacement).
@@ -1270,6 +1327,16 @@ if (RUN_EXTRA_CONTROLS) {
   print(cmp_fetal(res_am_match, n_scans = nrow(si_match)))
 
   ## ---- 9g. Postnatal-age check for PMA x prematurity (control #5) -----------------
+  # WHAT IT TESTS: whether the PMA x prematurity result could be a postnatal-age effect. PMA = birth GA +
+  #   postnatal age, so groups differ in postnatal age at the same PMA (median postnatal age: EPT 10.3,
+  #   VPT 6.3, MPT 3.9 wk; ranges 0.6-21 wk). Postnatal age is 0.92-0.96 correlated with PMA within group,
+  #   so this is a demanding test with wider confidence intervals.
+  # RESULT: (A) adding postnatal age as a covariate: 14 edges FDR-significant, 14 of the 16 retained, 0 new;
+  #   the 2 that drop have adjusted p = .0536. Slopes are unchanged: EPT/VPT near zero, MPT +0.045 to +0.093.
+  #   (B) postnatal age as the time axis instead of PMA (a different hypothesis): 12 significant, 10 of the 16
+  #   retained, 2 new (SFGmed.R_REC.R, PCUN.L_HES.L); the dropped edges are near misses (adjusted p .11-.19).
+  # INTERPRETATION: the effect is not a postnatal-age artifact. (A) is the direct test; (B) answers a
+  #   different question and is expected to differ somewhat.
   # PMA = gestational age at birth + postnatal age, so differences in postnatal age could
   # masquerade as differences in PMA slopes. (A) Add postnatal age as a covariate and retest the
   # interaction; (B) use postnatal age as the time axis instead of PMA.
@@ -1284,6 +1351,15 @@ if (RUN_EXTRA_CONTROLS) {
   cmp_pna_axis <- compare_sets(res_pna_axis); print(cmp_pna_axis)
 
   ## ---- 9h. Unharmonized data with scanner as a covariate (control #11) ------------
+  # WHAT IT TESTS: whether the findings depend on LongComBat. All models include scanner as a fixed effect,
+  #   so this repeats them on the connectivity values BEFORE harmonization. It also addresses the limitation
+  #   that LongComBat does not protect interaction terms.
+  # RESULT: fetal vs. preterm: 1,439 edges significant, all 1,404 primary edges remain, all the same
+  #   direction, correlation of betas 1.000 (scanner is already a covariate and fetal scans are all 1.5T, so
+  #   harmonization changes nothing here). PMA x prematurity: 9 of the 16 edges significant, none new; the 7
+  #   that drop are near misses (adjusted p .049-.15 for the edges that were lost; chi-square 14-24).
+  # INTERPRETATION: the group difference is fully robust to harmonization; the interaction pattern persists
+  #   without it, but harmonization improves power (16 vs. 9 edges). Report both numbers.
   # Repeats the two main analyses on the connectivity values BEFORE LongComBat. Every model already
   # includes scanner as a fixed effect, so this shows whether the findings depend on harmonization.
   rawFC <- combFCData[scanInfo$longID, colnames(goodFCData)]
