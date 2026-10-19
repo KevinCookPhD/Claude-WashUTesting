@@ -1127,8 +1127,8 @@ legend_text_size <- 7      # legend (points)
 panelB_margin_r_pt <- 2    # white space to the right of each plot (points); smaller = more room for the plot itself
 panelB_labels    <- "short"   # y-axis names: "short" = display names with hemisphere, e.g. "Superior Orbital (L)"; "long" = atlas long names
 
-panel_data <- function(cn) {
-  d <- pt; d$FCz <- as.numeric(goodFCData[d$longID, cn])
+panel_data <- function(cn, d0 = pt) {
+  d <- d0; d$FCz <- as.numeric(goodFCData[d$longID, cn])
   m <- lme(fml_main, random = ~ 1 | shortID, data = d, method = "REML", control = ctrl)   # same model as the Wald test
   b <- nlme::fixef(m); V <- vcov(m)
   sc <- scn_term; s2 <- levels(d$scanner)[2]
@@ -1158,8 +1158,10 @@ ylab_for <- function(cn) {                                            # two line
   paste0(nm(p[1]), " \u2013\n", nm(p[2]))
 }
 
-make_panel_b <- function(edges, ncol = panel_ncol_split) {
-  pd        <- lapply(edges, panel_data)
+# data: scan table to plot/fit (default: all preterm scans); xlim/xbreaks: PMA axis; pvals: optional named vector of FDR-adjusted
+# p-values (names = edges) printed in each panel, with * when < .05
+make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24, 49), xbreaks = seq(25, 45, 5), pvals = NULL) {
+  pd        <- lapply(edges, panel_data, d0 = data)
   lab_order <- sub("_", " \u2013 ", gsub("\\.", "-", edges))
   pts       <- do.call(rbind, lapply(pd, `[[`, "pts"));       pts$label       <- factor(pts$label, levels = lab_order)
   fit_lines <- do.call(rbind, lapply(pd, `[[`, "fit_lines")); fit_lines$label <- factor(fit_lines$label, levels = lab_order)
@@ -1177,10 +1179,12 @@ make_panel_b <- function(edges, ncol = panel_ncol_split) {
       geom_line(data = dl, aes(ScanPMA, val, color = BirthCat), linewidth = line_w) +
       scale_color_manual(values = cols_pt, labels = grp_labels) +
       scale_fill_manual(values = cols_pt, labels = grp_labels) +
-      scale_x_continuous(breaks = seq(25, 45, 5)) +
+      scale_x_continuous(breaks = xbreaks) +
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
-      coord_cartesian(xlim = c(24, 49), ylim = ylim) +
+      coord_cartesian(xlim = xlim, ylim = ylim) +
       labs(x = "PMA at scan (weeks)", y = ylab_for(cn), color = NULL, fill = NULL) +
+      {if (!is.null(pvals)) annotate("text", x = xlim[2], y = ylim[2], hjust = 1, vjust = 1, size = axis_text_size / ggplot2::.pt,
+                                     label = paste0("pFDR = ", fmt_p(pvals[[cn]]), if (pvals[[cn]] < .05) "*" else ""))} +
       theme_classic(base_size = 8) +
       theme(aspect.ratio = 1,                                            # square plotting area
             axis.line = element_line(color = "#000000", linewidth = .5),
@@ -1213,6 +1217,18 @@ pt_legend_plot <- function() {
 draw_pt_legend <- function(w_in, h_in, x0_in = 0, y0_in = 0, first_col = 3, ncols = panel_ncol_split) {
   print(pt_legend_plot(), vp = grid::viewport(x = grid::unit(x0_in + w_in * first_col / ncols, "in"), y = grid::unit(y0_in, "in"),
                                               width = grid::unit(w_in * (ncols - first_col) / ncols, "in"), height = grid::unit(h_in, "in"), just = c("left", "bottom")))
+}
+
+# Draws Panel B above Panel C (and the group legend beside C) in the current device. letters: labels for the two panels.
+draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel_left_in, y0_in = 0) {
+  b_h <- panelB_row_h_in * pB$nrow; c_h <- panelB_row_h_in * pC$nrow; bw <- w_in - x0_in
+  vp  <- function(y, h) grid::viewport(x = grid::unit(x0_in, "in"), y = grid::unit(y0_in + y, "in"), width = grid::unit(bw, "in"),
+                                       height = grid::unit(h, "in"), just = c("left", "bottom"))
+  print(pB$fig, vp = vp(c_h, b_h)); print(pC$fig, vp = vp(0, c_h))
+  draw_pt_legend(bw, c_h, x0_in = x0_in, y0_in = y0_in)
+  lab <- function(txt, y_top) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y0_in + y_top, "in") - grid::unit(0.02, "in"),
+                                              just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
+  lab(letters[1], c_h + b_h); lab(letters[2], c_h)
 }
 
 # Panel B = the connections where MPT differs from VPT and EPT (which look alike); Panel C = the three oddballs (listed
@@ -1433,13 +1449,9 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
         grid::grid.text(names(lobe_pal)[k], x = grid::unit(xk + 0.17, "in"), y = grid::unit(key_y, "in"), just = "left",
                         gp = grid::gpar(fontsize = bn_key_pt))
       }
-      letter <- function(txt, y_top_in) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y_top_in, "in") - grid::unit(0.02, "in"),
-                                                        just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
-      bx <- bn_panel_left_in; bw <- panelB_w_in - bx                                              # Panels B and C start bx in from the left, leaving room for the letters
-      vpB <- function(y0, h) grid::viewport(x = grid::unit(bx, "in"), y = grid::unit(y0, "in"), width = grid::unit(bw, "in"), height = grid::unit(h, "in"), just = c("left", "bottom"))
-      print(panelB$fig, vp = vpB(c_h_in, b_h_in)); print(panelC$fig, vp = vpB(0, c_h_in))
-      draw_pt_legend(bw, c_h_in, x0_in = bx)
-      letter("A", fig3_h); letter("B", c_h_in + b_h_in); letter("C", c_h_in)
+      draw_panels_bc(panelB, panelC, panelB_w_in)                                                 # Panels B and C below, indented so the letters fit
+      grid::grid.text("A", x = grid::unit(bn_letter_in, "in"), y = grid::unit(fig3_h, "in") - grid::unit(0.02, "in"), just = c("left", "top"),
+                      gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
     }
     show_fig("Fig3_PanelsAB", panelB_w_in, fig3_h, draw_fig3)
   }
@@ -1564,6 +1576,13 @@ if (RUN_SENSITIVITY) {
   res_gt32 <- wald_scan(pt32, fml_main, "ScanPMA:BirthCat")
   cmp_gt32 <- compare_sets(res_gt32); print(cmp_gt32)
   slopes_gt32_wide <- slope_wide(slope_table(pt32, sigEdges, fml_main)); print(slopes_gt32_wide)
+  # Supplemental figure: the Fig. 3 B/C trajectories refit on these scans only (same connections, order and layout), with
+  # each connection's FDR-adjusted p from this reduced sample; * = still significant after FDR.
+  p32  <- setNames(res_gt32$pAdj[match(sigEdges, res_gt32$Connection)], sigEdges)
+  pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5), pvals = p32)
+  pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5), pvals = p32)
+  show_fig("SIFig_gt32_trajectories", panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
+           function() { grid::grid.newpage(); draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B")) })
 
   ## ---- 9d. Within- vs. between-infant PMA effects ---------------------------
   # WHAT IT TESTS: whether the MPT steepening reflects change WITHIN infants over time or differences
