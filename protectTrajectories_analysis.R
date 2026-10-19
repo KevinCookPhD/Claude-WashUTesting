@@ -1387,6 +1387,21 @@ if (RUN_DISTANCE_CONTROL) {
   coup_tab[-1] <- lapply(coup_tab[-1], function(x) signif(x, 3))
   print(coup_tab)                       # negative rho = FC falls with distance; b > 0 means a weaker fall-off in preterm scans
 
+  # Does the group difference depend on PMA? (the fetal and preterm lines can cross, so the single
+  # group coefficient above averages over different differences at different ages)
+  d_all  <- scanInfo; d_all$coupling <- coupling(subsets[["All edges"]])
+  m_int  <- lme(coupling ~ ScanPMA * scanType + scanner, random = ~ 1 | shortID, data = d_all, control = ctrl)
+  print(round(summary(m_int)$tTable[c("ScanPMA", "scanTypePreterm", "ScanPMA:scanTypePreterm"), c("Value", "Std.Error", "p-value")], 4))
+  # rows: slope with PMA in fetal scans | preterm-minus-fetal at PMA = 0 (not meaningful) | difference in slopes
+  b_int <- nlme::fixef(m_int); V_int <- vcov(m_int)
+  dfi   <- min(m_int$fixDF$X[c("scanTypePreterm", "ScanPMA:scanTypePreterm")])
+  diff_at_age <- t(sapply(c(28, 30, 32, 35, 38, 40), function(a) {                   # preterm minus fetal at a given PMA
+    w <- setNames(numeric(length(b_int)), names(b_int)); w["scanTypePreterm"] <- 1; w["ScanPMA:scanTypePreterm"] <- a
+    est <- sum(w * b_int); se <- sqrt(drop(t(w) %*% V_int %*% w))
+    c(PMA = a, diff = est, se = se, p = 2 * pt(-abs(est / se), dfi))
+  }))
+  print(round(diff_at_age, 4))
+
   ## ---- Figures ----
   dd <- data.frame(dist = edge_dist, beta = fetalRes$scanTypeb)
   dd$bin <- cut(dd$dist, breaks = unique(quantile(dd$dist, seq(0, 1, 0.1))), include.lowest = TRUE)
