@@ -756,9 +756,6 @@ show_fig("Homotopic2Groups_UPDATE", 19.5, 6, function() print(p_homo))
 # axis, outside the panel, so the plot margin on the left must leave room for the longest name.
 homo_label_margin_in <- 1.75    # inches reserved on the left for region names (raise if a name is cut off)
 homo_label_pt        <- 9       # region-name font size (points)
-homo_show_stars      <- TRUE    # TRUE: mark regions with an FDR-significant fetal-vs-preterm difference with an asterisk
-homo_star_pt         <- 14      # asterisk size (points)
-homo_star_vjust      <- 0.25    # nudges the asterisk up/down within its row (smaller = lower)
 homo_rois  <- bilatROI[bilatROI %in% homo$ROI]
 n_homo     <- length(homo_rois)
 homo_lobe  <- roiData$Lobe[match(paste0(homo_rois, "-L"), roiData$FullLabel)]
@@ -774,10 +771,6 @@ x_hi   <- if (is.null(homo_x_limits)) ceiling(max(homoH$Mean + homoH$SE) * 20) /
 x_span <- x_hi - x_lo
 strip_right <- x_lo - 0.008 * x_span                                   # strip sits just left of the axis line
 strip_left  <- strip_right - 0.035 * x_span
-
-# FDR-significant regions (fetal vs. preterm), in row order; the asterisk column sits just right of the panel
-homo_sig <- homo$scanTypep.Adj[match(homo_rois, homo$ROI)] < .05
-star_x   <- x_hi + 0.025 * x_span
 
 p_homo_h <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
   geom_col(aes(color = Group, fill = Group), width = bar_width, orientation = "y",
@@ -808,13 +801,8 @@ p_homo_h <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
         legend.title = element_blank(), legend.text = element_text(size = 10),
         legend.background = element_rect(color = "#000000", fill = "white"),
         legend.key.size = unit(0.18, "in"),
-        plot.margin = margin(6, if (homo_show_stars) 22 else 8, 6, homo_label_margin_in * 72, "pt")) +
+        plot.margin = margin(6, 8, 6, homo_label_margin_in * 72, "pt")) +
   legend_inside(0.78, 0.04)
-if (homo_show_stars) {       # * = FDR-corrected p < .05 (say so in the caption)
-  p_homo_h <- p_homo_h +
-    annotate("text", x = star_x, y = row_pos[homo_sig], label = "*", hjust = 0.5, vjust = homo_star_vjust,
-             size = homo_star_pt / ggplot2::.pt, color = "#000000")
-}
 show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 
 
