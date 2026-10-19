@@ -769,6 +769,9 @@ bar_each    <- bar_width / 2 * (1 - bar_pad)   # width of a single bar in plot u
 homo_label_margin_in <- 1.75    # inches reserved on the left for region names (raise if a name is cut off)
 homo_label_pt        <- 9       # region-name font size (points)
 homo_strip_split     <- 0.4     # small white gap between lobe segments of the strip, in rows (0 = none)
+homo_show_stars      <- TRUE    # TRUE: asterisk in a column at the far right for regions with an FDR-significant fetal-vs-preterm difference
+homo_star_pt         <- 14      # asterisk size (points)
+homo_star_vjust      <- 0.25    # nudges the asterisk up/down within its row (smaller = lower)
 homo_rois  <- bilatROI[bilatROI %in% homo$ROI]
 n_homo     <- length(homo_rois)
 homo_lobe  <- roiData$Lobe[match(paste0(homo_rois, "-L"), roiData$FullLabel)]
@@ -791,6 +794,10 @@ homo_end   <- cumsum(homo_runs$lengths); homo_start <- homo_end - homo_runs$leng
 J          <- length(homo_runs$values)
 strip_ymax <- row_pos[homo_start] + 0.5 - c(0, rep(homo_strip_split / 2, J - 1))
 strip_ymin <- row_pos[homo_end]   - 0.5 + c(rep(homo_strip_split / 2, J - 1), 0)
+
+# FDR-significant regions (fetal vs. preterm), in row order; the asterisk column sits just right of the panel
+homo_sig <- homo$scanTypep.Adj[match(homo_rois, homo$ROI)] < .05
+star_x   <- x_hi + 0.025 * x_span
 
 p_homo_h <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
   geom_col(aes(color = Group, fill = Group), width = bar_width, orientation = "y",
@@ -821,8 +828,13 @@ p_homo_h <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
         legend.title = element_blank(), legend.text = element_text(size = 10),
         legend.background = element_rect(color = "#000000", fill = "white"),
         legend.key.size = unit(0.18, "in"),
-        plot.margin = margin(6, 8, 6, homo_label_margin_in * 72, "pt")) +
+        plot.margin = margin(6, if (homo_show_stars) 22 else 8, 6, homo_label_margin_in * 72, "pt")) +
   legend_inside(0.78, 0.04)
+if (homo_show_stars) {       # * = FDR-corrected p < .05 (say so in the caption)
+  p_homo_h <- p_homo_h +
+    annotate("text", x = star_x, y = row_pos[homo_sig], label = "*", hjust = 0.5, vjust = homo_star_vjust,
+             size = homo_star_pt / ggplot2::.pt, color = "#000000")
+}
 show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 
 
