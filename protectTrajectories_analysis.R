@@ -1267,7 +1267,7 @@ bn_edge_scale    <- 0.006             # edge (cylinder) radius as a fraction of 
 bn_edge_col      <- "#333333"
 bn_surface_col   <- "#c8c8c8"
 bn_surface_alpha <- 0.12              # surface opacity (lower = see the nodes through the brain more easily)
-bn_fov           <- 0                 # 0 = orthographic (nodes the same size at any depth, like a glass-brain figure); 30-60 = perspective
+bn_fov           <- 10                # 0 = orthographic (nodes the same size at any depth, like a glass-brain figure); 30-60 = perspective
 bn_zoom          <- c(right_lateral = 0.6, left_lateral = 0.6, dorsal = 0.85, ventral = 0.85, anterior = 0.8, posterior = 0.8)
                                       # per view; SMALLER = brain fills more of the image. The dorsal view is taller than the lateral ones, so it needs a larger value
 bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels (= the rgl window size; keep it within your screen: a window larger than the screen is cut off)
