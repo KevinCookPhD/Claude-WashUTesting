@@ -31,7 +31,7 @@
 #   1  Read data and scan-level QA
 #   2  Fetal controls + LongComBat harmonization (+ harmonization checks)
 #   3  Analysis data: connection table, scan table, preterm table, Table 1
-#   4  Fetal vs. preterm, all edges (Fig. 2: matrices, chords, homotopic bars; Table 2; SI Fig. 2 mean matrices)
+#   4  Fetal vs. preterm, all edges (Fig. 2: matrices, chords, homotopic bars; Table 2; Fig. 2 assembled; SI Fig. 2 mean matrices)
 #   5  Preterm only: PMA x prematurity, all edges (Fig. 3, Table 3)
 #   6  Fig. 3 Panels B and C (group trajectories)
 #   7  Fig. 3 Panel A (BrainNet Viewer edge file; 7b: the same picture in R with rgl, and the combined Fig. 3 A-C)
@@ -192,6 +192,19 @@ show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS) {
     tryCatch(draw(), finally = dev.off())
   }
   invisible(NULL)
+}
+
+# Trims the white border off a picture (a height x width x 3 array from png::readPNG), keeping m px of white.
+# With several pictures, the same crop (the union of their drawings) is applied to all, so pieces that belong together
+# keep the same scale and alignment.
+trim_white <- function(im, m = 6, thr = .99) {
+  one <- is.array(im)                                             # one picture (an array) or a list of pictures
+  ims <- if (one) list(im) else im
+  nw  <- lapply(ims, function(x) x[, , 1] < thr | x[, , 2] < thr | x[, , 3] < thr)
+  r   <- range(unlist(lapply(nw, function(z) which(rowSums(z) > 0)))); cc <- range(unlist(lapply(nw, function(z) which(colSums(z) > 0))))
+  out <- lapply(ims, function(x) { rr <- c(max(1, r[1] - m), min(dim(x)[1], r[2] + m)); c2 <- c(max(1, cc[1] - m), min(dim(x)[2], cc[2] + m))
+                                   x[rr[1]:rr[2], c2[1]:c2[2], , drop = FALSE] })
+  if (one) out[[1]] else out
 }
 
 # p-value formatting for tables: "<.001" or ".034"
@@ -779,7 +792,7 @@ errbar_frac <- 0.75    # error-bar cap width as a fraction of ONE bar's width
 bar_each    <- bar_width / 2 * (1 - bar_pad)   # width of a single bar in plot units
 
 ## ---- 4e. Homotopic connectivity, horizontal version with lobe strip (Panel C) ---
-# One plot: rows = bilateral ROIs in lobe order (Precentral at the top), Fetal above Preterm.
+# One plot: rows = bilateral ROIs in lobe order (Precentral at the top), Preterm above Fetal.
 # The lobe-colored strip and the region names (single line, right-aligned) are drawn just left of the
 # axis, outside the panel, so the plot margin on the left must leave room for the longest name.
 homo_label_margin_in <- 1.75    # inches reserved on the left for region names (raise if a name is cut off)
@@ -794,7 +807,7 @@ homo_lobe  <- roiData$Lobe[match(paste0(homo_rois, "-L"), roiData$FullLabel)]
 row_pos    <- n_homo:1                                                   # row 1 (Precentral) sits at the top
 homoH      <- homoPlot
 homoH$ROI  <- factor(as.character(homoH$Connection), levels = rev(homo_rois))   # ggplot draws the first level at the bottom
-homoH$Group <- factor(homoH$Group, levels = c("Preterm", "Fetal"))      # dodge order: Fetal ends up on top
+homoH$Group <- factor(homoH$Group, levels = c("Fetal", "Preterm"))      # dodge order: the LAST level ends up on top, so Preterm is above Fetal
 
 # x range: the data range rounded outward to 0.05 (tight), with a small extra pad on the left so the lowest
 # error bar does not touch the axis. Set homo_x_limits <- c(lo, hi) to override.
@@ -833,7 +846,7 @@ p_homo_h <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
   scale_x_continuous(breaks = seq(ceiling(x_lo * 4) / 4, floor(x_hi * 4) / 4, by = 0.25), labels = scales::number_format(accuracy = 0.01), expand = c(0, 0)) +
   scale_y_discrete(expand = c(0, 0.5)) +                                 # half a row of padding top and bottom
   coord_cartesian(xlim = c(x_lo, x_hi), expand = FALSE, clip = "off") +
-  guides(color = guide_legend(reverse = TRUE), fill = guide_legend(reverse = TRUE)) +   # legend reads Fetal, Preterm
+  guides(color = guide_legend(reverse = TRUE), fill = guide_legend(reverse = TRUE)) +   # legend reads Preterm, Fetal (same order as the bars)
   labs(x = "Estimated marginal mean connectivity (Fisher z)", y = NULL) +
   theme_classic(base_size = 10) +
   theme(axis.line.y = element_line(color = "#000000", linewidth = 0.8),
@@ -855,7 +868,64 @@ if (homo_show_stars) {       # * = FDR-corrected p < .05 (say so in the caption)
 }
 show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 
-## ---- 4f. SI Fig. 2: mean connectivity matrices, one per group (Fetal, EPT, VPT, MPT) ----
+## ---- 4f. Figure 2 assembled: A = preterm (top), B = fetal (bottom), C = homotopic bars -------------
+# Each piece (chord diagram + triangular matrix per group, and the homotopic chart) is drawn at its own design size
+# (the sizes used for the separate files above), trimmed, and placed in one figure, so the proportions of the text
+# stay as in the separate pieces. Boxes with rounded corners frame A, B and C. The chords are placed as pictures; the
+# separate Fig2_chord_* files remain available as vectors for editing. Whole-figure size is set by fig2_box_h_in.
+RUN_FIG2_ASSEMBLY <- TRUE
+fig2_box_h_in   <- 4.2    # height of the A and B boxes, inches (everything else scales from this)
+fig2_title_h_in <- 0.5    # band at the top of each box for the title (Preterm / Fetal)
+fig2_pad_in     <- 0.15   # space inside the boxes
+fig2_gap_in     <- 0.2    # space between boxes
+fig2_title_pt   <- 18     # box titles (points)
+fig2_letter_pt  <- 18     # panel letters (points)
+fig2_dpi        <- 220    # resolution at which the pieces are drawn before they are placed (their design sizes are 6-10 in)
+if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quietly = TRUE))) {
+  render_piece <- function(draw, w_in, h_in) {
+    f_tmp <- tempfile(fileext = ".png")
+    ragg::agg_png(f_tmp, width = w_in, height = h_in, units = "in", res = fig2_dpi)
+    tryCatch(draw(), finally = dev.off())
+    im <- png::readPNG(f_tmp)[, , 1:3, drop = FALSE]; unlink(f_tmp); im
+  }
+  ch  <- trim_white(list(render_piece(function() draw_chord(chord_col_preterm), 9, 9), render_piece(function() draw_chord(chord_col_fetal), 9, 9)))
+  mx  <- trim_white(list(render_piece(function() print(p_tri_preterm), 6, 6), render_piece(function() print(p_tri_fetal), 6, 6)))
+  hm  <- trim_white(render_piece(function() print(p_homo_h), 6.2, 10))
+  asp <- function(im) dim(im)[2] / dim(im)[1]
+
+  content_h <- fig2_box_h_in - fig2_title_h_in - fig2_pad_in
+  ch_w  <- content_h * asp(ch[[1]]); mx_h <- content_h * 0.97; mx_w <- mx_h * asp(mx[[1]])
+  left_w  <- fig2_pad_in + ch_w + 0.1 + mx_w + fig2_pad_in
+  homo_h  <- 2 * fig2_box_h_in + fig2_gap_in - 2 * fig2_pad_in - 0.3
+  homo_w  <- homo_h * asp(hm)
+  right_w <- homo_w + 2 * fig2_pad_in
+  W2 <- left_w + fig2_gap_in + right_w + 0.1; H2 <- 2 * fig2_box_h_in + fig2_gap_in + 0.1
+
+  draw_fig2 <- function() {
+    grid::grid.newpage()
+    u <- function(v) grid::unit(v, "in")
+    box <- function(x, y, w, h) grid::grid.roundrect(x = u(x), y = u(y), width = u(w), height = u(h), just = c("left", "bottom"),
+                                                      r = grid::unit(0.12, "in"), gp = grid::gpar(col = "#000000", fill = NA, lwd = 1.2))
+    img <- function(im, x, y, w, h) grid::grid.raster(im, x = u(x), y = u(y), width = u(w), height = u(h), just = c("left", "bottom"), interpolate = TRUE)
+    txt <- function(label, x, y, pt, just = "centre") grid::grid.text(label, x = u(x), y = u(y), just = just, gp = grid::gpar(fontsize = pt, fontface = "bold"))
+    x0 <- 0.05
+    for (k in 1:2) {                                              # k = 1: preterm (top), 2: fetal (bottom)
+      y_bot <- 0.05 + (2 - k) * (fig2_box_h_in + fig2_gap_in)
+      box(x0, y_bot, left_w, fig2_box_h_in)
+      img(ch[[k]], x0 + fig2_pad_in, y_bot + fig2_pad_in * 0.5, ch_w, content_h)
+      img(mx[[k]], x0 + fig2_pad_in + ch_w + 0.1, y_bot + fig2_pad_in * 0.5 + (content_h - mx_h) / 2, mx_w, mx_h)
+      txt(c("Preterm", "Fetal")[k], x0 + left_w / 2, y_bot + fig2_box_h_in - fig2_title_h_in / 2, fig2_title_pt)
+      txt(c("A", "B")[k], x0 + 0.1, y_bot + fig2_box_h_in - 0.08, fig2_letter_pt, just = c("left", "top"))
+    }
+    xc <- x0 + left_w + fig2_gap_in
+    box(xc, 0.05, right_w, 2 * fig2_box_h_in + fig2_gap_in)
+    img(hm, xc + fig2_pad_in, 0.05 + fig2_pad_in, homo_w, homo_h)
+    txt("C", xc + 0.1, 0.05 + 2 * fig2_box_h_in + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
+  }
+  show_fig("Fig2_assembled", W2, H2, draw_fig2)
+}
+
+## ---- 4g. SI Fig. 2: mean connectivity matrices, one per group (Fetal, EPT, VPT, MPT) ----
 # Full symmetric matrices of mean connectivity (r = tanh of the mean Fisher z per edge, averaged over the
 # group's scans). ROIs are ordered by lobe (same order as the Fig. 2 matrices); the diagonal runs bottom-left
 # to top-right and is drawn gray. Lobe boundaries are black lines; lobe color bars sit on top and on the right.
@@ -1398,14 +1468,10 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
   # The magnification is calibrated from the dorsal image so that the box in the dorsal view and the magnified panel cover the same region.
   {
     rd <- function(f) png::readPNG(f)[, , 1:3, drop = FALSE]
-    trim <- function(im, m = 6) { nw <- im[, , 1] < .99 | im[, , 2] < .99 | im[, , 3] < .99          # trim to the drawing, keep m px of white (the faint outer surface must not be clipped)
-                           r <- range(which(rowSums(nw) > 0)); cc <- range(which(colSums(nw) > 0))
-                           r <- c(max(1, r[1] - m), min(dim(im)[1], r[2] + m)); cc <- c(max(1, cc[1] - m), min(dim(im)[2], cc[2] + m))
-                           im[r[1]:r[2], cc[1]:cc[2], , drop = FALSE] }
     centre_rect <- function(im, w, h) { h <- min(h, dim(im)[1]); w <- min(w, dim(im)[2])                    # w x h pixels from the middle of the window
                                         r0 <- floor((dim(im)[1] - h) / 2); c0 <- floor((dim(im)[2] - w) / 2)
                                         im[r0 + seq_len(h), c0 + seq_len(w), , drop = FALSE] }
-    ims   <- setNames(lapply(bn_panels, function(v) trim(rd(f_png(v)))), bn_panels)
+    ims   <- setNames(lapply(bn_panels, function(v) trim_white(rd(f_png(v)))), bn_panels)
     if (bn_inset) ims$inset <- centre_rect(rd(f_png("inset")), round(2 * hx * px_mm_t), round(2 * hy * px_mm_t))
     H     <- bn_panel_h_in; padx <- bn_pad_x_in; pady <- bn_pad_y_in
     hgt   <- setNames(rep(H, length(ims)), names(ims)); if (bn_inset) hgt[["inset"]] <- H * bn_inset_scale
