@@ -73,6 +73,7 @@ SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDi
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
 RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges (slow serially; fast with N_CORES, cached)
+RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
 RUN_QC_COVARIATE_CONTROL  <- FALSE  # needs finalVol / tSNR for fetal scans (section 9e)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
@@ -1210,10 +1211,95 @@ if (RUN_QC_COVARIATE_CONTROL) {
     same_direction = sum(sigFetal & sign(fetalRes_qc$scanTypeb) == sign(fetalRes$scanTypeb), na.rm = TRUE),
     r_beta = cor(fetalRes$scanTypeb, fetalRes_qc$scanTypeb, use = "complete.obs")))
 }
-# Still to do (need data not yet in this script): equal-data-per-scan reanalysis,
-# age-matched fetal-vs-preterm comparison, postnatal-age check, and an
-# unharmonized-data sensitivity analysis (scanner as a covariate).
+# Still to do (need data not yet in this script): the equal-data-per-scan reanalysis
+# (needs the ROI time series so FC can be recomputed on truncated scans) and tSNR / motion
+# as covariates (9e, once those values are added to scanInfo).
 
+## ---- 9f-9h. Controls that use only data already in this script -------------------
+if (RUN_EXTRA_CONTROLS) {
+
+  ## Summary of a fetal-vs-preterm rerun against the primary result (fetalRes / sigFetal)
+  cmp_fetal <- function(res_alt, n_scans = NA) {
+    s_alt <- res_alt$scanTypep.Adj < .05 & !is.na(res_alt$scanTypep.Adj)
+    c(scans = n_scans, fdr05 = sum(s_alt), preterm_greater = sum(s_alt & res_alt$scanTypeb > 0),
+      fetal_greater = sum(s_alt & res_alt$scanTypeb < 0),
+      primary_n = sum(sigFetal), still_sig_of_primary = sum(s_alt & sigFetal),
+      same_direction_of_primary = sum(sigFetal & sign(res_alt$scanTypeb) == sign(fetalRes$scanTypeb), na.rm = TRUE),
+      r_beta_with_primary = round(cor(fetalRes$scanTypeb, res_alt$scanTypeb, use = "complete.obs"), 3))
+  }
+  # Fetal-vs-preterm scan over all edges for a given scan table (parallel, cached)
+  run_fetal <- function(d, tag) {
+    res <- cached(paste0("fetalRes_", tag), key = paste(data_key, "fetal", tag, table_key(d)),
+                  do.call(rbind, par_lapply(allConn, fit_fetal_edge, export = c("goodFCData", "ctrl", "scn_term", "scanInfo"), data = d)))
+    res$scanPMAp.Adj  <- p.adjust(res$scanPMAp,  method = "fdr")
+    res$scanTypep.Adj <- p.adjust(res$scanTypep, method = "fdr")
+    res
+  }
+
+  ## ---- 9f. Age-matched fetal vs. preterm (control #3) ---------------------------
+  # The primary model adjusts for PMA, but the groups do not cover the same ages. Two checks:
+  #  A. restrict both groups to the PMA range they share;
+  #  B. 1:1 nearest-neighbor matching on PMA within a caliper (greedy, without replacement).
+  # Repeated scans of one infant are kept (the model has a random intercept per infant).
+  pma_rng <- lapply(split(scanInfo$ScanPMA, scanInfo$scanType), range)
+  am_lo <- max(sapply(pma_rng, `[`, 1)); am_hi <- min(sapply(pma_rng, `[`, 2))
+  pma_tab <- rbind(Fetal = pma_rng$Fetal, Preterm = pma_rng$Preterm, Overlap = c(am_lo, am_hi))
+  colnames(pma_tab) <- c("min", "max"); print(pma_tab)
+
+  si_range <- droplevels(scanInfo[scanInfo$ScanPMA >= am_lo & scanInfo$ScanPMA <= am_hi, ])
+  print(table(si_range$scanType))
+  res_am_range <- run_fetal(si_range, "ageRange")
+  print(cmp_fetal(res_am_range, n_scans = nrow(si_range)))
+
+  match_pma <- function(d, caliper = 1) {
+    fet <- d[d$scanType == "Fetal", ]; pre <- d[d$scanType == "Preterm", ]
+    free <- rep(TRUE, nrow(pre)); ki <- integer(0); kj <- integer(0)
+    for (i in order(fet$ScanPMA)) {
+      dist <- abs(pre$ScanPMA - fet$ScanPMA[i]); dist[!free] <- Inf
+      j <- which.min(dist)
+      if (is.finite(dist[j]) && dist[j] <= caliper) { ki <- c(ki, i); kj <- c(kj, j); free[j] <- FALSE }
+    }
+    rbind(fet[ki, ], pre[kj, ])
+  }
+  si_match <- droplevels(match_pma(scanInfo, caliper = 1))
+  print(c(matched_pairs = sum(si_match$scanType == "Fetal"), fetal_infants = nlevels(droplevels(si_match$shortID[si_match$scanType == "Fetal"])),
+          preterm_infants = nlevels(droplevels(si_match$shortID[si_match$scanType == "Preterm"]))))
+  print(tapply(si_match$ScanPMA, si_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))   # balance on PMA after matching
+  res_am_match <- run_fetal(si_match, "ageMatched")
+  print(cmp_fetal(res_am_match, n_scans = nrow(si_match)))
+
+  ## ---- 9g. Postnatal-age check for PMA x prematurity (control #5) -----------------
+  # PMA = gestational age at birth + postnatal age, so differences in postnatal age could
+  # masquerade as differences in PMA slopes. (A) Add postnatal age as a covariate and retest the
+  # interaction; (B) use postnatal age as the time axis instead of PMA.
+  pt_pna <- pt; pt_pna$postnatal <- pt_pna$ScanPMA - pt_pna$BirthPMA          # weeks since birth
+  print(tapply(pt_pna$postnatal, pt_pna$BirthCat, function(x) round(c(min = min(x), median = median(x), max = max(x)), 1)))
+  print(round(tapply(seq_len(nrow(pt_pna)), pt_pna$BirthCat, function(i) cor(pt_pna$ScanPMA[i], pt_pna$postnatal[i])), 2))   # collinearity within group
+  fml_pna <- FCz ~ scanner + ScanPMA * BirthCat + postnatal
+  res_pna <- wald_scan(pt_pna, fml_pna, "ScanPMA:BirthCat")                    # (A) PMA x group, adjusted for postnatal age
+  cmp_pna <- compare_sets(res_pna); print(cmp_pna)
+  slopes_pna_wide <- slope_wide(slope_table(pt_pna, sigEdges, fml_pna)); print(slopes_pna_wide)
+  res_pna_axis <- wald_scan(pt_pna, FCz ~ scanner + postnatal * BirthCat, "postnatal:BirthCat")   # (B) postnatal age as the time axis
+  cmp_pna_axis <- compare_sets(res_pna_axis); print(cmp_pna_axis)
+
+  ## ---- 9h. Unharmonized data with scanner as a covariate (control #11) ------------
+  # Repeats the two main analyses on the connectivity values BEFORE LongComBat. Every model already
+  # includes scanner as a fixed effect, so this shows whether the findings depend on harmonization.
+  rawFC <- combFCData[scanInfo$longID, colnames(goodFCData)]
+  stopifnot(!anyNA(rawFC), identical(dim(rawFC), dim(goodFCData)))
+  # Temporarily swap the connectivity matrix (and the cache key) used by the scan functions
+  with_fc <- function(fc, code) {
+    old <- list(goodFCData = goodFCData, data_key = data_key)
+    on.exit({ goodFCData <<- old$goodFCData; data_key <<- old$data_key }, add = TRUE)
+    goodFCData <<- fc
+    data_key   <<- paste(old$data_key, "unharmonized", sum(as.matrix(fc)))
+    force(code)
+  }
+  fetalRes_raw <- with_fc(rawFC, run_fetal(scanInfo, "unharmonized"))
+  print(cmp_fetal(fetalRes_raw, n_scans = nrow(scanInfo)))
+  res_raw <- with_fc(rawFC, wald_scan(pt, fml_main, "ScanPMA:BirthCat"))
+  cmp_raw <- compare_sets(res_raw); print(cmp_raw)
+}
 
 ###############################################################################
 # 10. SAVE TABLES AND RECORD SESSION
