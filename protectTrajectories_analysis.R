@@ -106,12 +106,23 @@ birth_cat <- function(ga, rule = "paper") {
 # temporal yellow, parietal green, occipital blue) are separate and unchanged.
 #   "new"      : brighter blue (#2a78d6; passes the color-blind/contrast checks), and the
 #                preterm heatmap and the Fig. 3B subgroup ramp are built from that same blue
+#   "cyan"     : like "new", but the lightest Fig. 3B group is a cyan (#12b5cf) instead of a pale blue
+#                (the pale blue reads gray and has poor contrast on white)
+#   "periwinkle": navy -> periwinkle (#4a63d9) -> cyan; the most separated of the blue options for the three groups
 #   "original" : earlier palette (navy #08415c, indigo heatmap)  -> set this to revert
-COLOR_SCHEME <- "new"
+COLOR_SCHEME <- "cyan"
 pal <- switch(COLOR_SCHEME,
   new = list(fetal = "#cc2936", preterm = "#2a78d6",
              cols_pt      = c(EPT = "#0d366b", VPT = "#2a78d6", MPT = "#86b6ef"),   # dark -> light blue
              heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),                     # low, mid, high
+             heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
+  cyan = list(fetal = "#cc2936", preterm = "#2a78d6",
+             cols_pt      = c(EPT = "#0d366b", VPT = "#2a78d6", MPT = "#12b5cf"),
+             heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),
+             heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
+  periwinkle = list(fetal = "#cc2936", preterm = "#2a78d6",
+             cols_pt      = c(EPT = "#14306b", VPT = "#4a63d9", MPT = "#12b5cf"),
+             heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),
              heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
   original = list(fetal = "#cc2936", preterm = "#08415c",
                   cols_pt      = c(EPT = "#08415c", VPT = "#2f7fb0", MPT = "#8cc2e0"),
@@ -1144,10 +1155,10 @@ halo_w          <- 0.2     # extra width of the white halo under each line
 panel_ncol      <- 4       # panels per row; 16 edges fit a 4x4 grid exactly (legend goes below the grid)
 # Size: design the figure at the size it will be printed, so the text sizes below are the printed sizes.
 panelB_w_in      <- 7.5    # export width (inches); a bit wider than tall leaves room for the brain image above
-panelB_row_h_in  <- 1.5    # height of each row of panels (inches); total height = rows x this + 0.55 for the legend
-axis_text_size   <- 7      # tick labels (points)
-axis_title_size  <- 7.5    # axis titles (points), both axes
-legend_text_size <- 8      # legend (points)
+panelB_row_h_in  <- 1.3    # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
+axis_text_size   <- 8      # tick labels (points)
+axis_title_size  <- 8.5    # axis titles (points), both axes
+legend_text_size <- 9.5    # legend (points)
 panelB_labels    <- "short"   # y-axis names: "short" = display names with hemisphere, e.g. "Superior Orbital (L)"; "long" = atlas long names
 
 panel_data <- function(cn) {
@@ -1206,7 +1217,8 @@ make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
       labs(x = "PMA at scan (weeks)", y = ylab_for(cn), color = NULL, fill = NULL) +
       guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, linewidth = 1.2)), fill = "none") +
       theme_classic(base_size = 8) +
-      theme(axis.line = element_line(color = "#000000", linewidth = .5),
+      theme(aspect.ratio = 1,                                            # square plotting area
+            axis.line = element_line(color = "#000000", linewidth = .5),
             axis.ticks = element_line(color = "#000000", linewidth = .4),
             axis.text = element_text(size = axis_text_size, color = "#000000"),
             axis.title.x = element_text(size = axis_title_size, color = "#000000"),
@@ -1223,8 +1235,24 @@ make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
        nrow = nrow_fig)
 }
 
+# Legend-only plot for the empty cells beside Panel C
+pt_legend_plot <- function() {
+  d <- data.frame(g = factor(rep(names(cols_pt), each = 2), levels = names(cols_pt)), x = rep(1:2, 3), y = 1)
+  p <- ggplot(d, aes(x, y, color = g, group = g)) + geom_line(linewidth = line_w) +
+    scale_color_manual(values = cols_pt, labels = grp_labels, name = NULL) +
+    guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4))) +
+    theme_void() + theme(legend.position = "left", legend.text = element_text(size = legend_text_size, color = "#000000"),
+                         legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"), legend.margin = margin(0, 0, 0, 0))
+  ggpubr::as_ggplot(ggpubr::get_legend(p))
+}
+# draws the legend in the right-hand part of a Panel C area of the given size (columns beyond the three plots)
+draw_pt_legend <- function(w_in, h_in, x0_in = 0, y0_in = 0, first_col = 3, ncols = panel_ncol_split) {
+  print(pt_legend_plot(), vp = grid::viewport(x = grid::unit(x0_in + w_in * first_col / ncols, "in"), y = grid::unit(y0_in, "in"),
+                                              width = grid::unit(w_in * (ncols - first_col) / ncols, "in"), height = grid::unit(h_in, "in"), just = c("left", "bottom")))
+}
+
 # Split into B and C? TRUE: Panel B = the connections where MPT differs from VPT and EPT (which look alike), Panel C = the
-# three oddballs (listed below), both panel_ncol_split columns wide with one shared legend under C. FALSE: one Panel B, as before.
+# three oddballs (listed below), both panel_ncol_split columns wide; the legend sits in the empty cells to the right of C. FALSE: one Panel B, as before.
 panelB_split     <- TRUE
 panelC_edges     <- c("PreCG.L_ORBmid.R", "SPG.L_HES.R", "SMG.L_SMG.R")
 panel_ncol_split <- 5
@@ -1232,9 +1260,10 @@ if (panelB_split) {
   stopifnot(all(panelC_edges %in% sigEdges))
   edgesB <- setdiff(sigEdges, panelC_edges)                                      # keeps the order set in edge_order
   panelB <- make_panel_b(edgesB,       ncol = panel_ncol_split, legend = FALSE)
-  panelC <- make_panel_b(panelC_edges, ncol = panel_ncol_split, legend = TRUE)
+  panelC <- make_panel_b(panelC_edges, ncol = panel_ncol_split, legend = FALSE)
   show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow, function() print(panelB$fig))                 # width x height in inches
-  show_fig("Figure3_PanelC", panelB_w_in, panelB_row_h_in * panelC$nrow + 0.55, function() print(panelC$fig))
+  show_fig("Figure3_PanelC", panelB_w_in, panelB_row_h_in * panelC$nrow,
+           function() { print(panelC$fig); draw_pt_legend(panelB_w_in, panelB_row_h_in * panelC$nrow) })
 } else {
   panelB <- make_panel_b(sigEdges)
   show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + 0.55, function() print(panelB$fig))           # width x height in inches
@@ -1439,7 +1468,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     sc_a    <- panelB_w_in / W
     a_h_in  <- Hfig * sc_a
     b_h_in  <- if (panelB_split) panelB_row_h_in * panelB$nrow else panelB_row_h_in * panelB$nrow + 0.55   # Panel B (without legend when split)
-    c_h_in  <- if (panelB_split) panelB_row_h_in * panelC$nrow + 0.55 else 0                                 # Panel C, with the shared legend
+    c_h_in  <- if (panelB_split) panelB_row_h_in * panelC$nrow else 0                                        # Panel C (its legend sits beside the plots)
     fig3_h  <- a_h_in + bn_gap_ab_in + b_h_in + c_h_in
     draw_fig3 <- function() {
       grid::grid.newpage()
@@ -1462,7 +1491,10 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
       letter <- function(txt, y_top_in) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y_top_in, "in") - grid::unit(0.02, "in"),
                                                         just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
       print(panelB$fig, vp = grid::viewport(x = 0, y = grid::unit(c_h_in, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
-      if (panelB_split) print(panelC$fig, vp = grid::viewport(x = 0, y = 0, width = grid::unit(panelB_w_in, "in"), height = grid::unit(c_h_in, "in"), just = c("left", "bottom")))
+      if (panelB_split) {
+        print(panelC$fig, vp = grid::viewport(x = 0, y = 0, width = grid::unit(panelB_w_in, "in"), height = grid::unit(c_h_in, "in"), just = c("left", "bottom")))
+        draw_pt_legend(panelB_w_in, c_h_in)
+      }
       letter("A", fig3_h); letter("B", c_h_in + b_h_in); if (panelB_split) letter("C", c_h_in)
     }
     show_fig("Fig3_PanelsAB", panelB_w_in, fig3_h, draw_fig3)
