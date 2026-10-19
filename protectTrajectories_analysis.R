@@ -751,36 +751,41 @@ p_homo <- ggplot(homoPlot, aes(x = Connection, y = Mean, group = Group)) +
 show_fig("Homotopic2Groups_UPDATE", 19.5, 6, function() print(p_homo))
 
 ## ---- 4e. Homotopic connectivity, horizontal version with lobe strip (Panel C) ---
-# Rows = bilateral ROIs in lobe order (Precentral at the top). A narrow plot on the left holds the
-# region names and the lobe-colored strip; the bars sit to its right. Fetal is drawn above preterm.
+# One plot: rows = bilateral ROIs in lobe order (Precentral at the top), Fetal above Preterm.
+# The lobe-colored strip and the region names (single line, right-aligned) are drawn just left of the
+# axis, outside the panel, so the plot margin on the left must leave room for the longest name.
+homo_label_margin_in <- 1.75    # inches reserved on the left for region names (raise if a name is cut off)
+homo_label_pt        <- 9       # region-name font size (points)
 homo_rois  <- bilatROI[bilatROI %in% homo$ROI]
+n_homo     <- length(homo_rois)
 homo_lobe  <- roiData$Lobe[match(paste0(homo_rois, "-L"), roiData$FullLabel)]
-roi_rev    <- rev(homo_rois)                                            # ggplot draws the first level at the bottom
+row_pos    <- n_homo:1                                                   # row 1 (Precentral) sits at the top
 homoH      <- homoPlot
-homoH$ROI  <- factor(as.character(homoH$Connection), levels = roi_rev)
+homoH$ROI  <- factor(as.character(homoH$Connection), levels = rev(homo_rois))   # ggplot draws the first level at the bottom
 homoH$Group <- factor(homoH$Group, levels = c("Preterm", "Fetal"))      # dodge order: Fetal ends up on top
 
-strip_df <- data.frame(ROI = factor(homo_rois, levels = roi_rev), Lobe = homo_lobe)
-wrap_label <- function(x) scales::label_wrap(16)(display_name(x))     # long names wrap onto two lines
-p_strip <- ggplot(strip_df, aes(x = 1, y = ROI, fill = Lobe)) +
-  geom_tile(width = 1, height = 1) +
-  scale_fill_manual(values = lobe_pal) +
-  scale_x_continuous(expand = c(0, 0)) + scale_y_discrete(labels = wrap_label, expand = c(0, 0)) +
-  theme_classic(base_size = 10) +
-  theme(axis.line = element_blank(), axis.ticks = element_blank(), axis.text.x = element_blank(), axis.title = element_blank(),
-        axis.text.y = element_text(size = 9, color = "#000000", hjust = 1, margin = margin(r = 4)),
-        legend.position = "none", plot.margin = margin(0, 0, 0, 4))
+x_lo   <- floor(min(homoH$Mean - homoH$SE) * 4) / 4                    # x range in quarter steps
+x_hi   <- ceiling(max(homoH$Mean + homoH$SE) * 4) / 4
+x_span <- x_hi - x_lo
+strip_right <- x_lo - 0.008 * x_span                                   # strip sits just left of the axis line
+strip_left  <- strip_right - 0.035 * x_span
 
-p_bars <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
+p_homo_h <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
   geom_col(aes(color = Group, fill = Group), width = bar_width, orientation = "y",
            position = position_dodge2(padding = bar_pad), linewidth = 0.6) +
   geom_errorbar(aes(xmin = Mean - SE, xmax = Mean + SE), orientation = "y", width = bar_each * errbar_frac,
                 position = position_dodge(width = bar_width), linewidth = 0.4) +
   geom_vline(xintercept = 0, linewidth = 1) +
+  # lobe strip (one tile per row; neighbors merge into lobe blocks) and single-line region names
+  annotate("rect", xmin = strip_left, xmax = strip_right, ymin = row_pos - 0.5, ymax = row_pos + 0.5,
+           fill = unname(lobe_pal[homo_lobe])) +
+  annotate("text", x = strip_left - 0.012 * x_span, y = row_pos, label = display_name(homo_rois),
+           hjust = 1, size = homo_label_pt / ggplot2::.pt, color = "#000000") +
   scale_color_manual(values = c(Fetal = col_fetal, Preterm = col_preterm)) +
   scale_fill_manual(values = c(Fetal = paste0(col_fetal, "aa"), Preterm = paste0(col_preterm, "aa"))) +
-  scale_x_continuous(position = "top") +
-  scale_y_discrete(expand = c(0, 0)) +
+  scale_x_continuous(breaks = seq(x_lo, x_hi, by = 0.25), labels = scales::number_format(accuracy = 0.01), expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0.5)) +                                 # half a row of padding top and bottom
+  coord_cartesian(xlim = c(x_lo, x_hi), expand = FALSE, clip = "off") +
   guides(color = guide_legend(reverse = TRUE), fill = guide_legend(reverse = TRUE)) +   # legend reads Fetal, Preterm
   labs(x = "Estimated marginal mean connectivity (Fisher z)", y = NULL) +
   theme_classic(base_size = 10) +
@@ -790,14 +795,13 @@ p_bars <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
         axis.text.x = element_text(color = "#000000", size = 8),
         axis.title.x = element_text(color = "#000000", size = 10),
         panel.grid.major.x = element_line(color = "#d9d9d9", linewidth = 0.3),
+        panel.grid.major.y = element_line(color = "#d9d9d9", linewidth = 0.3),   # one light-gray line per region, like the vertical ones
         legend.title = element_blank(), legend.text = element_text(size = 10),
         legend.background = element_rect(color = "#000000", fill = "white"),
-        legend.key.size = unit(0.18, "in")) +
+        legend.key.size = unit(0.18, "in"),
+        plot.margin = margin(6, 8, 6, homo_label_margin_in * 72, "pt")) +
   legend_inside(0.78, 0.04)
-
-p_homo_h <- ggpubr::ggarrange(p_strip, p_bars, nrow = 1, widths = c(0.30, 1), align = "h")   # tune widths if labels crowd
-show_fig("Fig2_homotopic_horizontal", 4.6, 10, function() print(p_homo_h))
-
+show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 
 
 ###############################################################################
