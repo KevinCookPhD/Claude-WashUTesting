@@ -1402,6 +1402,17 @@ if (RUN_DISTANCE_CONTROL) {
   }))
   print(round(diff_at_age, 4))
 
+  # Scanner effect on distance coupling within preterm scans: harmonization removes per-edge scanner
+  # means and variances, but not necessarily a difference in the PATTERN of FC across edges.
+  m_sc <- lme(coupling ~ ScanPMA + scanner, random = ~ 1 | shortID, data = d_all[d_all$scanType == "Preterm", ], control = ctrl)
+  print(round(summary(m_sc)$tTable[scn_term, c("Value", "Std.Error", "p-value")], 4))       # 3T minus 1.5T
+  # Interaction restricted to the ages where both groups are well sampled (avoids extrapolating the fetal line)
+  rng_both <- c(28, 38)                                                                     # edit as needed
+  d_rng    <- d_all[d_all$ScanPMA >= rng_both[1] & d_all$ScanPMA <= rng_both[2], ]
+  print(table(d_rng$scanType))
+  m_rng <- lme(coupling ~ ScanPMA * scanType + scanner, random = ~ 1 | shortID, data = d_rng, control = ctrl)
+  print(round(summary(m_rng)$tTable[c("ScanPMA", "scanTypePreterm", "ScanPMA:scanTypePreterm"), c("Value", "Std.Error", "p-value")], 4))
+
   ## ---- Figures ----
   dd <- data.frame(dist = edge_dist, beta = fetalRes$scanTypeb)
   dd$bin <- cut(dd$dist, breaks = unique(quantile(dd$dist, seq(0, 1, 0.1))), include.lowest = TRUE)
