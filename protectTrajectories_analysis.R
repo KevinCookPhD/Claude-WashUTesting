@@ -33,8 +33,8 @@
 #   3  Analysis data: connection table, scan table, preterm table, Table 1
 #   4  Fetal vs. preterm, all edges (Fig. 2: matrices, chords, homotopic bars; Table 2; SI Fig. 2 mean matrices)
 #   5  Preterm only: PMA x prematurity, all edges (Fig. 3, Table 3)
-#   6  Fig. 3 Panel B (group trajectories)
-#   7  Fig. 3 Panel A (BrainNet Viewer edge file; 7b: the same picture in R with rgl)
+#   6  Fig. 3 Panels B and C (group trajectories)
+#   7  Fig. 3 Panel A (BrainNet Viewer edge file; 7b: the same picture in R with rgl, and the combined Fig. 3 A-C)
 #   8  Group slopes and pairwise contrasts for the significant edges
 #   9  Sensitivity analyses and controls
 #  10  Save tables, session info
@@ -53,15 +53,12 @@
 ###############################################################################
 
 ## ---- Packages --------------------------------------------------------------
-# install.packages(c("ggplot2","nlme","lmerTest","car","emmeans","DescTools",
-#                    "circlize","ggpubr","scales","ragg","svglite"))
+# install.packages(c("ggplot2","nlme","lmerTest","car","circlize","ggpubr","scales","ragg","svglite","png","rgl"))
 # devtools::install_github("jcbeer/longCombat")
 library(ggplot2)
 library(nlme)       # lme(): linear mixed models with a random intercept
 library(lmerTest)   # lmer() with p-values (used for Table 3, with car)
 library(car)        # Anova(): Type II Wald chi-square tests for lmer models
-library(emmeans)    # emtrends() for group slopes (section 8)
-library(DescTools)  # FisherZ / FisherZInv
 library(longCombat) # longitudinal ComBat
 library(circlize)   # chord diagrams (Fig. 2)
 library(ggpubr)     # ggarrange() for the multi-panel Fig. 3B
@@ -505,8 +502,6 @@ i1 <- match(roi1, roiData$FullLabel); i2 <- match(roi2, roiData$FullLabel)
 stopifnot(!anyNA(i1), !anyNA(i2))                                       # every ROI must be in the label key
 columnMembership <- data.frame(Connection = allEdges, ROI1 = roi1, ROI2 = roi2,
                                Lobe1 = roiData$Lobe[i1],   Lobe2 = roiData$Lobe[i2],
-                               Class1 = roiData$Class[i1], Class2 = roiData$Class[i2],
-                               Module1 = roiData$Module[i1], Module2 = roiData$Module[i2],
                                Cortical1 = roiData$Cortical[i1], Cortical2 = roiData$Cortical[i2],
                                stringsAsFactors = FALSE)
 columnMembershipCortOnly <- subset(columnMembership, Cortical1 == 1 & Cortical2 == 1)
@@ -1160,8 +1155,6 @@ axis_text_size   <- 5.5    # tick labels (points)
 axis_title_size  <- 6      # axis titles (points), both axes
 legend_text_size <- 7      # legend (points)
 panelB_margin_r_pt <- 2    # white space to the right of each plot (points); smaller = more room for the plot itself
-panelB_shared_xlab <- FALSE# TRUE (with the B/C split): one "PMA at scan (weeks)" title under each group instead of one under every plot
-xlab_h_in        <- 0.2    # height reserved for that shared title (inches)
 panelB_labels    <- "short"   # y-axis names: "short" = display names with hemisphere, e.g. "Superior Orbital (L)"; "long" = atlas long names
 
 panel_data <- function(cn) {
@@ -1195,7 +1188,7 @@ ylab_for <- function(cn) {                                            # two line
   paste0(nm(p[1]), " \u2013\n", nm(p[2]))
 }
 
-make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE, xlab = TRUE) {
+make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
   pd        <- lapply(edges, panel_data)
   lab_order <- sub("_", " \u2013 ", gsub("\\.", "-", edges))
   pts       <- do.call(rbind, lapply(pd, `[[`, "pts"));       pts$label       <- factor(pts$label, levels = lab_order)
@@ -1217,7 +1210,7 @@ make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE, xlab = TRUE) {
       scale_x_continuous(breaks = seq(25, 45, 5)) +
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
       coord_cartesian(xlim = c(24, 49), ylim = ylim) +
-      labs(x = if (xlab) "PMA at scan (weeks)" else NULL, y = ylab_for(cn), color = NULL, fill = NULL) +
+      labs(x = "PMA at scan (weeks)", y = ylab_for(cn), color = NULL, fill = NULL) +
       guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, linewidth = 1.2)), fill = "none") +
       theme_classic(base_size = 8) +
       theme(aspect.ratio = 1,                                            # square plotting area
@@ -1262,22 +1255,11 @@ panel_ncol_split <- 5
 if (panelB_split) {
   stopifnot(all(panelC_edges %in% sigEdges))
   edgesB <- setdiff(sigEdges, panelC_edges)                                      # keeps the order set in edge_order
-  shared_x <- panelB_shared_xlab                                                 # one x title per group
-  panelB <- make_panel_b(edgesB,       ncol = panel_ncol_split, legend = FALSE, xlab = !shared_x)
-  panelC <- make_panel_b(panelC_edges, ncol = panel_ncol_split, legend = FALSE, xlab = !shared_x)
-  xl_h   <- if (shared_x) xlab_h_in else 0
-  # draws a plot grid in a viewport and, if shared_x, the common x title under it (centered under the plots that are there)
-  draw_group <- function(p, n_plots, x0_in, y0_in, w_in, plots_h_in) {
-    print(p$fig, vp = grid::viewport(x = grid::unit(x0_in, "in"), y = grid::unit(y0_in + xl_h, "in"), width = grid::unit(w_in, "in"),
-                                     height = grid::unit(plots_h_in, "in"), just = c("left", "bottom")))
-    if (shared_x) grid::grid.text("PMA at scan (weeks)", x = grid::unit(x0_in + w_in * min(n_plots, panel_ncol_split) / panel_ncol_split / 2 + 0.25, "in"),
-                                  y = grid::unit(y0_in + xl_h / 2, "in"), gp = grid::gpar(fontsize = axis_title_size))
-  }
-  show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + xl_h,
-           function() { grid::grid.newpage(); draw_group(panelB, length(edgesB), 0, 0, panelB_w_in, panelB_row_h_in * panelB$nrow) })                 # width x height in inches
-  show_fig("Figure3_PanelC", panelB_w_in, panelB_row_h_in * panelC$nrow + xl_h,
-           function() { grid::grid.newpage(); draw_group(panelC, length(panelC_edges), 0, 0, panelB_w_in, panelB_row_h_in * panelC$nrow)
-                        draw_pt_legend(panelB_w_in, panelB_row_h_in * panelC$nrow, y0_in = xl_h) })
+  panelB <- make_panel_b(edgesB,       ncol = panel_ncol_split, legend = FALSE)
+  panelC <- make_panel_b(panelC_edges, ncol = panel_ncol_split, legend = FALSE)
+  show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow, function() print(panelB$fig))                 # width x height in inches
+  show_fig("Figure3_PanelC", panelB_w_in, panelB_row_h_in * panelC$nrow,
+           function() { print(panelC$fig); draw_pt_legend(panelB_w_in, panelB_row_h_in * panelC$nrow) })
 } else {
   panelB <- make_panel_b(sigEdges)
   show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + 0.55, function() print(panelB$fig))           # width x height in inches
@@ -1317,7 +1299,7 @@ if (file.exists(nodeFile)) {
 # Needs the rgl and png packages and an OpenGL display (a normal desktop session); the rgl windows must stay visible.
 # Orientation: node and mesh coordinates are assumed to share one space with x = right, y = anterior,
 # z = superior (as in BrainNet Viewer); they are rotated into rgl's axes (x, z, -y), a pure rotation.
-# The bounding boxes are printed so you can confirm the mesh and nodes overlap.
+# A warning is given if the nodes fall outside the mesh (different coordinate spaces).
 RUN_BRAIN_RENDER <- TRUE
 bn_mesh_name     <- "preterm_mesh.obj"
 bn_nodes_shown   <- "edges_only"      # "edges_only": only ROIs touched by a significant edge; "all": all 78 ROIs
@@ -1370,10 +1352,9 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
   names(bn_nodes) <- c("x", "y", "z", "color", "size", "label")
   bn_nodes$lobe <- roiData$Lobe[match(bn_nodes$label, roiData$FullLabel)]
   stopifnot(!anyNA(bn_nodes$lobe))
-  print(rbind(mesh = apply(xyz, 2, range)[2, ] - apply(xyz, 2, range)[1, ],                 # extent (mm) in x, y, z
-              nodes = apply(bn_nodes[, c("x", "y", "z")], 2, range)[2, ] - apply(bn_nodes[, c("x", "y", "z")], 2, range)[1, ]))
-  print(rbind(mesh_min = apply(xyz, 2, min), mesh_max = apply(xyz, 2, max),
-              node_min = apply(bn_nodes[, c("x", "y", "z")], 2, min), node_max = apply(bn_nodes[, c("x", "y", "z")], 2, max)))
+  nd_rng <- apply(bn_nodes[, c("x", "y", "z")], 2, range); ms_rng <- apply(xyz, 2, range)
+  if (any(nd_rng[1, ] < ms_rng[1, ] - 0.1 * (ms_rng[2, ] - ms_rng[1, ]) | nd_rng[2, ] > ms_rng[2, ] + 0.1 * (ms_rng[2, ] - ms_rng[1, ])))
+    warning("Some nodes lie well outside the mesh: the node file and the mesh may not share a coordinate space.")
   width_mm <- diff(range(xyz[, 1]))
 
   ends  <- do.call(rbind, strsplit(gsub(".", "-", sigEdges, fixed = TRUE), "_", fixed = TRUE))
@@ -1440,10 +1421,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
   # ---- combine into one figure: the views in bn_panels, then the magnification (bn_layout = "row"; "grid" gives 2 rows) ----
   # Each image is trimmed to the brain and surrounded by bn_pad_x_in and bn_pad_y_in of white space for labeling the ROIs by hand.
   # The magnification is calibrated from the dorsal image so that the box in the dorsal view and the magnified panel cover the same region.
-  if (!requireNamespace("png", quietly = TRUE)) {
-    message("Package png not installed (install.packages('png')); the views were saved separately instead of combined.")
-    for (nm in c(bn_panels, if (bn_inset) "inset")) file.copy(f_png(nm), file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")), overwrite = TRUE)
-  } else {
+  {
     rd <- function(f) png::readPNG(f)[, , 1:3, drop = FALSE]
     trim <- function(im, m = 6) { nw <- im[, , 1] < .99 | im[, , 2] < .99 | im[, , 3] < .99          # trim to the drawing, keep m px of white (the faint outer surface must not be clipped)
                            r <- range(which(rowSums(nw) > 0)); cc <- range(which(colSums(nw) > 0))
@@ -1462,8 +1440,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     row_w <- function(r) sum(wid[r]) + (length(r) + 1) * padx
     W     <- max(sapply(rows, row_w)); Hfig <- length(rows) * H + (length(rows) + 1) * pady
     # Draws the image strip (Panel A) in the current viewport; sc scales every size (1 = natural size in inches).
-    draw_combined <- function(sc = 1) {
-      grid::grid.newpage()
+    draw_strip <- function(sc = 1, lwd = 1.5) {
       for (k in seq_along(rows)) {
         r <- rows[[k]]; x <- (W - row_w(r)) / 2 + padx; y0 <- Hfig - k * (H + pady)               # row k from the top
         for (nm in r) {
@@ -1471,46 +1448,33 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
           grid::grid.raster(ims[[nm]], x = grid::unit(x * sc, "in"), y = grid::unit(yy * sc, "in"), width = grid::unit(wid[[nm]] * sc, "in"),
                             height = grid::unit(hgt[[nm]] * sc, "in"), just = c("left", "bottom"), interpolate = TRUE)
           if (nm == "inset") grid::grid.rect(x = grid::unit(x * sc, "in"), y = grid::unit(yy * sc, "in"), width = grid::unit(wid[[nm]] * sc, "in"),
-                                             height = grid::unit(hgt[[nm]] * sc, "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = 1.5))
+                                             height = grid::unit(hgt[[nm]] * sc, "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = lwd))
           x <- x + wid[[nm]] + padx
         }
       }
     }
-    if (bn_save_strip) show_fig("Fig3_PanelA_brain", W, Hfig, draw_combined)
+    if (bn_save_strip) show_fig("Fig3_PanelA_brain", W, Hfig, function() { grid::grid.newpage(); draw_strip() })
 
     # Figure 3, Panels A + B: the image strip on top (scaled to the width of Panel B), the interaction plots below.
     # Panel B is drawn at its own design size (section 6), so its text sizes are unchanged.
     sc_a    <- panelB_w_in / W
     a_h_in  <- Hfig * sc_a
-    b_h_in  <- if (panelB_split) panelB_row_h_in * panelB$nrow + xl_h else panelB_row_h_in * panelB$nrow + 0.55   # Panel B (without legend when split; + its shared x title)
-    c_h_in  <- if (panelB_split) panelB_row_h_in * panelC$nrow + xl_h else 0                                 # Panel C (its legend sits beside the plots)
+    b_h_in  <- if (panelB_split) panelB_row_h_in * panelB$nrow else panelB_row_h_in * panelB$nrow + 0.55   # Panel B (no legend row when split)
+    c_h_in  <- if (panelB_split) panelB_row_h_in * panelC$nrow else 0                                        # Panel C (its legend sits beside the plots)
     fig3_h  <- a_h_in + bn_gap_ab_in + b_h_in + c_h_in
     draw_fig3 <- function() {
       grid::grid.newpage()
       grid::pushViewport(grid::viewport(x = 0, y = grid::unit(fig3_h, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(a_h_in, "in"), just = c("left", "top")))
-      draw_strip <- function() {                                                                  # Panel A (same drawing, scaled)
-        for (k in seq_along(rows)) {
-          r <- rows[[k]]; x <- (W - row_w(r)) / 2 + padx; y0 <- Hfig - k * (H + pady)
-          for (nm in r) {
-            yy <- y0 + (H - hgt[[nm]]) / 2
-            grid::grid.raster(ims[[nm]], x = grid::unit(x * sc_a, "in"), y = grid::unit(yy * sc_a, "in"), width = grid::unit(wid[[nm]] * sc_a, "in"),
-                              height = grid::unit(hgt[[nm]] * sc_a, "in"), just = c("left", "bottom"), interpolate = TRUE)
-            if (nm == "inset") grid::grid.rect(x = grid::unit(x * sc_a, "in"), y = grid::unit(yy * sc_a, "in"), width = grid::unit(wid[[nm]] * sc_a, "in"),
-                                               height = grid::unit(hgt[[nm]] * sc_a, "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = 1))
-            x <- x + wid[[nm]] + padx
-          }
-        }
-      }
-      draw_strip()
+      draw_strip(sc_a, lwd = 1)                                                                   # Panel A (same drawing, scaled)
       grid::popViewport()
       letter <- function(txt, y_top_in) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y_top_in, "in") - grid::unit(0.02, "in"),
                                                         just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
       bx <- bn_panel_left_in; bw <- panelB_w_in - bx                                              # Panels B and C start bx in from the left, leaving room for the letters
+      vpB <- function(y0, h) grid::viewport(x = grid::unit(bx, "in"), y = grid::unit(y0, "in"), width = grid::unit(bw, "in"), height = grid::unit(h, "in"), just = c("left", "bottom"))
       if (panelB_split) {
-        draw_group(panelB, length(edgesB), bx, c_h_in, bw, b_h_in - xl_h)
-        draw_group(panelC, length(panelC_edges), bx, 0, bw, c_h_in - xl_h)
-        draw_pt_legend(bw, c_h_in - xl_h, x0_in = bx, y0_in = xl_h)
-      } else print(panelB$fig, vp = grid::viewport(x = grid::unit(bx, "in"), y = grid::unit(c_h_in, "in"), width = grid::unit(bw, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
+        print(panelB$fig, vp = vpB(c_h_in, b_h_in)); print(panelC$fig, vp = vpB(0, c_h_in))
+        draw_pt_legend(bw, c_h_in, x0_in = bx)
+      } else print(panelB$fig, vp = vpB(c_h_in, b_h_in))
       letter("A", fig3_h); letter("B", c_h_in + b_h_in); if (panelB_split) letter("C", c_h_in)
     }
     show_fig("Fig3_PanelsAB", panelB_w_in, fig3_h, draw_fig3)
