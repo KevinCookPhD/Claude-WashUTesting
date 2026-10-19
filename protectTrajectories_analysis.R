@@ -1156,9 +1156,9 @@ panel_ncol      <- 4       # panels per row; 16 edges fit a 4x4 grid exactly (le
 # Size: design the figure at the size it will be printed, so the text sizes below are the printed sizes.
 panelB_w_in      <- 7.5    # export width (inches); a bit wider than tall leaves room for the brain image above
 panelB_row_h_in  <- 1.3    # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
-axis_text_size   <- 8      # tick labels (points)
-axis_title_size  <- 8.5    # axis titles (points), both axes
-legend_text_size <- 9.5    # legend (points)
+axis_text_size   <- 5.5    # tick labels (points)
+axis_title_size  <- 6      # axis titles (points), both axes
+legend_text_size <- 7.5    # legend (points)
 panelB_labels    <- "short"   # y-axis names: "short" = display names with hemisphere, e.g. "Superior Orbital (L)"; "long" = atlas long names
 
 panel_data <- function(cn) {
@@ -1337,6 +1337,7 @@ bn_pad_y_in       <- 0.1              # white space above and below the images, 
 bn_save_strip     <- FALSE            # TRUE: also save the image strip (Panel A) on its own
 bn_gap_ab_in      <- 0.1              # space between Panel A and Panel B in the combined figure, inches
 bn_letter_pt      <- 14               # panel letters A and B (points)
+bn_panel_left_in  <- 0.22             # Panels B and C are indented by this much (inches) so the letters do not sit on the y-axis labels
 bn_letter_in      <- 0.03             # distance of the letters from the top-left corner of each panel, inches
 bn_save_views     <- FALSE            # TRUE: also write each view as its own PNG (needs SAVE_FIGS)
 
@@ -1490,10 +1491,11 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
       grid::popViewport()
       letter <- function(txt, y_top_in) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y_top_in, "in") - grid::unit(0.02, "in"),
                                                         just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
-      print(panelB$fig, vp = grid::viewport(x = 0, y = grid::unit(c_h_in, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
+      bx <- bn_panel_left_in; bw <- panelB_w_in - bx                                              # Panels B and C start bx in from the left, leaving room for the letters
+      print(panelB$fig, vp = grid::viewport(x = grid::unit(bx, "in"), y = grid::unit(c_h_in, "in"), width = grid::unit(bw, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
       if (panelB_split) {
-        print(panelC$fig, vp = grid::viewport(x = 0, y = 0, width = grid::unit(panelB_w_in, "in"), height = grid::unit(c_h_in, "in"), just = c("left", "bottom")))
-        draw_pt_legend(panelB_w_in, c_h_in)
+        print(panelC$fig, vp = grid::viewport(x = grid::unit(bx, "in"), y = 0, width = grid::unit(bw, "in"), height = grid::unit(c_h_in, "in"), just = c("left", "bottom")))
+        draw_pt_legend(bw, c_h_in, x0_in = bx)
       }
       letter("A", fig3_h); letter("B", c_h_in + b_h_in); if (panelB_split) letter("C", c_h_in)
     }
