@@ -875,10 +875,13 @@ show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 # separate Fig2_chord_* files remain available as vectors for editing. Whole-figure size is set by fig2_box_h_in.
 RUN_FIG2_ASSEMBLY <- TRUE
 fig2_box_h_in   <- 4.2    # base height of a box, inches: sets the size of the matrices (and the first guess for the chords)
-fig2_chord_scale <- 1.3   # chord diagram height relative to that (1 = same as before); the boxes, and panel C, grow with it. The figure gets wider and taller
+fig2_chord_scale <- 1.15  # chord diagram height relative to that (1 = same as before); the boxes, and panel C, grow with it. The figure gets wider and taller
 fig2_title_h_in <- 0.5    # band at the top of each box for the title (Preterm / Fetal)
 fig2_pad_in     <- 0.15   # space inside the boxes
 fig2_gap_in     <- 0.2    # space between boxes
+fig2_boxes      <- TRUE   # TRUE: rounded frames around A, B and C; FALSE: none (the letters and white space separate the panels)
+fig2_box_col    <- "#808080"   # frame color
+fig2_box_lwd    <- 0.7    # frame line width
 fig2_title_pt   <- 18     # box titles (points)
 fig2_letter_pt  <- 18     # panel letters (points)
 fig2_dpi        <- 220    # resolution at which the pieces are drawn before they are placed (their design sizes are 6-10 in)
@@ -907,8 +910,8 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
   draw_fig2 <- function() {
     grid::grid.newpage()
     u <- function(v) grid::unit(v, "in")
-    box <- function(x, y, w, h) grid::grid.roundrect(x = u(x), y = u(y), width = u(w), height = u(h), just = c("left", "bottom"),
-                                                      r = grid::unit(0.12, "in"), gp = grid::gpar(col = "#000000", fill = NA, lwd = 1.2))
+    box <- function(x, y, w, h) if (fig2_boxes) grid::grid.roundrect(x = u(x), y = u(y), width = u(w), height = u(h), just = c("left", "bottom"),
+                                                      r = grid::unit(0.12, "in"), gp = grid::gpar(col = fig2_box_col, fill = NA, lwd = fig2_box_lwd))
     img <- function(im, x, y, w, h) grid::grid.raster(im, x = u(x), y = u(y), width = u(w), height = u(h), just = c("left", "bottom"), interpolate = TRUE)
     txt <- function(label, x, y, pt, just = "centre") grid::grid.text(label, x = u(x), y = u(y), just = just, gp = grid::gpar(fontsize = pt, fontface = "bold"))
     x0 <- 0.05
