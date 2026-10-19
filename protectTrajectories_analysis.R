@@ -693,19 +693,27 @@ b_dir    <- fetalRes$scanTypeb[match(allConn, fetalRes$Connection)] > 0
 chord_col_fetal   <- ifelse(b_dir, "#00000000", col_fetal)       # fetal-greater edges only
 chord_col_preterm <- ifelse(b_dir, col_preterm, "#00000000")     # preterm-greater edges only
 
-# Sector labels use roi_display (no hemisphere). label_cex sets the label size.
-draw_chord <- function(cols, label_cex = 1) {
+# Chord layout settings (tune here)
+chord_canvas    <- 1.75   # half-width of the drawing canvas; raise it if labels are still cut off (the circle gets smaller)
+chord_label_cex <- 0.8    # label size
+chord_label_gap <- 1.5    # mm between a colored sector and its label: the SAME for every label, left and right
+
+# Sector labels use roi_display (no hemisphere). Each label starts a fixed distance (mm) beyond its
+# colored sector and runs outward; with adj = c(0, .5) and niceFacing, circlize mirrors the anchor for
+# the flipped (left-side) labels, so their near end sits the same distance from the sector.
+draw_chord <- function(cols, label_cex = chord_label_cex) {
   circos.clear()
-  circos.par(start.degree = 86, gap.after = gapSize)
+  circos.par(start.degree = 86, gap.after = gapSize,
+             canvas.xlim = c(-chord_canvas, chord_canvas), canvas.ylim = c(-chord_canvas, chord_canvas))
   chordDiagram(chord_df, order = roiList, grid.col = roiColor, col = cols, symmetric = TRUE, scale = TRUE,
                annotationTrack = "grid", annotationTrackHeight = c(0.03, 0.03))
   circos.track(track.index = 1, bg.border = NA, panel.fun = function(x, y)
-    circos.text(CELL_META$xcenter, CELL_META$ylim[1], display_name(CELL_META$sector.index),
-                facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5), cex = label_cex))
+    circos.text(CELL_META$xcenter, CELL_META$cell.ylim[2] + mm_y(chord_label_gap), display_name(CELL_META$sector.index),
+                facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex = label_cex))
   circos.clear()
 }
-show_fig("Fig2_chord_fetal",   8, 8, function() draw_chord(chord_col_fetal))
-show_fig("Fig2_chord_preterm", 8, 8, function() draw_chord(chord_col_preterm))
+show_fig("Fig2_chord_fetal",   9, 9, function() draw_chord(chord_col_fetal))
+show_fig("Fig2_chord_preterm", 9, 9, function() draw_chord(chord_col_preterm))
 
 ## ---- 4d. Table 2 + homotopic bar plot --------------------------------------
 # Homotopic edges = the same region in the left and right hemispheres.
