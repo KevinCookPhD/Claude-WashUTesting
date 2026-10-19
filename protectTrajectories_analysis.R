@@ -1255,7 +1255,9 @@ if (file.exists(nodeFile)) {
 ## ---- 7b. Fig. 3 Panel A in R: nodes and significant edges on the neonatal surface (rgl) ----
 # Reads the neonatal surface exported from Surf Ice (preterm_mesh.obj) and the same node file used for
 # BrainNet Viewer, then draws the nodes (colored by lobe) and the significant edges on a semi-transparent
-# surface and saves PNG snapshots. Needs the rgl package and an OpenGL display (a normal desktop session).
+# surface, then combines left lateral, right lateral and a dorsal view (with a box around the densest cluster) plus a
+# magnified panel of that box into ONE figure with white space around each image for labeling by hand.
+# Needs the rgl and png packages and an OpenGL display (a normal desktop session); the rgl windows must stay visible.
 # Orientation: node and mesh coordinates are assumed to share one space with x = right, y = anterior,
 # z = superior (as in BrainNet Viewer); they are rotated into rgl's axes (x, z, -y), a pure rotation.
 # The bounding boxes are printed so you can confirm the mesh and nodes overlap.
@@ -1276,7 +1278,15 @@ bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels (= the r
 bn_views <- list(right_lateral = c(theta = 90,  phi = 0),  left_lateral = c(theta = -90, phi = 0),
                  dorsal        = c(theta = 0,   phi = 90), ventral      = c(theta = 0,   phi = -90),
                  anterior      = c(theta = 180, phi = 0),  posterior    = c(theta = 0,   phi = 0))
-bn_views_saved <- c("right_lateral", "left_lateral", "dorsal")   # which views are written to PNG
+bn_inset          <- TRUE             # add a magnified panel of the densest cluster of nodes (the dorsal view gets a box around it)
+bn_inset_view     <- "dorsal"         # view used for the main picture with the box and for the magnification
+bn_inset_radius_mm <- 25              # nodes within this distance (mm) of the best-connected node form the magnified cluster
+bn_inset_margin_mm <- 8               # extra space around the cluster inside the box (mm)
+bn_inset_zoom     <- NULL             # NULL = estimated from the box size; set a number (smaller = more magnified) to tune by hand
+bn_box_col        <- "#000000"        # color of the box and the magnification frame
+bn_panel_h_in     <- 3.2              # height of every image in the combined figure, inches
+bn_pad_in         <- 0.8              # white space around each image for hand-labeling the ROIs, inches
+bn_save_views     <- FALSE            # TRUE: also write each view as its own PNG (needs SAVE_FIGS)
 
 bn_dir <- c(file.path(figureDir, "brainNetPlotting"), file.path(figureDir, "bainNetPlotting"))   # either spelling of the folder
 bn_dir <- bn_dir[dir.exists(bn_dir)][1]
@@ -1306,21 +1316,85 @@ if (RUN_BRAIN_RENDER && !requireNamespace("rgl", quietly = TRUE)) {
   shown <- if (bn_nodes_shown == "all") seq_len(nrow(bn_nodes)) else which(bn_nodes$label %in% c(ends))
   node_xyz <- to_rgl(as.matrix(bn_nodes[shown, c("x", "y", "z")]))
 
-  draw_brain <- function() {
+  draw_brain <- function(box = FALSE) {
     rgl::bg3d("white")
     rgl::shade3d(mesh, color = bn_surface_col, alpha = bn_surface_alpha, specular = "black")
     for (i in seq_len(nrow(p1)))
       rgl::shade3d(rgl::cylinder3d(rbind(p1[i, ], p2[i, ]), radius = bn_edge_scale * width_mm, sides = 10, closed = -2),
                    color = bn_edge_col, specular = "black")
     rgl::spheres3d(node_xyz, radius = bn_node_scale * width_mm, color = lobe_pal[bn_nodes$lobe[shown]], specular = "black")
+    if (box) for (i in 1:4)                                                          # square marking the magnified region (dorsal view)
+      rgl::shade3d(rgl::cylinder3d(rbind(box_pts[i, ], box_pts[i %% 4 + 1, ]), radius = 0.25 * bn_edge_scale * width_mm, sides = 6, closed = -2),
+                   color = bn_box_col, specular = "black")
   }
+
+  # ---- magnified region: the densest group of significant-edge nodes around the best-connected node ----
+  deg    <- table(c(ends))
+  hub    <- names(deg)[which.max(deg)]
+  nd_xyz <- as.matrix(bn_nodes[, c("x", "y", "z")]); rownames(nd_xyz) <- bn_nodes$label
+  cand   <- names(deg)
+  d_hub  <- sqrt(rowSums((nd_xyz[cand, , drop = FALSE] - matrix(nd_xyz[hub, ], length(cand), 3, byrow = TRUE))^2))
+  cl     <- cand[d_hub <= bn_inset_radius_mm]
+  cl_ctr <- colMeans(nd_xyz[cl, , drop = FALSE])
+  half   <- max(10, max(abs(sweep(nd_xyz[cl, 1:2, drop = FALSE], 2, cl_ctr[1:2]))) + bn_inset_margin_mm)   # half-width of the box (mm)
+  box_pts <- to_rgl(cbind(cl_ctr[1] + c(-1, 1, 1, -1) * half, cl_ctr[2] + c(-1, -1, 1, 1) * half, max(xyz[, 3]) - 0.5))   # 4 corners at the top of the brain
+  message("Magnified region: ", length(cl), " nodes around ", hub, " (", paste(cl, collapse = ", "), "); box half-width ", round(half, 1), " mm")
+  vis0_mm   <- diff(range(xyz[, 2])) / 0.76          # approx. height (mm) of the dorsal image at the default zoom (brain length ~76% of it)
+  inset_zoom <- if (is.null(bn_inset_zoom)) bn_zoom[[bn_inset_view]] * (2 * half) / vis0_mm else bn_inset_zoom
+
+  # ---- snapshots ----
+  snap <- function(v, file, zoom, center_on = NULL, box = FALSE) {
+    rgl::clear3d(); draw_brain(box)
+    rgl::view3d(theta = bn_views[[v]][["theta"]], phi = bn_views[[v]][["phi"]], fov = bn_fov, zoom = zoom)
+    if (!is.null(center_on)) {                                                      # shift the view so `center_on` (rgl coordinates) sits in the middle
+      bb <- rgl::par3d("bbox"); c0 <- c(mean(bb[1:2]), mean(bb[3:4]), mean(bb[5:6]))
+      um <- rgl::par3d("userMatrix"); um[1:3, 4] <- um[1:3, 4] - drop(um[1:3, 1:3] %*% (center_on - c0))
+      rgl::par3d(userMatrix = um)
+    }
+    rgl::snapshot3d(file, webshot = FALSE)                                          # plain screen capture; no webshot2/Chrome needed
+  }
+  f_png <- function(nm) if (bn_save_views && SAVE_FIGS) file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")) else file.path(tempdir(), paste0("bn_", nm, ".png"))
   rgl::open3d(windowRect = c(20, 20, 20 + bn_png_px[1], 20 + bn_png_px[2]))      # the saved PNG has the size of this window
-  draw_brain()
-  for (v in bn_views_saved) {
-    rgl::view3d(theta = bn_views[[v]][["theta"]], phi = bn_views[[v]][["phi"]], fov = bn_fov, zoom = bn_zoom[[v]])
-    if (SAVE_FIGS) rgl::snapshot3d(file.path(figureDir, paste0("Fig3_PanelA_", v, ".png")), webshot = FALSE)   # plain screen capture; no webshot2/Chrome needed
+  snap("left_lateral",  f_png("left_lateral"),  bn_zoom[["left_lateral"]])
+  snap("right_lateral", f_png("right_lateral"), bn_zoom[["right_lateral"]])
+  snap(bn_inset_view,   f_png("dorsal"),        bn_zoom[[bn_inset_view]], box = bn_inset)
+  if (bn_inset) snap(bn_inset_view, f_png("inset"), inset_zoom, center_on = to_rgl(matrix(cl_ctr, 1))[1, ])
+
+  # ---- combine into one figure: left lateral | right lateral on top; dorsal (box) | magnification below ----
+  # Each image is trimmed to the brain and surrounded by bn_pad_in of white space for labeling the ROIs by hand.
+  if (!requireNamespace("png", quietly = TRUE)) {
+    message("Package png not installed (install.packages('png')); the views were saved separately instead of combined.")
+    for (nm in c("left_lateral", "right_lateral", "dorsal", if (bn_inset) "inset")) file.copy(f_png(nm), file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")), overwrite = TRUE)
+  } else {
+    rd <- function(f) png::readPNG(f)[, , 1:3, drop = FALSE]
+    trim <- function(im) { nw <- im[, , 1] < .97 | im[, , 2] < .97 | im[, , 3] < .97
+                           r <- range(which(rowSums(nw) > 0)); cc <- range(which(colSums(nw) > 0)); im[r[1]:r[2], cc[1]:cc[2], , drop = FALSE] }
+    centre_sq <- function(im) { s <- min(dim(im)[1:2]); r0 <- floor((dim(im)[1] - s) / 2); c0 <- floor((dim(im)[2] - s) / 2)
+                                im[r0 + seq_len(s), c0 + seq_len(s), , drop = FALSE] }
+    ims   <- list(left_lateral = trim(rd(f_png("left_lateral"))), right_lateral = trim(rd(f_png("right_lateral"))), dorsal = trim(rd(f_png("dorsal"))))
+    if (bn_inset) ims$inset <- centre_sq(rd(f_png("inset")))
+    H     <- bn_panel_h_in; pad <- bn_pad_in
+    wid   <- sapply(ims, function(im) H * dim(im)[2] / dim(im)[1]); if (bn_inset) wid[["inset"]] <- H
+    row_t <- c("left_lateral", "right_lateral"); row_b <- c("dorsal", if (bn_inset) "inset")
+    row_w <- function(r) sum(wid[r]) + (length(r) + 1) * pad
+    W     <- max(row_w(row_t), row_w(row_b)); Hfig <- 2 * H + 3 * pad
+    draw_combined <- function() {
+      grid::grid.newpage()
+      place <- function(r, y0) {
+        x <- (W - row_w(r)) / 2 + pad
+        for (nm in r) {
+          grid::grid.raster(ims[[nm]], x = grid::unit(x, "in"), y = grid::unit(y0, "in"), width = grid::unit(wid[[nm]], "in"),
+                            height = grid::unit(H, "in"), just = c("left", "bottom"), interpolate = TRUE)
+          if (nm == "inset") grid::grid.rect(x = grid::unit(x, "in"), y = grid::unit(y0, "in"), width = grid::unit(wid[[nm]], "in"),
+                                             height = grid::unit(H, "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = 1.5))
+          x <- x + wid[[nm]] + pad
+        }
+      }
+      place(row_t, Hfig - pad - H); place(row_b, pad)
+    }
+    show_fig("Fig3_PanelA_brain", W, Hfig, draw_combined)
   }
-  # The window stays open at the last view: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
+  # The rgl window stays open: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
 }
 
 
