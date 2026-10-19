@@ -632,6 +632,13 @@ lobe_runs  <- rle(as.character(cort$Lobe))                                      
 lobe_end   <- cumsum(lobe_runs$lengths); lobe_start <- lobe_end - lobe_runs$lengths + 1
 heat_lim   <- ceiling(max(abs(fetalRes$scanTypeb[sigFetal])) * 100) / 100       # top of the color scale
 
+# Matrix layout settings (tune here)
+tri_strip_thick <- 2      # lobe sidebar thickness, in matrix cells (the homotopic chart's strip is about 3% of its panel width)
+tri_strip_gap   <- 1      # gap between the axis line and the sidebar, in cells
+tri_bar_len_in  <- 1.5    # colorbar length, inches
+tri_bar_w_in    <- 0.17   # colorbar width, inches
+tri_axis_lw     <- 0.5    # line width of the left/bottom axis lines and the hypotenuse
+
 tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
   keep[is.na(keep)] <- FALSE
   d <- cp[keep, ]
@@ -639,14 +646,16 @@ tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
   d$x <- pmin(i, j); d$y <- pmax(i, j)                                         # lower triangle: y (row) >= x (column)
   d$beta <- abs(d$B)
   bnd <- lobe_end[-length(lobe_end)] + 0.5                                     # lobe boundaries
-  gap <- 1.2; thick <- 3.4                                                     # sidebar offset and thickness (cell units)
+  gap <- tri_strip_gap; thick <- tri_strip_thick                               # sidebar offset and thickness (cell units)
   mid <- (lobe_start + lobe_end) / 2
   ggplot(d) +
     geom_tile(aes(x, y, fill = beta), width = 1, height = 1) +
     scale_fill_gradient2(low = ramp[1], mid = ramp[2], high = ramp[3], midpoint = lim / 2,
                          limits = c(0, lim), breaks = seq(0.1, lim, by = 0.1)) +
-    # hypotenuse and lobe boundaries (inside the triangle)
-    annotate("segment", x = 0.5, xend = n_roi + 0.5, y = 0.5, yend = n_roi + 0.5, linewidth = 0.4) +
+    # axis lines (left and bottom edges), hypotenuse, and lobe boundaries (inside the triangle)
+    annotate("segment", x = 0.5, xend = 0.5, y = 0.5, yend = n_roi + 0.5, linewidth = tri_axis_lw) +
+    annotate("segment", x = 0.5, xend = n_roi + 0.5, y = n_roi + 0.5, yend = n_roi + 0.5, linewidth = tri_axis_lw) +
+    annotate("segment", x = 0.5, xend = n_roi + 0.5, y = 0.5, yend = n_roi + 0.5, linewidth = tri_axis_lw) +
     annotate("segment", x = 0.5, xend = bnd, y = bnd, yend = bnd, linewidth = 0.25) +
     annotate("segment", x = bnd, xend = bnd, y = bnd, yend = n_roi + 0.5, linewidth = 0.25) +
     # lobe sidebars + labels: left (vertical) and bottom (horizontal)
@@ -662,7 +671,8 @@ tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
     guides(fill = guide_colourbar(frame.colour = "#000000", ticks.colour = "#000000")) +
     theme_void(base_size = 10) +
     theme(aspect.ratio = 1, plot.margin = margin(margin_pt[1], margin_pt[2], margin_pt[3], margin_pt[4], "pt"),
-          legend.key.height = unit(1.1, "in"), legend.key.width = unit(0.16, "in"),
+          # a colorbar is 5 x legend.key.height long, so divide the wanted length by 5
+          legend.key.height = unit(tri_bar_len_in / 5, "in"), legend.key.width = unit(tri_bar_w_in, "in"),
           legend.title = element_text(size = 12), legend.text = element_text(size = 8)) +
     legend_inside(0.88, 0.80)
 }
