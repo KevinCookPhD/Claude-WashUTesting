@@ -1202,9 +1202,9 @@ make_panel_b <- function(edges, ncol = panel_ncol_split) {
 # Legend-only plot for the empty cells beside Panel C
 pt_legend_plot <- function() {
   d <- data.frame(g = factor(rep(names(cols_pt), each = 2), levels = names(cols_pt)), x = rep(1:2, 3), y = 1)
-  p <- ggplot(d, aes(x, y, color = g, group = g)) + geom_line(linewidth = line_w) +
+  p <- ggplot(d, aes(x, y, color = g, group = g)) + geom_line(linewidth = line_w) + geom_point(size = 2.2) +   # key = line with a dot (dots are scans, lines are model fits)
     scale_color_manual(values = cols_pt, labels = grp_labels, name = NULL) +
-    guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4))) +
+    guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4, size = 2.2))) +
     theme_void() + theme(legend.position = "left", legend.text = element_text(size = legend_text_size, color = "#000000"),
                          legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"), legend.margin = margin(0, 0, 0, 0))
   ggpubr::as_ggplot(ggpubr::get_legend(p))
@@ -1287,6 +1287,8 @@ bn_box_col        <- "#000000"        # color of the box and the magnification f
 bn_panel_h_in     <- 2.3              # height of every image in the combined figure, inches
 bn_pad_x_in       <- 0.2              # white space between images, inches (room for ROI labels; raise it if you need more)
 bn_pad_y_in       <- 0.1              # white space above and below the images, inches
+bn_key_h_in      <- 0.24             # height of the lobe color key under Panel A, inches
+bn_key_pt        <- 7                # lobe key text size (points)
 bn_gap_ab_in      <- 0.1              # space between Panel A and Panel B in the combined figure, inches
 bn_letter_pt      <- 14               # panel letters A and B (points)
 bn_panel_left_in  <- 0.22             # Panels B and C are indented by this much (inches) so the letters do not sit on the y-axis labels
@@ -1413,12 +1415,23 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     a_h_in  <- Hfig * sc_a
     b_h_in  <- panelB_row_h_in * panelB$nrow                                                                # Panel B
     c_h_in  <- panelB_row_h_in * panelC$nrow                                                                # Panel C (its legend sits beside the plots)
-    fig3_h  <- a_h_in + bn_gap_ab_in + b_h_in + c_h_in
+    fig3_h  <- a_h_in + bn_key_h_in + bn_gap_ab_in + b_h_in + c_h_in
     draw_fig3 <- function() {
       grid::grid.newpage()
       grid::pushViewport(grid::viewport(x = 0, y = grid::unit(fig3_h, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(a_h_in, "in"), just = c("left", "top")))
       draw_strip(sc_a, lwd = 1)                                                                   # Panel A (same drawing, scaled)
       grid::popViewport()
+      # Lobe color key under Panel A: a dot per lobe, same colors as the nodes
+      key_y  <- fig3_h - a_h_in - bn_key_h_in / 2
+      key_w  <- c(0.62, 0.7, 0.62, 0.7)                                                           # approx. width of each dot + label (inches)
+      key_x0 <- (panelB_w_in - sum(key_w)) / 2
+      for (k in seq_along(lobe_pal)) {
+        xk <- key_x0 + sum(key_w[seq_len(k - 1)])
+        grid::grid.circle(x = grid::unit(xk + 0.07, "in"), y = grid::unit(key_y, "in"), r = grid::unit(0.065, "in"),
+                          gp = grid::gpar(fill = lobe_pal[[k]], col = "#00000066", lwd = 0.6))
+        grid::grid.text(names(lobe_pal)[k], x = grid::unit(xk + 0.17, "in"), y = grid::unit(key_y, "in"), just = "left",
+                        gp = grid::gpar(fontsize = bn_key_pt))
+      }
       letter <- function(txt, y_top_in) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y_top_in, "in") - grid::unit(0.02, "in"),
                                                         just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
       bx <- bn_panel_left_in; bw <- panelB_w_in - bx                                              # Panels B and C start bx in from the left, leaving room for the letters
