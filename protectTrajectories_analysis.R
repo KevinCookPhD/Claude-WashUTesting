@@ -1207,7 +1207,9 @@ pt_legend_plot <- function() {
     scale_color_manual(values = cols_pt, labels = grp_labels, name = NULL) +
     guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4, size = 2.2))) +
     theme_void() + theme(legend.position = "left", legend.text = element_text(size = legend_text_size, color = "#000000"),
-                         legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"), legend.margin = margin(0, 0, 0, 0))
+                         legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"),
+                         legend.background = element_rect(color = "#000000", fill = "#ffffff", linewidth = 0.5),   # box around the legend
+                         legend.margin = margin(7, 10, 7, 10))
   ggpubr::as_ggplot(ggpubr::get_legend(p))
 }
 # draws the legend in the right-hand part of the Panel C area of the given size (columns beyond the three plots)
@@ -1222,7 +1224,9 @@ draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel
   vp  <- function(y, h) grid::viewport(x = grid::unit(x0_in, "in"), y = grid::unit(y0_in + y, "in"), width = grid::unit(bw, "in"),
                                        height = grid::unit(h, "in"), just = c("left", "bottom"))
   print(pB$fig, vp = vp(c_h, b_h)); print(pC$fig, vp = vp(0, c_h))
-  draw_pt_legend(bw, c_h, x0_in = x0_in, y0_in = y0_in)
+  # Legend: centered in the empty block to the right of the plots, which spans Panel C's row and the last (partly empty)
+  # row of Panel B above it, so it is centered on the boundary between them.
+  draw_pt_legend(bw, 2 * panelB_row_h_in, x0_in = x0_in, y0_in = y0_in + c_h - panelB_row_h_in)
   lab <- function(txt, y_top) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y0_in + y_top, "in") - grid::unit(0.02, "in"),
                                               just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
   lab(letters[1], c_h + b_h); lab(letters[2], c_h)
@@ -1437,8 +1441,10 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
       grid::popViewport()
       # Lobe color key under Panel A: a dot per lobe, same colors as the nodes
       key_y  <- fig3_h - a_h_in - bn_key_h_in / 2
-      key_w  <- c(0.62, 0.7, 0.62, 0.7)                                                           # approx. width of each dot + label (inches)
+      key_w  <- c(0.62, 0.7, 0.62, 0.55)                                                          # width of each dot + label (inches); the last is the label's own width
       key_x0 <- (panelB_w_in - sum(key_w)) / 2
+      grid::grid.rect(x = grid::unit(panelB_w_in / 2, "in"), y = grid::unit(key_y, "in"), width = grid::unit(sum(key_w) + 0.2, "in"),
+                      height = grid::unit(bn_key_h_in - 0.04, "in"), gp = grid::gpar(col = "#000000", fill = NA, lwd = 0.6))   # box around the lobe key
       for (k in seq_along(lobe_pal)) {
         xk <- key_x0 + sum(key_w[seq_len(k - 1)])
         grid::grid.circle(x = grid::unit(xk + 0.07, "in"), y = grid::unit(key_y, "in"), r = grid::unit(0.065, "in"),
