@@ -922,7 +922,7 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
     img(hm, xc + fig2_pad_in, 0.05 + fig2_pad_in, homo_w, homo_h)
     txt("C", xc + 0.1, 0.05 + 2 * fig2_box_h_in + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
   }
-  show_fig("Fig2_assembled", W2, H2, draw_fig2)
+  show_fig("Fig2_assembled", W2, H2, draw_fig2, save = TRUE)   # always written to file: drawing this many large pictures in the RStudio plot pane times out
 }
 
 ## ---- 4g. SI Fig. 2: mean connectivity matrices, one per group (Fetal, EPT, VPT, MPT) ----
