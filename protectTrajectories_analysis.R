@@ -1284,14 +1284,15 @@ bn_inset_radius_mm <- 25              # nodes within this distance (mm) of the b
 bn_inset_margin_mm <- 8               # extra space around the cluster inside the box (mm)
 bn_inset_zoom     <- NULL             # NULL = estimated from the box size; set a number (smaller = more magnified) to tune by hand
 bn_box_col        <- "#000000"        # color of the box and the magnification frame
-bn_panel_h_in     <- 3.2              # height of every image in the combined figure, inches
-bn_pad_in         <- 0.8              # white space around each image for hand-labeling the ROIs, inches
+bn_layout         <- "row"            # "row": all four images side by side (a wide, short figure that sits above the interaction plots); "grid": 2 x 2
+bn_panel_h_in     <- 2.3              # height of every image in the combined figure, inches
+bn_pad_in         <- 0.45             # white space around each image for hand-labeling the ROIs, inches
 bn_save_views     <- FALSE            # TRUE: also write each view as its own PNG (needs SAVE_FIGS)
 
 bn_dir <- c(file.path(figureDir, "brainNetPlotting"), file.path(figureDir, "bainNetPlotting"))   # either spelling of the folder
 bn_dir <- bn_dir[dir.exists(bn_dir)][1]
-if (RUN_BRAIN_RENDER && !requireNamespace("rgl", quietly = TRUE)) {
-  message("Package rgl not installed; skipping the brain render (install.packages('rgl')).")
+if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireNamespace("png", quietly = TRUE)))) {
+  message("Packages rgl and png are needed for the brain render; skipping (install.packages(c('rgl', 'png'))).")
 } else if (RUN_BRAIN_RENDER && (is.na(bn_dir) || !file.exists(file.path(bn_dir, bn_mesh_name)) || !file.exists(file.path(bn_dir, basename(nodeFile))))) {
   message("Mesh or node file not found in the BrainNet folder; skipping the brain render.")
 } else if (RUN_BRAIN_RENDER) {
@@ -1337,10 +1338,10 @@ if (RUN_BRAIN_RENDER && !requireNamespace("rgl", quietly = TRUE)) {
   cl     <- cand[d_hub <= bn_inset_radius_mm]
   cl_ctr <- colMeans(nd_xyz[cl, , drop = FALSE])
   half   <- max(10, max(abs(sweep(nd_xyz[cl, 1:2, drop = FALSE], 2, cl_ctr[1:2]))) + bn_inset_margin_mm)   # half-width of the box (mm)
-  box_pts <- to_rgl(cbind(cl_ctr[1] + c(-1, 1, 1, -1) * half, cl_ctr[2] + c(-1, -1, 1, 1) * half, max(xyz[, 3]) - 0.5))   # 4 corners at the top of the brain
+  clampc <- function(v, r) if (2 * half + 2 >= diff(r)) mean(r) else min(max(v, r[1] + half + 1), r[2] - half - 1)
+  box_ctr <- c(clampc(cl_ctr[1], range(xyz[, 1])), clampc(cl_ctr[2], range(xyz[, 2])), cl_ctr[3])         # box centre, kept inside the brain
+  box_pts <- to_rgl(cbind(box_ctr[1] + c(-1, 1, 1, -1) * half, box_ctr[2] + c(-1, -1, 1, 1) * half, box_ctr[3]))   # drawn at the depth of the nodes, so it lines up with the magnification
   message("Magnified region: ", length(cl), " nodes around ", hub, " (", paste(cl, collapse = ", "), "); box half-width ", round(half, 1), " mm")
-  vis0_mm   <- diff(range(xyz[, 2])) / 0.76          # approx. height (mm) of the dorsal image at the default zoom (brain length ~76% of it)
-  inset_zoom <- if (is.null(bn_inset_zoom)) bn_zoom[[bn_inset_view]] * (2 * half) / vis0_mm else bn_inset_zoom
 
   # ---- snapshots ----
   snap <- function(v, file, zoom, center_on = NULL, box = FALSE) {
@@ -1358,30 +1359,43 @@ if (RUN_BRAIN_RENDER && !requireNamespace("rgl", quietly = TRUE)) {
   snap("left_lateral",  f_png("left_lateral"),  bn_zoom[["left_lateral"]])
   snap("right_lateral", f_png("right_lateral"), bn_zoom[["right_lateral"]])
   snap(bn_inset_view,   f_png("dorsal"),        bn_zoom[[bn_inset_view]], box = bn_inset)
-  if (bn_inset) snap(bn_inset_view, f_png("inset"), inset_zoom, center_on = to_rgl(matrix(cl_ctr, 1))[1, ])
+  if (bn_inset) {
+    # Calibrate the magnification from the dorsal picture itself: pixels per mm there (brain width in pixels / width in mm),
+    # then choose the zoom at which the window height spans exactly the box (2 x half mm). Zoom is inversely proportional to scale.
+    im_d  <- png::readPNG(f_png("dorsal"))[, , 1:3, drop = FALSE]
+    nw_d  <- im_d[, , 1] < .985 | im_d[, , 2] < .985 | im_d[, , 3] < .985
+    px_mm <- diff(range(which(colSums(nw_d) > 0))) / diff(range(xyz[, 1]))
+    inset_zoom <- if (is.null(bn_inset_zoom)) bn_zoom[[bn_inset_view]] * px_mm * 2 * half / dim(im_d)[1] else bn_inset_zoom
+    message("Magnification zoom: ", round(inset_zoom, 3), " (set bn_inset_zoom to override)")
+    snap(bn_inset_view, f_png("inset"), inset_zoom, center_on = to_rgl(matrix(box_ctr, 1))[1, ])
+  }
 
-  # ---- combine into one figure: left lateral | right lateral on top; dorsal (box) | magnification below ----
+  # ---- combine into one figure: left lateral | right lateral | dorsal (with box) | magnification (bn_layout = "row"; "grid" gives 2 x 2) ----
   # Each image is trimmed to the brain and surrounded by bn_pad_in of white space for labeling the ROIs by hand.
+  # The magnification is calibrated from the dorsal image so that the box in the dorsal view and the magnified panel cover the same region.
   if (!requireNamespace("png", quietly = TRUE)) {
     message("Package png not installed (install.packages('png')); the views were saved separately instead of combined.")
     for (nm in c("left_lateral", "right_lateral", "dorsal", if (bn_inset) "inset")) file.copy(f_png(nm), file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")), overwrite = TRUE)
   } else {
     rd <- function(f) png::readPNG(f)[, , 1:3, drop = FALSE]
-    trim <- function(im) { nw <- im[, , 1] < .97 | im[, , 2] < .97 | im[, , 3] < .97
-                           r <- range(which(rowSums(nw) > 0)); cc <- range(which(colSums(nw) > 0)); im[r[1]:r[2], cc[1]:cc[2], , drop = FALSE] }
+    trim <- function(im, m = 12) { nw <- im[, , 1] < .99 | im[, , 2] < .99 | im[, , 3] < .99          # trim to the drawing, keep m px of white (the faint outer surface must not be clipped)
+                           r <- range(which(rowSums(nw) > 0)); cc <- range(which(colSums(nw) > 0))
+                           r <- c(max(1, r[1] - m), min(dim(im)[1], r[2] + m)); cc <- c(max(1, cc[1] - m), min(dim(im)[2], cc[2] + m))
+                           im[r[1]:r[2], cc[1]:cc[2], , drop = FALSE] }
     centre_sq <- function(im) { s <- min(dim(im)[1:2]); r0 <- floor((dim(im)[1] - s) / 2); c0 <- floor((dim(im)[2] - s) / 2)
                                 im[r0 + seq_len(s), c0 + seq_len(s), , drop = FALSE] }
     ims   <- list(left_lateral = trim(rd(f_png("left_lateral"))), right_lateral = trim(rd(f_png("right_lateral"))), dorsal = trim(rd(f_png("dorsal"))))
     if (bn_inset) ims$inset <- centre_sq(rd(f_png("inset")))
     H     <- bn_panel_h_in; pad <- bn_pad_in
     wid   <- sapply(ims, function(im) H * dim(im)[2] / dim(im)[1]); if (bn_inset) wid[["inset"]] <- H
-    row_t <- c("left_lateral", "right_lateral"); row_b <- c("dorsal", if (bn_inset) "inset")
+    rows  <- if (bn_layout == "row") list(c("left_lateral", "right_lateral", "dorsal", if (bn_inset) "inset"))
+             else list(c("left_lateral", "right_lateral"), c("dorsal", if (bn_inset) "inset"))
     row_w <- function(r) sum(wid[r]) + (length(r) + 1) * pad
-    W     <- max(row_w(row_t), row_w(row_b)); Hfig <- 2 * H + 3 * pad
+    W     <- max(sapply(rows, row_w)); Hfig <- length(rows) * H + (length(rows) + 1) * pad
     draw_combined <- function() {
       grid::grid.newpage()
-      place <- function(r, y0) {
-        x <- (W - row_w(r)) / 2 + pad
+      for (k in seq_along(rows)) {
+        r <- rows[[k]]; x <- (W - row_w(r)) / 2 + pad; y0 <- Hfig - k * (H + pad)                 # row k from the top
         for (nm in r) {
           grid::grid.raster(ims[[nm]], x = grid::unit(x, "in"), y = grid::unit(y0, "in"), width = grid::unit(wid[[nm]], "in"),
                             height = grid::unit(H, "in"), just = c("left", "bottom"), interpolate = TRUE)
@@ -1390,7 +1404,6 @@ if (RUN_BRAIN_RENDER && !requireNamespace("rgl", quietly = TRUE)) {
           x <- x + wid[[nm]] + pad
         }
       }
-      place(row_t, Hfig - pad - H); place(row_b, pad)
     }
     show_fig("Fig3_PanelA_brain", W, Hfig, draw_combined)
   }
