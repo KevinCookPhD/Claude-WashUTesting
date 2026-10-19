@@ -1270,7 +1270,7 @@ bn_edge_col      <- "#333333"
 bn_surface_col   <- "#c8c8c8"
 bn_surface_alpha <- 0.12              # surface opacity (lower = see the nodes through the brain more easily)
 bn_fov           <- 10                # 0 = orthographic (nodes the same size at any depth, like a glass-brain figure); 30-60 = perspective
-bn_zoom          <- c(right_lateral = 0.6, left_lateral = 0.6, dorsal = 0.7, ventral = 0.7, anterior = 0.8, posterior = 0.8)
+bn_zoom          <- c(right_lateral = 0.6, left_lateral = 0.6, dorsal = 0.7, ventral = 0.7, anterior = 0.6, posterior = 0.6)
                                       # per view; SMALLER = brain fills more of the image. The dorsal view is taller than the lateral ones, so it needs a larger value
 bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels (= the rgl window size; keep it within your screen: a window larger than the screen is cut off)
 # Views to save: theta (rotation about the vertical axis, degrees) and phi (elevation, degrees).
@@ -1278,13 +1278,14 @@ bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels (= the r
 bn_views <- list(right_lateral = c(theta = 90,  phi = 0),  left_lateral = c(theta = -90, phi = 0),
                  dorsal        = c(theta = 0,   phi = 90), ventral      = c(theta = 0,   phi = -90),
                  anterior      = c(theta = 180, phi = 0),  posterior    = c(theta = 0,   phi = 0))
-bn_inset          <- TRUE             # add a magnified panel of the densest cluster of nodes (the dorsal view gets a box around it)
+bn_panels         <- c("right_lateral", "anterior", "dorsal")   # views in the figure, left to right: any of right_lateral, left_lateral, anterior (coronal), posterior, dorsal, ventral
+bn_inset          <- TRUE             # add a magnified panel of the most medial frontal connections (the dorsal view gets a rectangle around them)
 bn_inset_view     <- "dorsal"         # view used for the main picture with the box and for the magnification
-bn_inset_radius_mm <- 25              # nodes within this distance (mm) of the best-connected node form the magnified cluster
-bn_inset_margin_mm <- 8               # extra space around the cluster inside the box (mm)
+bn_inset_n_edges  <- 6                # the magnified region frames the n most medial frontal-frontal connections (rectangle around their nodes)
+bn_inset_margin_mm <- 6               # extra space around those nodes inside the rectangle (mm)
 bn_inset_zoom     <- NULL             # NULL = estimated from the box size; set a number (smaller = more magnified) to tune by hand
 bn_box_col        <- "#000000"        # color of the box and the magnification frame
-bn_layout         <- "row"            # "row": all four images side by side (a wide, short figure that sits above the interaction plots); "grid": 2 x 2
+bn_layout         <- "row"            # "row": all images side by side (a wide, short figure that sits above the interaction plots); "grid": two rows
 bn_panel_h_in     <- 2.3              # height of every image in the combined figure, inches
 bn_pad_in         <- 0.45             # white space around each image for hand-labeling the ROIs, inches
 bn_save_views     <- FALSE            # TRUE: also write each view as its own PNG (needs SAVE_FIGS)
@@ -1329,19 +1330,21 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
                    color = bn_box_col, specular = "black")
   }
 
-  # ---- magnified region: the densest group of significant-edge nodes around the best-connected node ----
-  deg    <- table(c(ends))
-  hub    <- names(deg)[which.max(deg)]
+  # ---- magnified region: the bn_inset_n_edges most medial frontal-frontal connections ----
+  # "Medial" = smallest mean distance of the two end nodes from the midline (x centre of the surface).
   nd_xyz <- as.matrix(bn_nodes[, c("x", "y", "z")]); rownames(nd_xyz) <- bn_nodes$label
-  cand   <- names(deg)
-  d_hub  <- sqrt(rowSums((nd_xyz[cand, , drop = FALSE] - matrix(nd_xyz[hub, ], length(cand), 3, byrow = TRUE))^2))
-  cl     <- cand[d_hub <= bn_inset_radius_mm]
-  cl_ctr <- colMeans(nd_xyz[cl, , drop = FALSE])
-  half   <- max(10, max(abs(sweep(nd_xyz[cl, 1:2, drop = FALSE], 2, cl_ctr[1:2]))) + bn_inset_margin_mm)   # half-width of the box (mm)
-  clampc <- function(v, r) if (2 * half + 2 >= diff(r)) mean(r) else min(max(v, r[1] + half + 1), r[2] - half - 1)
-  box_ctr <- c(clampc(cl_ctr[1], range(xyz[, 1])), clampc(cl_ctr[2], range(xyz[, 2])), cl_ctr[3])         # box centre, kept inside the brain
-  box_pts <- to_rgl(cbind(box_ctr[1] + c(-1, 1, 1, -1) * half, box_ctr[2] + c(-1, -1, 1, 1) * half, box_ctr[3]))   # drawn at the depth of the nodes, so it lines up with the magnification
-  message("Magnified region: ", length(cl), " nodes around ", hub, " (", paste(cl, collapse = ", "), "); box half-width ", round(half, 1), " mm")
+  mid_x  <- mean(range(xyz[, 1]))
+  is_fr  <- bn_nodes$lobe[match(ends[, 1], bn_nodes$label)] == "Frontal" & bn_nodes$lobe[match(ends[, 2], bn_nodes$label)] == "Frontal"
+  medial <- (abs(nd_xyz[ends[, 1], 1] - mid_x) + abs(nd_xyz[ends[, 2], 1] - mid_x)) / 2
+  pick   <- head(order(ifelse(is_fr, medial, Inf)), min(bn_inset_n_edges, sum(is_fr)))
+  cl     <- unique(c(ends[pick, ]))                                                 # nodes of the picked connections
+  box_lo <- apply(nd_xyz[cl, , drop = FALSE], 2, min); box_hi <- apply(nd_xyz[cl, , drop = FALSE], 2, max)
+  hx <- (box_hi[1] - box_lo[1]) / 2 + bn_inset_margin_mm; hy <- (box_hi[2] - box_lo[2]) / 2 + bn_inset_margin_mm   # half-width / half-height of the rectangle (mm)
+  clampc <- function(v, r, h) if (2 * h + 2 >= diff(r)) mean(r) else min(max(v, r[1] + h + 1), r[2] - h - 1)
+  cl_ctr  <- (box_lo + box_hi) / 2
+  box_ctr <- c(clampc(cl_ctr[1], range(xyz[, 1]), hx), clampc(cl_ctr[2], range(xyz[, 2]), hy), cl_ctr[3])   # centre, kept inside the brain
+  box_pts <- to_rgl(cbind(box_ctr[1] + c(-1, 1, 1, -1) * hx, box_ctr[2] + c(-1, -1, 1, 1) * hy, box_ctr[3]))   # at the depth of the nodes, so it lines up with the magnification
+  message("Magnified region: connections ", paste(sigEdges[pick], collapse = ", "), "; box ", round(2 * hx, 1), " x ", round(2 * hy, 1), " mm")
 
   # ---- snapshots ----
   snap <- function(v, file, zoom, center_on = NULL, box = FALSE) {
@@ -1356,40 +1359,40 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
   }
   f_png <- function(nm) if (bn_save_views && SAVE_FIGS) file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")) else file.path(tempdir(), paste0("bn_", nm, ".png"))
   rgl::open3d(windowRect = c(20, 20, 20 + bn_png_px[1], 20 + bn_png_px[2]))      # the saved PNG has the size of this window
-  snap("left_lateral",  f_png("left_lateral"),  bn_zoom[["left_lateral"]])
-  snap("right_lateral", f_png("right_lateral"), bn_zoom[["right_lateral"]])
-  snap(bn_inset_view,   f_png("dorsal"),        bn_zoom[[bn_inset_view]], box = bn_inset)
+  for (v in bn_panels) snap(v, f_png(v), bn_zoom[[v]], box = bn_inset && v == bn_inset_view)
   if (bn_inset) {
     # Calibrate the magnification from the dorsal picture itself: pixels per mm there (brain width in pixels / width in mm),
-    # then choose the zoom at which the window height spans exactly the box (2 x half mm). Zoom is inversely proportional to scale.
-    im_d  <- png::readPNG(f_png("dorsal"))[, , 1:3, drop = FALSE]
+    # then choose the zoom at which the rectangle just fits the window. Zoom is inversely proportional to scale.
+    im_d  <- png::readPNG(f_png(bn_inset_view))[, , 1:3, drop = FALSE]
     nw_d  <- im_d[, , 1] < .985 | im_d[, , 2] < .985 | im_d[, , 3] < .985
     px_mm <- diff(range(which(colSums(nw_d) > 0))) / diff(range(xyz[, 1]))
-    inset_zoom <- if (is.null(bn_inset_zoom)) bn_zoom[[bn_inset_view]] * px_mm * 2 * half / dim(im_d)[1] else bn_inset_zoom
+    px_mm_t <- min(dim(im_d)[2] / (2 * hx), dim(im_d)[1] / (2 * hy))                 # target pixels per mm in the magnified picture
+    inset_zoom <- if (is.null(bn_inset_zoom)) bn_zoom[[bn_inset_view]] * px_mm / px_mm_t else bn_inset_zoom
     message("Magnification zoom: ", round(inset_zoom, 3), " (set bn_inset_zoom to override)")
     snap(bn_inset_view, f_png("inset"), inset_zoom, center_on = to_rgl(matrix(box_ctr, 1))[1, ])
   }
 
-  # ---- combine into one figure: left lateral | right lateral | dorsal (with box) | magnification (bn_layout = "row"; "grid" gives 2 x 2) ----
+  # ---- combine into one figure: the views in bn_panels, then the magnification (bn_layout = "row"; "grid" gives 2 rows) ----
   # Each image is trimmed to the brain and surrounded by bn_pad_in of white space for labeling the ROIs by hand.
   # The magnification is calibrated from the dorsal image so that the box in the dorsal view and the magnified panel cover the same region.
   if (!requireNamespace("png", quietly = TRUE)) {
     message("Package png not installed (install.packages('png')); the views were saved separately instead of combined.")
-    for (nm in c("left_lateral", "right_lateral", "dorsal", if (bn_inset) "inset")) file.copy(f_png(nm), file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")), overwrite = TRUE)
+    for (nm in c(bn_panels, if (bn_inset) "inset")) file.copy(f_png(nm), file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")), overwrite = TRUE)
   } else {
     rd <- function(f) png::readPNG(f)[, , 1:3, drop = FALSE]
     trim <- function(im, m = 12) { nw <- im[, , 1] < .99 | im[, , 2] < .99 | im[, , 3] < .99          # trim to the drawing, keep m px of white (the faint outer surface must not be clipped)
                            r <- range(which(rowSums(nw) > 0)); cc <- range(which(colSums(nw) > 0))
                            r <- c(max(1, r[1] - m), min(dim(im)[1], r[2] + m)); cc <- c(max(1, cc[1] - m), min(dim(im)[2], cc[2] + m))
                            im[r[1]:r[2], cc[1]:cc[2], , drop = FALSE] }
-    centre_sq <- function(im) { s <- min(dim(im)[1:2]); r0 <- floor((dim(im)[1] - s) / 2); c0 <- floor((dim(im)[2] - s) / 2)
-                                im[r0 + seq_len(s), c0 + seq_len(s), , drop = FALSE] }
-    ims   <- list(left_lateral = trim(rd(f_png("left_lateral"))), right_lateral = trim(rd(f_png("right_lateral"))), dorsal = trim(rd(f_png("dorsal"))))
-    if (bn_inset) ims$inset <- centre_sq(rd(f_png("inset")))
+    centre_rect <- function(im, w, h) { h <- min(h, dim(im)[1]); w <- min(w, dim(im)[2])                    # w x h pixels from the middle of the window
+                                        r0 <- floor((dim(im)[1] - h) / 2); c0 <- floor((dim(im)[2] - w) / 2)
+                                        im[r0 + seq_len(h), c0 + seq_len(w), , drop = FALSE] }
+    ims   <- setNames(lapply(bn_panels, function(v) trim(rd(f_png(v)))), bn_panels)
+    if (bn_inset) ims$inset <- centre_rect(rd(f_png("inset")), round(2 * hx * px_mm_t), round(2 * hy * px_mm_t))
     H     <- bn_panel_h_in; pad <- bn_pad_in
-    wid   <- sapply(ims, function(im) H * dim(im)[2] / dim(im)[1]); if (bn_inset) wid[["inset"]] <- H
-    rows  <- if (bn_layout == "row") list(c("left_lateral", "right_lateral", "dorsal", if (bn_inset) "inset"))
-             else list(c("left_lateral", "right_lateral"), c("dorsal", if (bn_inset) "inset"))
+    wid   <- sapply(ims, function(im) H * dim(im)[2] / dim(im)[1])
+    rows  <- if (bn_layout == "row") list(c(bn_panels, if (bn_inset) "inset"))
+             else list(bn_panels[-length(bn_panels)], c(bn_panels[length(bn_panels)], if (bn_inset) "inset"))
     row_w <- function(r) sum(wid[r]) + (length(r) + 1) * pad
     W     <- max(sapply(rows, row_w)); Hfig <- length(rows) * H + (length(rows) + 1) * pad
     draw_combined <- function() {
