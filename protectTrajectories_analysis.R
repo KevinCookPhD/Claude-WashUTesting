@@ -68,7 +68,7 @@ library(ggpubr)     # ggarrange() for the multi-panel Fig. 3B
 
 ## ---- Switches --------------------------------------------------------------
 SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
-FIG_FORMATS               <- c("tiff", "svg")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf"
+FIG_FORMATS               <- c("tiff", "svg", "pdf")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf"
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
