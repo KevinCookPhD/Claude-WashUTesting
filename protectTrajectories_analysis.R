@@ -353,6 +353,31 @@ fetalDemoData$good4Min <- 1
 fetalDemoData$scanType <- "Fetal"
 goodData$scanType      <- "Preterm"
 
+## ---- Supplementary figure: usable scans per participant, preterm (top) and fetal (bottom) ----
+# Same style as qaPlot_goodOnly (section 1); both panels share the PMA axis so the groups are comparable.
+# Fetal scans are all 1.5T; the legend lists both scanners.
+if (RUN_QA_PLOTS) {
+  qa_good_pt <- subset(scanQA, good4Min == 1)
+  qa_good_ft <- fetalDemoData
+  qa_ylim <- c(floor(min(qa_good_pt$scanPMA, qa_good_ft$scanPMA) / 2) * 2, ceiling(max(qa_good_pt$scanPMA, qa_good_ft$scanPMA) / 2) * 2)
+  qa_panel <- function(d, ttl) {
+    d$scanner_f <- factor(as.character(d$scanner), levels = c("450", "750"))
+    ggplot(d, aes(x = shortID, y = scanPMA)) +
+      scale_y_continuous(limits = qa_ylim, breaks = seq(20, 60, 2), expand = c(0, 0)) +
+      scale_shape_manual(values = c("450" = 21, "750" = 23), labels = c("450" = "1.5T", "750" = "3T"), limits = c("450", "750")) +
+      scale_fill_manual(values = c("450" = "#0096FF", "750" = "#90EE90"), labels = c("450" = "1.5T", "750" = "3T"), limits = c("450", "750")) +
+      scale_color_manual(values = c("450" = "#00008B", "750" = "#095c00"), labels = c("450" = "1.5T", "750" = "3T"), limits = c("450", "750")) +
+      geom_line(aes(group = shortID), linewidth = 1) +
+      geom_point(aes(shape = scanner_f, color = scanner_f, fill = scanner_f), size = 3, stroke = 2) +
+      labs(x = "Participants", y = "PMA at Scan", title = ttl) +
+      theme_paper(legend = "bottom") + theme(axis.text.x = element_blank(), plot.title = element_text(size = 18, hjust = 0))
+  }
+  p_qa_pt_s <- qa_panel(qa_good_pt, sprintf("Preterm (%d infants, %d scans)", length(unique(qa_good_pt$shortID)), nrow(qa_good_pt)))
+  p_qa_ft_s <- qa_panel(qa_good_ft, sprintf("Fetal (%d participants, %d scans)", length(unique(qa_good_ft$shortID)), nrow(qa_good_ft)))
+  p_qa_stack <- ggpubr::ggarrange(p_qa_pt_s, p_qa_ft_s, ncol = 1, nrow = 2, align = "v", common.legend = TRUE, legend = "bottom")
+  show_fig("qaPlot_goodOnly_stacked", 18, 12, function() print(p_qa_stack))
+}
+
 combFCData   <- rbind(fcData, fetalFCData)
 combDemoData <- rbind(goodData, fetalDemoData)
 combDemoData$scanType <- factor(combDemoData$scanType)
