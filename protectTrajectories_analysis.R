@@ -1181,7 +1181,7 @@ ylab_for <- function(cn) {                                            # two line
   paste0(nm(p[1]), " \u2013\n", nm(p[2]))
 }
 
-make_panel_b <- function(edges) {
+make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
   pd        <- lapply(edges, panel_data)
   lab_order <- sub("_", " \u2013 ", gsub("\\.", "-", edges))
   pts       <- do.call(rbind, lapply(pd, `[[`, "pts"));       pts$label       <- factor(pts$label, levels = lab_order)
@@ -1216,15 +1216,29 @@ make_panel_b <- function(edges) {
             legend.position = "bottom", legend.text = element_text(size = legend_text_size))
   }
   plots <- lapply(seq_along(edges), function(j) edge_plot(edges[j], lab_order[j]))
-  nrow_fig <- ceiling(length(plots) / panel_ncol)
-  # One shared legend below the grid (taken from the first panel)
-  list(fig = ggpubr::ggarrange(plotlist = plots, ncol = panel_ncol, nrow = nrow_fig, align = "hv",
-                               common.legend = TRUE, legend = "bottom"),
+  nrow_fig <- ceiling(length(plots) / ncol)
+  # One shared legend below the grid (taken from the first panel); legend = FALSE leaves it out
+  list(fig = ggpubr::ggarrange(plotlist = plots, ncol = ncol, nrow = nrow_fig, align = "hv",
+                               common.legend = legend, legend = if (legend) "bottom" else "none"),
        nrow = nrow_fig)
 }
 
-panelB <- make_panel_b(sigEdges)
-show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + 0.55, function() print(panelB$fig))   # width x height in inches
+# Split into B and C? TRUE: Panel B = the connections where MPT differs from VPT and EPT (which look alike), Panel C = the
+# three oddballs (listed below), both panel_ncol_split columns wide with one shared legend under C. FALSE: one Panel B, as before.
+panelB_split     <- TRUE
+panelC_edges     <- c("PreCG.L_ORBmid.R", "SPG.L_HES.R", "SMG.L_SMG.R")
+panel_ncol_split <- 5
+if (panelB_split) {
+  stopifnot(all(panelC_edges %in% sigEdges))
+  edgesB <- setdiff(sigEdges, panelC_edges)                                      # keeps the order set in edge_order
+  panelB <- make_panel_b(edgesB,       ncol = panel_ncol_split, legend = FALSE)
+  panelC <- make_panel_b(panelC_edges, ncol = panel_ncol_split, legend = TRUE)
+  show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow, function() print(panelB$fig))                 # width x height in inches
+  show_fig("Figure3_PanelC", panelB_w_in, panelB_row_h_in * panelC$nrow + 0.55, function() print(panelC$fig))
+} else {
+  panelB <- make_panel_b(sigEdges)
+  show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + 0.55, function() print(panelB$fig))           # width x height in inches
+}
 
 
 ###############################################################################
@@ -1424,8 +1438,9 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     # Panel B is drawn at its own design size (section 6), so its text sizes are unchanged.
     sc_a    <- panelB_w_in / W
     a_h_in  <- Hfig * sc_a
-    b_h_in  <- panelB_row_h_in * panelB$nrow + 0.55
-    fig3_h  <- a_h_in + bn_gap_ab_in + b_h_in
+    b_h_in  <- if (panelB_split) panelB_row_h_in * panelB$nrow else panelB_row_h_in * panelB$nrow + 0.55   # Panel B (without legend when split)
+    c_h_in  <- if (panelB_split) panelB_row_h_in * panelC$nrow + 0.55 else 0                                 # Panel C, with the shared legend
+    fig3_h  <- a_h_in + bn_gap_ab_in + b_h_in + c_h_in
     draw_fig3 <- function() {
       grid::grid.newpage()
       grid::pushViewport(grid::viewport(x = 0, y = grid::unit(fig3_h, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(a_h_in, "in"), just = c("left", "top")))
@@ -1444,9 +1459,11 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
       }
       draw_strip()
       grid::popViewport()
-      print(panelB$fig, vp = grid::viewport(x = 0, y = 0, width = grid::unit(panelB_w_in, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
-      grid::grid.text("A", x = grid::unit(bn_letter_in, "in"), y = grid::unit(fig3_h, "in") - grid::unit(bn_letter_in, "in"), just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
-      grid::grid.text("B", x = grid::unit(bn_letter_in, "in"), y = grid::unit(b_h_in, "in") - grid::unit(0.02, "in"), just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
+      letter <- function(txt, y_top_in) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y_top_in, "in") - grid::unit(0.02, "in"),
+                                                        just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
+      print(panelB$fig, vp = grid::viewport(x = 0, y = grid::unit(c_h_in, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
+      if (panelB_split) print(panelC$fig, vp = grid::viewport(x = 0, y = 0, width = grid::unit(panelB_w_in, "in"), height = grid::unit(c_h_in, "in"), just = c("left", "bottom")))
+      letter("A", fig3_h); letter("B", c_h_in + b_h_in); if (panelB_split) letter("C", c_h_in)
     }
     show_fig("Fig3_PanelsAB", panelB_w_in, fig3_h, draw_fig3)
   }
