@@ -1158,9 +1158,8 @@ ylab_for <- function(cn) {                                            # two line
   paste0(nm(p[1]), " \u2013\n", nm(p[2]))
 }
 
-# data: scan table to plot/fit (default: all preterm scans); xlim/xbreaks: PMA axis; pvals: optional named vector of FDR-adjusted
-# p-values (names = edges) printed in each panel, with * when < .05
-make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24, 49), xbreaks = seq(25, 45, 5), pvals = NULL) {
+# data: scan table to plot/fit (default: all preterm scans); xlim/xbreaks: PMA axis
+make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24, 49), xbreaks = seq(25, 45, 5)) {
   pd        <- lapply(edges, panel_data, d0 = data)
   lab_order <- sub("_", " \u2013 ", gsub("\\.", "-", edges))
   pts       <- do.call(rbind, lapply(pd, `[[`, "pts"));       pts$label       <- factor(pts$label, levels = lab_order)
@@ -1183,8 +1182,6 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
       coord_cartesian(xlim = xlim, ylim = ylim) +
       labs(x = "PMA at scan (weeks)", y = ylab_for(cn), color = NULL, fill = NULL) +
-      {if (!is.null(pvals)) annotate("text", x = xlim[2], y = ylim[2], hjust = 1, vjust = 1, size = axis_text_size / ggplot2::.pt,
-                                     label = paste0("pFDR = ", fmt_p(pvals[[cn]]), if (pvals[[cn]] < .05) "*" else ""))} +
       theme_classic(base_size = 8) +
       theme(aspect.ratio = 1,                                            # square plotting area
             axis.line = element_line(color = "#000000", linewidth = .5),
@@ -1576,11 +1573,9 @@ if (RUN_SENSITIVITY) {
   res_gt32 <- wald_scan(pt32, fml_main, "ScanPMA:BirthCat")
   cmp_gt32 <- compare_sets(res_gt32); print(cmp_gt32)
   slopes_gt32_wide <- slope_wide(slope_table(pt32, sigEdges, fml_main)); print(slopes_gt32_wide)
-  # Supplemental figure: the Fig. 3 B/C trajectories refit on these scans only (same connections, order and layout), with
-  # each connection's FDR-adjusted p from this reduced sample; * = still significant after FDR.
-  p32  <- setNames(res_gt32$pAdj[match(sigEdges, res_gt32$Connection)], sigEdges)
-  pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5), pvals = p32)
-  pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5), pvals = p32)
+  # Supplemental figure: the Fig. 3 B/C trajectories refit on these scans only (same connections, order and layout).
+  pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
+  pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
   show_fig("SIFig_gt32_trajectories", panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
            function() { grid::grid.newpage(); draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B")) },
            save = TRUE)                                                   # always written to figureDir (the plot pane shows blank space above it: the pane is taller than the figure)
