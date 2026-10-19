@@ -764,8 +764,10 @@ homoH      <- homoPlot
 homoH$ROI  <- factor(as.character(homoH$Connection), levels = rev(homo_rois))   # ggplot draws the first level at the bottom
 homoH$Group <- factor(homoH$Group, levels = c("Preterm", "Fetal"))      # dodge order: Fetal ends up on top
 
-x_lo   <- floor(min(homoH$Mean - homoH$SE) * 4) / 4                    # x range in quarter steps
-x_hi   <- ceiling(max(homoH$Mean + homoH$SE) * 4) / 4
+# x range: the data range rounded outward to 0.05 (tight). Set homo_x_limits <- c(lo, hi) to override.
+homo_x_limits <- NULL
+x_lo   <- if (is.null(homo_x_limits)) floor(min(homoH$Mean - homoH$SE) * 20) / 20 else homo_x_limits[1]
+x_hi   <- if (is.null(homo_x_limits)) ceiling(max(homoH$Mean + homoH$SE) * 20) / 20 else homo_x_limits[2]
 x_span <- x_hi - x_lo
 strip_right <- x_lo - 0.008 * x_span                                   # strip sits just left of the axis line
 strip_left  <- strip_right - 0.035 * x_span
@@ -783,7 +785,7 @@ p_homo_h <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
            hjust = 1, size = homo_label_pt / ggplot2::.pt, color = "#000000") +
   scale_color_manual(values = c(Fetal = col_fetal, Preterm = col_preterm)) +
   scale_fill_manual(values = c(Fetal = paste0(col_fetal, "aa"), Preterm = paste0(col_preterm, "aa"))) +
-  scale_x_continuous(breaks = seq(x_lo, x_hi, by = 0.25), labels = scales::number_format(accuracy = 0.01), expand = c(0, 0)) +
+  scale_x_continuous(breaks = seq(ceiling(x_lo * 4) / 4, floor(x_hi * 4) / 4, by = 0.25), labels = scales::number_format(accuracy = 0.01), expand = c(0, 0)) +
   scale_y_discrete(expand = c(0, 0.5)) +                                 # half a row of padding top and bottom
   coord_cartesian(xlim = c(x_lo, x_hi), expand = FALSE, clip = "off") +
   guides(color = guide_legend(reverse = TRUE), fill = guide_legend(reverse = TRUE)) +   # legend reads Fetal, Preterm
