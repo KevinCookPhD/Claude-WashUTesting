@@ -639,11 +639,13 @@ c(homotopic_edges = nrow(homo), significant = sum(homo$scanTypep.Adj < .05),
 homoPlot <- rbind(data.frame(Connection = homo$ROI, Mean = homo$emmMean.Fetal,   SE = homo$emmSE.Fetal,   Group = "Fetal"),
                   data.frame(Connection = homo$ROI, Mean = homo$emmMean.Preterm, SE = homo$emmSE.Preterm, Group = "Preterm"))
 homoPlot$Connection <- factor(homoPlot$Connection, levels = bilatROI)
+bar_width   <- 0.8     # bar width (fraction of the space for one ROI)
+errbar_frac <- 0.75    # error-bar cap width as a fraction of the bar width
 p_homo <- ggplot(homoPlot, aes(x = Connection, y = Mean, group = Group)) +
   scale_color_manual(values = c(col_fetal, col_preterm)) +
   scale_fill_manual(values = paste0(c(col_fetal, col_preterm), "aa")) +
-  geom_bar(width = .8, stat = "identity", position = position_dodge2(), aes(color = Group, fill = Group), linewidth = 1) +
-  geom_errorbar(width = .8, position = position_dodge2(width = .2), aes(ymin = Mean - SE, ymax = Mean + SE)) +
+  geom_bar(width = bar_width, stat = "identity", position = position_dodge2(), aes(color = Group, fill = Group), linewidth = 1) +
+  geom_errorbar(width = bar_width * errbar_frac, position = position_dodge2(width = .2), aes(ymin = Mean - SE, ymax = Mean + SE)) +
   geom_hline(yintercept = 0, linewidth = 1.5) +
   xlab("") + ylab("Estimated marginal mean connectivity (Fisher z)") +
   theme_paper(grid_x = TRUE, legend = "bottom") + theme(axis.text.x = element_text(angle = 60, hjust = 1))
