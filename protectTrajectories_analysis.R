@@ -780,9 +780,11 @@ homoH      <- homoPlot
 homoH$ROI  <- factor(as.character(homoH$Connection), levels = rev(homo_rois))   # ggplot draws the first level at the bottom
 homoH$Group <- factor(homoH$Group, levels = c("Preterm", "Fetal"))      # dodge order: Fetal ends up on top
 
-# x range: the data range rounded outward to 0.05 (tight). Set homo_x_limits <- c(lo, hi) to override.
+# x range: the data range rounded outward to 0.05 (tight), with a small extra pad on the left so the lowest
+# error bar does not touch the axis. Set homo_x_limits <- c(lo, hi) to override.
 homo_x_limits <- NULL
-x_lo   <- if (is.null(homo_x_limits)) floor(min(homoH$Mean - homoH$SE) * 20) / 20 else homo_x_limits[1]
+homo_x_pad    <- 0.02                                                  # extra room on the negative side (x units)
+x_lo   <- if (is.null(homo_x_limits)) floor(min(homoH$Mean - homoH$SE) * 20) / 20 - homo_x_pad else homo_x_limits[1]
 x_hi   <- if (is.null(homo_x_limits)) ceiling(max(homoH$Mean + homoH$SE) * 20) / 20 else homo_x_limits[2]
 x_span <- x_hi - x_lo
 strip_right <- x_lo - 0.008 * x_span                                   # strip sits just left of the axis line
