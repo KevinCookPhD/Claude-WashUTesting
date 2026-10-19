@@ -74,6 +74,7 @@ RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
 RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges (slow serially; fast with N_CORES, cached)
 RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
+RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
 RUN_QC_COVARIATE_CONTROL  <- FALSE  # needs finalVol / tSNR for fetal scans (section 9e)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
@@ -1299,6 +1300,69 @@ if (RUN_EXTRA_CONTROLS) {
   print(cmp_fetal(fetalRes_raw, n_scans = nrow(scanInfo)))
   res_raw <- with_fc(rawFC, wald_scan(pt, fml_main, "ScanPMA:BirthCat"))
   cmp_raw <- compare_sets(res_raw); print(cmp_raw)
+}
+
+## ---- 9i. Do the fetal-vs-preterm differences depend on distance between ROIs? ----
+# Connectivity usually falls off with distance, so a group difference could simply be larger for
+# short or long connections. For every edge we take the Euclidean distance between the two ROI
+# centroids (coordinate template for gestational age `dist_ga`; the old script used 40 weeks) and
+# relate it to (a) the fetal-vs-preterm difference (beta, preterm minus fetal) and (b) each group's
+# own adjusted mean FC. Spearman correlations are tested with a permutation (Mantel-type) test that
+# shuffles ROI labels, because edges sharing an ROI are not independent; ordinary p-values over
+# 3,003 edges would be far too small.
+if (RUN_DISTANCE_CONTROL) {
+  dist_ga      <- 40       # which coordinate template to use (files ga23..ga37 and ga40 in labelsAndCoords)
+  n_perm       <- 5000     # permutations
+  coord_file   <- file.path(dataDir, "labelsAndCoords", sprintf("ga%dCoords_reformat.csv", dist_ga))
+  coords       <- read.csv(coord_file, stringsAsFactors = FALSE)
+  coord_cols   <- intersect(c("X", "Y", "Z"), names(coords))
+  stopifnot("ROI" %in% names(coords), all(c("X", "Y") %in% coord_cols))
+  message("Distances use coordinate columns: ", paste(coord_cols, collapse = ", "), " (template GA ", dist_ga, ")")
+  xyz <- as.matrix(coords[, coord_cols, drop = FALSE]); rownames(xyz) <- coords$ROI
+
+  e1 <- columnMembershipCortOnly$ROI1; e2 <- columnMembershipCortOnly$ROI2          # "PreCG-L" format, same order as allConn
+  stopifnot(identical(fetalRes$Connection, allConn), all(c(e1, e2) %in% rownames(xyz)))
+  nodes   <- sort(unique(c(e1, e2)))
+  Dmat    <- as.matrix(dist(xyz[nodes, , drop = FALSE]))                              # node-by-node distances
+  i1 <- match(e1, nodes); i2 <- match(e2, nodes)
+  edge_dist  <- Dmat[cbind(i1, i2)]
+  same_hemi  <- substr(e1, nchar(e1), nchar(e1)) == substr(e2, nchar(e2), nchar(e2))
+
+  outcomes <- list(`Group difference (beta, preterm - fetal)` = fetalRes$scanTypeb,
+                   `Fetal mean FC (adjusted)`   = fetalRes$emmMean.Fetal,
+                   `Preterm mean FC (adjusted)` = fetalRes$emmMean.Preterm)
+
+  # Spearman rho between distance and an outcome, with a node-label permutation p-value
+  mantel_rho <- function(y, idx, nperm = n_perm) {
+    ry  <- rank(y[idx]); obs <- cor(rank(edge_dist[idx]), ry)
+    set.seed(2026)
+    perm <- replicate(nperm, { p <- sample(length(nodes)); cor(rank(Dmat[cbind(p[i1[idx]], p[i2[idx]])]), ry) })
+    c(rho = obs, p_perm = (1 + sum(abs(perm) >= abs(obs))) / (1 + nperm), n_edges = length(idx))
+  }
+  subsets <- list(`All edges` = seq_along(allConn), `Within hemisphere` = which(same_hemi), `Between hemispheres` = which(!same_hemi))
+  dist_tab <- do.call(rbind, lapply(names(outcomes), function(o) do.call(rbind, lapply(names(subsets), function(g)
+    data.frame(Outcome = o, Edges = g, t(mantel_rho(outcomes[[o]], subsets[[g]])), check.names = FALSE)))))
+  dist_tab$rho <- round(dist_tab$rho, 3); dist_tab$p_perm <- round(dist_tab$p_perm, 4)
+  print(dist_tab)
+
+  # Are the significant fetal-greater and preterm-greater edges at different distances?
+  dir_sig <- ifelse(fetalRes$scanTypeb[sigFetal] > 0, "Preterm greater", "Fetal greater")
+  print(tapply(edge_dist[sigFetal], dir_sig, function(x) round(c(n = length(x), median = median(x), q25 = quantile(x, .25, names = FALSE), q75 = quantile(x, .75, names = FALSE)), 1)))
+  print(wilcox.test(edge_dist[sigFetal] ~ dir_sig))
+
+  # Figure: group difference by distance (binned means with 95% CI, over the scatter of all edges)
+  dd <- data.frame(dist = edge_dist, beta = fetalRes$scanTypeb)
+  dd$bin <- cut(dd$dist, breaks = unique(quantile(dd$dist, seq(0, 1, 0.1))), include.lowest = TRUE)
+  bin_df <- do.call(rbind, lapply(split(dd, dd$bin), function(g) data.frame(dist = mean(g$dist), mean = mean(g$beta), se = sd(g$beta) / sqrt(nrow(g)))))
+  p_dist <- ggplot(dd, aes(dist, beta)) +
+    geom_hline(yintercept = 0, linewidth = 0.4) +
+    geom_point(color = "#8a8a8a", alpha = 0.18, size = 0.5, stroke = 0) +
+    geom_errorbar(data = bin_df, aes(x = dist, y = mean, ymin = mean - 1.96 * se, ymax = mean + 1.96 * se), width = 0, color = col_preterm, linewidth = 0.6) +
+    geom_line(data = bin_df, aes(x = dist, y = mean), color = col_preterm, linewidth = 0.6) +
+    geom_point(data = bin_df, aes(x = dist, y = mean), color = col_preterm, size = 1.6) +
+    labs(x = "Distance between ROIs (template units)", y = "Preterm - fetal difference (Fisher z)") +
+    theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4))
+  show_fig("SuppFig_distance", 3.4, 3.0, function() print(p_dist))
 }
 
 ###############################################################################
