@@ -893,8 +893,8 @@ mat_diag_col    <- "#7f7f7f"      # diagonal cells
 mat_label_pt    <- 2              # ROI tick-label size (points); 78 labels per axis need a very small size
 mat_line_w      <- 0.25           # lobe boundary lines
 mat_bar_len_in  <- 1.5            # colorbar length, inches
-mat_bar_w_in    <- 0.18           # colorbar width, inches
-mat_margin_right_pt <- 6          # right margin of every matrix, points (the fetal lobe names spill into the empty cell beside it)
+mat_bar_w_in    <- 0.12           # colorbar width, inches
+mat_margin_right_pt <- 14         # right margin of every matrix, points: must exceed the lobe bar (gap + thickness) or it is cut off at the cell edge; the fetal lobe names spill into the empty cell beside it
 si2_cell_w_in   <- 3.0            # width of each of the 3 columns, inches (figure width = 3 x this)
 si2_cell_h_in   <- 3.1            # height of each of the 2 rows, inches (figure height = 2 x this); lower it to remove vertical white space
 
@@ -908,7 +908,7 @@ if (RUN_SI_MATRICES) {
   edge_i <- match(sapply(strsplit(allConn, "_", fixed = TRUE), `[`, 1), roi_levels)
   edge_j <- match(sapply(strsplit(allConn, "_", fixed = TRUE), `[`, 2), roi_levels)
   stopifnot(!anyNA(edge_i), !anyNA(edge_j))
-  roi_tick <- gsub(".", "-", roi_levels, fixed = TRUE)                              # "PreCG.L" -> "PreCG-L"
+  roi_tick <- paste0(display_name(roi_levels), " (", substr(roi_levels, nchar(roi_levels), nchar(roi_levels)), ")")   # "PreCG.L" -> "Precentral (L)"
 
   mat_long <- function(ids) {
     r <- tanh(colMeans(as.matrix(fc_mat_src[ids, allConn])))
@@ -939,24 +939,30 @@ if (RUN_SI_MATRICES) {
             axis.ticks = element_line(color = "#000000", linewidth = 0.2), axis.ticks.length = unit(1, "pt"),
             axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = mat_label_pt, color = "#000000"),
             axis.text.y = element_text(size = mat_label_pt, color = "#000000"),
-            axis.title = element_text(size = 5, color = "#000000"))
+            axis.title = element_text(size = 5, color = "#000000"),
+            plot.background = element_blank())                                       # transparent: neighbouring panels never paint over the lobe bars
     if (lobe_labels) p <- p +                                                      # lobe names with leader lines (right of the right bar)
       annotate("segment", x = edge + 0.5, xend = edge + 6, y = mid, yend = mid, linewidth = 0.3) +
       annotate("text", x = edge + 7, y = mid, label = lobe_runs$values, hjust = 0, size = 3.4)
     p
   }
-  mat_bar <- ggplot(data.frame(y = seq(-mat_lim, mat_lim, length.out = 200)), aes(1, y, fill = y)) +
-    geom_raster() +
+  # Colorbar drawn in inches: the plot fills its viewport exactly, so the bar is exactly mat_bar_w_in wide
+  # and mat_bar_len_in long; tick labels and "r" sit to its right.
+  bar_pad_in <- 0.08                                                                # room above/below for the end labels
+  bar_vp_w   <- mat_bar_w_in + 0.42; bar_vp_h <- mat_bar_len_in + 2 * bar_pad_in
+  per_in     <- 2 * mat_lim / mat_bar_len_in                                        # data units per inch
+  bar_breaks <- seq(-mat_lim, mat_lim, length.out = 5)
+  mat_bar <- ggplot() +
+    geom_tile(data = data.frame(y = seq(-mat_lim, mat_lim, length.out = 200)), aes(x = mat_bar_w_in / 2, y = y, fill = y),
+              width = mat_bar_w_in, height = 2 * mat_lim / 199) +
     scale_fill_gradient2(low = mat_ramp[["low"]], mid = mat_ramp[["mid"]], high = mat_ramp[["high"]],
                          midpoint = 0, limits = c(-mat_lim, mat_lim), guide = "none") +
-    scale_x_continuous(expand = c(0, 0)) +
-    scale_y_continuous(position = "right", breaks = seq(-mat_lim, mat_lim, length.out = 5), expand = c(0, 0)) +
-    labs(y = "r") +
-    theme_classic(base_size = 8) +
-    theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.line.x = element_blank(),
-          axis.line.y = element_blank(), axis.title.y.right = element_text(angle = 0, vjust = 0.5, size = 9),
-          axis.text.y.right = element_text(size = 8, color = "#000000"), axis.ticks.y.right = element_line(color = "#000000", linewidth = 0.3),
-          panel.border = element_rect(color = "#000000", fill = NA, linewidth = 0.5))
+    annotate("rect", xmin = 0, xmax = mat_bar_w_in, ymin = -mat_lim, ymax = mat_lim, fill = NA, color = "#000000", linewidth = 0.5) +
+    annotate("segment", x = mat_bar_w_in, xend = mat_bar_w_in + 0.04, y = bar_breaks, yend = bar_breaks, linewidth = 0.3) +
+    annotate("text", x = mat_bar_w_in + 0.06, y = bar_breaks, label = format(bar_breaks, trim = TRUE), hjust = 0, size = 8 / ggplot2::.pt) +
+    annotate("text", x = mat_bar_w_in + 0.30, y = 0, label = "r", hjust = 0, size = 9 / ggplot2::.pt) +
+    coord_cartesian(xlim = c(0, bar_vp_w), ylim = c(-mat_lim - bar_pad_in * per_in, mat_lim + bar_pad_in * per_in), expand = FALSE, clip = "off") +
+    theme_void() + theme(plot.margin = margin(0, 0, 0, 0))
 
   print(sapply(mat_groups, length))                                                 # scans per group
   # Combined figure: EPT, VPT, MPT on top; colorbar, fetal (with lobe names), empty cell on the bottom.
@@ -966,7 +972,6 @@ if (RUN_SI_MATRICES) {
   p_si_vpt <- mat_plot(mat_groups$VPT, margin_pt = m_pt)
   p_si_mpt <- mat_plot(mat_groups$MPT, margin_pt = m_pt)
   p_si_ft  <- mat_plot(mat_groups$Fetal, lobe_labels = TRUE, margin_pt = m_pt)      # lobe names overflow to the right (no clipping)
-  p_si_bar <- mat_bar + theme(plot.margin = margin(4, 0, 4, 4, "pt"))
   # Fixed-size layout in inches (no automatic stretching): 3 columns x 2 rows of equal cells
   draw_si2 <- function() {
     grid::grid.newpage()
@@ -976,7 +981,7 @@ if (RUN_SI_MATRICES) {
     print(p_si_ept, vp = cell(1, 1)); print(p_si_vpt, vp = cell(1, 2)); print(p_si_mpt, vp = cell(1, 3))
     print(p_si_ft,  vp = cell(2, 2))
     grid::pushViewport(cell(2, 1))                                                  # colorbar: exact size, centered in its cell
-    print(p_si_bar, vp = grid::viewport(width = grid::unit(mat_bar_w_in + 0.55, "in"), height = grid::unit(mat_bar_len_in + 0.15, "in")))
+    print(mat_bar, vp = grid::viewport(width = grid::unit(bar_vp_w, "in"), height = grid::unit(bar_vp_h, "in")))
     grid::popViewport(2)
   }
   show_fig("SIFig2_connectivity_matrices", 3 * si2_cell_w_in, 2 * si2_cell_h_in, draw_si2)   # the only file written for SI Fig. 2
