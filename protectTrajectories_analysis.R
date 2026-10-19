@@ -1283,7 +1283,7 @@ bn_inset          <- TRUE             # add a magnified panel of the most medial
 bn_inset_view     <- "dorsal"         # view used for the main picture with the box and for the magnification
 bn_inset_n_edges  <- 6                # the magnified region frames the n most medial frontal-frontal connections (rectangle around their nodes)
 bn_inset_margin_mm <- 6               # extra space around those nodes inside the rectangle (mm)
-bn_inset_shift_mm <- c(x = -5, y = 0)  # nudge the rectangle and the magnified view (mm): negative x = left, positive y = toward the front
+bn_inset_shift_mm <- c(x = -3, y = 0)  # nudge the rectangle and the magnified view (mm): negative x = left, positive y = toward the front
 bn_inset_scale    <- 0.85             # height of the magnified panel relative to the other images (it is wide, so a smaller height saves width)
 bn_inset_zoom     <- NULL             # NULL = estimated from the box size; set a number (smaller = more magnified) to tune by hand
 bn_box_col        <- "#000000"        # color of the box and the magnification frame
@@ -1291,6 +1291,10 @@ bn_layout         <- "row"            # "row": all images side by side (a wide, 
 bn_panel_h_in     <- 2.3              # height of every image in the combined figure, inches
 bn_pad_x_in       <- 0.2              # white space between images, inches (room for ROI labels; raise it if you need more)
 bn_pad_y_in       <- 0.1              # white space above and below the images, inches
+bn_save_strip     <- FALSE            # TRUE: also save the image strip (Panel A) on its own
+bn_gap_ab_in      <- 0.1              # space between Panel A and Panel B in the combined figure, inches
+bn_letter_pt      <- 14               # panel letters A and B (points)
+bn_letter_in      <- 0.03             # distance of the letters from the top-left corner of each panel, inches
 bn_save_views     <- FALSE            # TRUE: also write each view as its own PNG (needs SAVE_FIGS)
 
 bn_dir <- c(file.path(figureDir, "brainNetPlotting"), file.path(figureDir, "bainNetPlotting"))   # either spelling of the folder
@@ -1399,21 +1403,52 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
              else list(bn_panels[-length(bn_panels)], c(bn_panels[length(bn_panels)], if (bn_inset) "inset"))
     row_w <- function(r) sum(wid[r]) + (length(r) + 1) * padx
     W     <- max(sapply(rows, row_w)); Hfig <- length(rows) * H + (length(rows) + 1) * pady
-    draw_combined <- function() {
+    # Draws the image strip (Panel A) in the current viewport; sc scales every size (1 = natural size in inches).
+    draw_combined <- function(sc = 1) {
       grid::grid.newpage()
       for (k in seq_along(rows)) {
         r <- rows[[k]]; x <- (W - row_w(r)) / 2 + padx; y0 <- Hfig - k * (H + pady)               # row k from the top
         for (nm in r) {
           yy <- y0 + (H - hgt[[nm]]) / 2                                                          # centred vertically in the row
-          grid::grid.raster(ims[[nm]], x = grid::unit(x, "in"), y = grid::unit(yy, "in"), width = grid::unit(wid[[nm]], "in"),
-                            height = grid::unit(hgt[[nm]], "in"), just = c("left", "bottom"), interpolate = TRUE)
-          if (nm == "inset") grid::grid.rect(x = grid::unit(x, "in"), y = grid::unit(yy, "in"), width = grid::unit(wid[[nm]], "in"),
-                                             height = grid::unit(hgt[[nm]], "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = 1.5))
+          grid::grid.raster(ims[[nm]], x = grid::unit(x * sc, "in"), y = grid::unit(yy * sc, "in"), width = grid::unit(wid[[nm]] * sc, "in"),
+                            height = grid::unit(hgt[[nm]] * sc, "in"), just = c("left", "bottom"), interpolate = TRUE)
+          if (nm == "inset") grid::grid.rect(x = grid::unit(x * sc, "in"), y = grid::unit(yy * sc, "in"), width = grid::unit(wid[[nm]] * sc, "in"),
+                                             height = grid::unit(hgt[[nm]] * sc, "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = 1.5))
           x <- x + wid[[nm]] + padx
         }
       }
     }
-    show_fig("Fig3_PanelA_brain", W, Hfig, draw_combined)
+    if (bn_save_strip) show_fig("Fig3_PanelA_brain", W, Hfig, draw_combined)
+
+    # Figure 3, Panels A + B: the image strip on top (scaled to the width of Panel B), the interaction plots below.
+    # Panel B is drawn at its own design size (section 6), so its text sizes are unchanged.
+    sc_a    <- panelB_w_in / W
+    a_h_in  <- Hfig * sc_a
+    b_h_in  <- panelB_row_h_in * panelB$nrow + 0.55
+    fig3_h  <- a_h_in + bn_gap_ab_in + b_h_in
+    draw_fig3 <- function() {
+      grid::grid.newpage()
+      grid::pushViewport(grid::viewport(x = 0, y = grid::unit(fig3_h, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(a_h_in, "in"), just = c("left", "top")))
+      draw_strip <- function() {                                                                  # Panel A (same drawing, scaled)
+        for (k in seq_along(rows)) {
+          r <- rows[[k]]; x <- (W - row_w(r)) / 2 + padx; y0 <- Hfig - k * (H + pady)
+          for (nm in r) {
+            yy <- y0 + (H - hgt[[nm]]) / 2
+            grid::grid.raster(ims[[nm]], x = grid::unit(x * sc_a, "in"), y = grid::unit(yy * sc_a, "in"), width = grid::unit(wid[[nm]] * sc_a, "in"),
+                              height = grid::unit(hgt[[nm]] * sc_a, "in"), just = c("left", "bottom"), interpolate = TRUE)
+            if (nm == "inset") grid::grid.rect(x = grid::unit(x * sc_a, "in"), y = grid::unit(yy * sc_a, "in"), width = grid::unit(wid[[nm]] * sc_a, "in"),
+                                               height = grid::unit(hgt[[nm]] * sc_a, "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = 1))
+            x <- x + wid[[nm]] + padx
+          }
+        }
+      }
+      draw_strip()
+      grid::popViewport()
+      print(panelB$fig, vp = grid::viewport(x = 0, y = 0, width = grid::unit(panelB_w_in, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
+      grid::grid.text("A", x = grid::unit(bn_letter_in, "in"), y = grid::unit(fig3_h, "in") - grid::unit(bn_letter_in, "in"), just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
+      grid::grid.text("B", x = grid::unit(bn_letter_in, "in"), y = grid::unit(b_h_in, "in") - grid::unit(0.02, "in"), just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
+    }
+    show_fig("Fig3_PanelsAB", panelB_w_in, fig3_h, draw_fig3)
   }
   # The rgl window stays open: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
 }
