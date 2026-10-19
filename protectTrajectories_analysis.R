@@ -1267,6 +1267,8 @@ bn_edge_scale    <- 0.006             # edge (cylinder) radius as a fraction of 
 bn_edge_col      <- "#333333"
 bn_surface_col   <- "#c8c8c8"
 bn_surface_alpha <- 0.22              # surface opacity (lower = see the nodes through the brain more easily)
+bn_fov           <- 0                 # 0 = orthographic (nodes the same size at any depth, like a glass-brain figure); 30-60 = perspective
+bn_zoom          <- 1.1               # larger = brain fills more of the image (it was 0.8: too much white space); try 1.0-1.3
 bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels (= the rgl window size; lower it if the window does not fit your screen)
 # Views to save: theta (rotation about the vertical axis, degrees) and phi (elevation, degrees).
 # If left and right come out swapped, swap the signs of theta in the two lateral views.
@@ -1314,7 +1316,7 @@ if (RUN_BRAIN_RENDER && !requireNamespace("rgl", quietly = TRUE)) {
   rgl::open3d(windowRect = c(20, 20, 20 + bn_png_px[1], 20 + bn_png_px[2]))      # the saved PNG has the size of this window
   draw_brain()
   for (v in bn_views_saved) {
-    rgl::view3d(theta = bn_views[[v]][["theta"]], phi = bn_views[[v]][["phi"]], zoom = 0.8)
+    rgl::view3d(theta = bn_views[[v]][["theta"]], phi = bn_views[[v]][["phi"]], fov = bn_fov, zoom = bn_zoom)
     if (SAVE_FIGS) rgl::snapshot3d(file.path(figureDir, paste0("Fig3_PanelA_", v, ".png")), webshot = FALSE)   # plain screen capture; no webshot2/Chrome needed
   }
   # The window stays open at the last view: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
