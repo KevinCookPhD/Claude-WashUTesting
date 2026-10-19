@@ -54,7 +54,7 @@
 
 ## ---- Packages --------------------------------------------------------------
 # install.packages(c("ggplot2","nlme","lmerTest","car","emmeans","DescTools",
-#                    "circlize","ggpubr","scales","reshape2"))
+#                    "circlize","ggpubr","scales","ragg"))
 # devtools::install_github("jcbeer/longCombat")
 library(ggplot2)
 library(nlme)       # lme(): linear mixed models with a random intercept
@@ -122,9 +122,18 @@ theme_paper <- function(grid_y = TRUE, grid_x = FALSE, legend = "none") {
 
 # Draw a figure on screen and, if SAVE_FIGS, also write it to a .tif file.
 # `draw` is a function that prints a ggplot / draws base graphics.
+# The file is written with ragg (or, if ragg is not installed, the cairo device).
+# R's default tiff() device leaves a small notch at the top-left corner of every
+# bar outline because it never joins the start and end of a rectangle's path.
+# install.packages("ragg") once to get the best output.
 show_fig <- function(file, w, h, draw, res = 600) {
   if (SAVE_FIGS) {
-    tiff(file.path(figureDir, file), units = "in", width = w, height = h, res = res, compression = "lzw")
+    path <- file.path(figureDir, file)
+    if (requireNamespace("ragg", quietly = TRUE)) {
+      ragg::agg_tiff(path, width = w, height = h, units = "in", res = res, compression = "lzw")
+    } else {
+      tiff(path, units = "in", width = w, height = h, res = res, compression = "lzw", type = "cairo")
+    }
     on.exit(dev.off())
   }
   draw()
