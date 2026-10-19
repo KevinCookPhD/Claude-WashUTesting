@@ -106,7 +106,7 @@ birth_cat <- function(ga, rule = "paper") {
 # temporal yellow, parietal green, occipital blue) are separate and unchanged.
 #   "new"      : brighter blue (#2a78d6; passes the color-blind/contrast checks), and the
 #                preterm heatmap and the Fig. 3B subgroup ramp are built from that same blue
-#   "cyan"     : like "new", but the lightest Fig. 3B group is a cyan (#12b5cf) instead of a pale blue
+#   "cyan"     : like "new", but EPT is a cyan (#12b5cf) and MPT the navy (no pale blue)
 #                (the pale blue reads gray and has poor contrast on white)
 #   "periwinkle": navy -> periwinkle (#4a63d9) -> cyan; the most separated of the blue options for the three groups
 #   "original" : earlier palette (navy #08415c, indigo heatmap)  -> set this to revert
@@ -117,11 +117,11 @@ pal <- switch(COLOR_SCHEME,
              heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),                     # low, mid, high
              heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
   cyan = list(fetal = "#cc2936", preterm = "#2a78d6",
-             cols_pt      = c(EPT = "#0d366b", VPT = "#2a78d6", MPT = "#12b5cf"),
+             cols_pt      = c(EPT = "#12b5cf", VPT = "#2a78d6", MPT = "#0d366b"),   # EPT cyan -> MPT navy
              heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),
              heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
   periwinkle = list(fetal = "#cc2936", preterm = "#2a78d6",
-             cols_pt      = c(EPT = "#14306b", VPT = "#4a63d9", MPT = "#12b5cf"),
+             cols_pt      = c(EPT = "#12b5cf", VPT = "#4a63d9", MPT = "#14306b"),   # EPT cyan -> MPT navy
              heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),
              heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
   original = list(fetal = "#cc2936", preterm = "#08415c",
@@ -1155,12 +1155,12 @@ halo_w          <- 0.2     # extra width of the white halo under each line
 panel_ncol      <- 4       # panels per row; 16 edges fit a 4x4 grid exactly (legend goes below the grid)
 # Size: design the figure at the size it will be printed, so the text sizes below are the printed sizes.
 panelB_w_in      <- 7.5    # export width (inches); a bit wider than tall leaves room for the brain image above
-panelB_row_h_in  <- 1.2    # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
+panelB_row_h_in  <- 1.3    # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
 axis_text_size   <- 5.5    # tick labels (points)
 axis_title_size  <- 6      # axis titles (points), both axes
 legend_text_size <- 7      # legend (points)
 panelB_margin_r_pt <- 2    # white space to the right of each plot (points); smaller = more room for the plot itself
-panelB_shared_xlab <- TRUE # TRUE (with the B/C split): one "PMA at scan (weeks)" title under each group instead of one under every plot
+panelB_shared_xlab <- FALSE# TRUE (with the B/C split): one "PMA at scan (weeks)" title under each group instead of one under every plot
 xlab_h_in        <- 0.2    # height reserved for that shared title (inches)
 panelB_labels    <- "short"   # y-axis names: "short" = display names with hemisphere, e.g. "Superior Orbital (L)"; "long" = atlas long names
 
