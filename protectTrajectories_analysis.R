@@ -1313,6 +1313,35 @@ if (RUN_EXTRA_CONTROLS) {
 #   (3) Scan level: for each scan, the Spearman correlation between its FC and edge distance (using
 #       the template nearest its own PMA) = how strongly its FC falls off with distance. The two
 #       groups are compared with a mixed model adjusted for PMA and scanner.
+# ---- CONCLUSION FOR THE PAPER (from the run on the final data) ---------------------------------
+# Part (1) is the control that answers the question: fetal-vs-preterm differences are NOT associated
+# with ROI distance (GA 36 template: rho = -0.002, permutation p = .94; within hemisphere rho = 0.025,
+# p = .40; between hemispheres rho = -0.004, p = .91), and |rho| <= 0.03 with the template of every age
+# (part 2). Connectivity itself falls with distance in both groups (fetal rho = -0.33, preterm
+# rho = -0.44, permutation p < .001; 0.0002 is the smallest p 5,000 permutations can give), as expected
+# for an early-development brain with predominantly local organization.
+#
+# Suggested wording.
+#   Methods: "To test whether fetal-preterm differences were confounded with connection length, we
+#   computed the Euclidean distance between ROI centroids using age-specific coordinate templates and
+#   correlated it with the edge-wise group differences (Spearman; significance by permutation of ROI
+#   labels, 5,000 permutations)."
+#   Results: "Group differences were unrelated to distance (rho = -0.002, permutation p = .94; within
+#   hemisphere rho = 0.03, p = .40; between hemispheres rho = -0.004, p = .91), and this held for
+#   templates of every age (|rho| <= 0.03). Connectivity itself fell with distance in both groups
+#   (fetal rho = -0.33; preterm rho = -0.44; both p < .001), as expected for a developing brain with
+#   predominantly local organization."
+#
+# Part (3) (scan level) is EXPLORATORY and answers a different question: how strongly each scan's
+# overall FC falls off with distance. It differs by group and by PMA (the preterm-fetal difference is
+# about +0.045 rho at 28 wk, ~0 at 30 wk, and -0.03 to -0.19 at 32-40 wk; interaction p < .001, still
+# present in 28-38 wk), and it differs by scanner within preterm scans (3T - 1.5T = +0.10, p < .001).
+# Do NOT state that overall distance dependence is equivalent between groups. It does not change the
+# result above, and it is not needed for the paper; if a reviewer asks, this is the answer: the groups
+# differ in overall distance dependence in an age- and scanner-dependent way, but this does not drive
+# the edge-wise group differences. The Wilcoxon test of edge distance by direction is descriptive only
+# (it treats edges as independent).
+# -----------------------------------------------------------------------------------------------
 if (RUN_DISTANCE_CONTROL) {
   ga_avail <- c(23:37, 40)       # templates that exist (no 38 or 39)
   dist_ga  <- NA                 # template for part (1); NA = the template nearest the median scan PMA
