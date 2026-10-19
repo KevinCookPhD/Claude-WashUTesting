@@ -694,8 +694,8 @@ chord_col_fetal   <- ifelse(b_dir, "#00000000", col_fetal)       # fetal-greater
 chord_col_preterm <- ifelse(b_dir, col_preterm, "#00000000")     # preterm-greater edges only
 
 # Chord layout settings (tune here)
-chord_canvas    <- 1.55   # half-width of the drawing canvas; raise it if labels are still cut off (the circle gets smaller)
-chord_label_cex <- 0.65   # label size
+chord_canvas    <- 1.65   # half-width of the drawing canvas; raise it if labels are still cut off (the circle gets smaller)
+chord_label_cex <- 0.725  # label size
 chord_label_gap <- 1.5    # mm between a colored sector and its label: the SAME for every label, left and right
 
 # Sector labels use roi_display (no hemisphere). Each label starts a fixed distance (mm) beyond its
