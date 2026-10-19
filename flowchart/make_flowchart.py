@@ -31,7 +31,8 @@ FETAL = dict(
     final=dict(participants=161, scans=192),
 )
 NB = "\u00a0"   # non-breaking space: keeps "< 120 volumes" and "n = 25" from splitting across lines
-QA_REASON = f"Insufficient usable data after preprocessing (<{NB}120{NB}volumes, <{NB}4{NB}min)"
+QA_REASON_PT = f"Insufficient usable data after preprocessing (<{NB}120{NB}volumes, <{NB}4{NB}min at TR{NB}={NB}2{NB}s)"
+QA_REASON_FT = f"Insufficient usable data after preprocessing (<{NB}80{NB}volumes, <{NB}4{NB}min at TR{NB}={NB}3{NB}s)"
 
 # Palette (matches the figures)
 RED, RED_TINT = "#cc2936", "#f2c9cd"
@@ -150,9 +151,9 @@ def excl(title, reason, d, who):
     body = ([reason] if reason else []) + [f"Scans: n{NB}={NB}{d['scans']}", f"{who}: n{NB}={NB}{d['participants']}"]
     return box_lines(title, body, EXCL_W)
 
-E1 = excl("Excluded: data quality", QA_REASON, PRETERM["qa"], "Participants excluded")
+E1 = excl("Excluded: data quality", QA_REASON_PT, PRETERM["qa"], "Participants excluded")
 E2 = excl("Excluded: brain injury", None, PRETERM["injury"], "Participants")   # no reason line: heading, scans, participants only
-E3 = excl("Excluded: data quality", QA_REASON, FETAL["qa"], "Participants excluded")
+E3 = excl("Excluded: data quality", QA_REASON_FT, FETAL["qa"], "Participants excluded")
 
 j1 = y1 + h1 + V_GAP / 2              # junction heights (middle of each arrow)
 j2 = y2 + h2 + V_GAP / 2

@@ -272,7 +272,8 @@ scanQA <- read.csv("preemieScanQAUpdate_07022025.csv", stringsAsFactors = FALSE)
 scanQA$fullID <- paste0(scanQA$shortID, "_0", scanQA$scanNo)
 scanQA <- subset(scanQA, !is.na(finalVol) & (kidokoro < 9 | is.na(kidokoro)))   # exclude severe injury (Kidokoro >= 9)
 
-# A scan is usable if it has > 119 volumes (>= 4 min of data at TR = 2 s)
+# A scan is usable if it has >= 4 min of data: >= 120 volumes for preterm scans (TR = 2 s); fetal scans
+# need >= 80 volumes (TR = 3 s)
 scanQA$good4Min <- as.numeric(scanQA$finalVol > 119)
 goodData <- subset(scanQA, good4Min == 1)
 
@@ -1282,9 +1283,10 @@ match_scans <- function(d, var, caliper) {
 #   of volumes and recompute FC) needs the ROI time series.
 # DATA: finalVol differs by group: fetal 80-281 (median 117, 192 scans), preterm 120-296 (median 220, 346
 #   scans); correlation with group r = 0.63. (An earlier minimum of 32 was a data-entry error, corrected to 132.)
-#   102 of the 192 fetal scans (53%) have < 120 volumes while every preterm scan has >= 120, so the fetal
-#   inclusion criterion must be stated correctly in Methods and in the flowchart (the flowchart box currently
-#   says "< 120 volumes" for fetal scans too).
+#   102 of the 192 fetal scans (53%) have < 120 volumes while every preterm scan has >= 120, because the
+#   criterion is 4 min of data in both groups: >= 120 volumes at TR = 2 s (preterm) and >= 80 volumes at
+#   TR = 3 s (fetal). Fetal scans therefore have fewer volumes by design, and both groups have the same
+#   duration of data; the volume controls below address the difference in volume count.
 # RESULT (each vs. the primary 1,404 significant edges; 'same direction' = of those 1,404):
 #   A raw finalVol covariate ........ 1,113 significant; 1,029 still significant; 1,403 same direction; r = 0.962
 #   B finalVol centered in group .... 1,426 significant; 1,387 still significant; 1,404 same direction; r = 0.999

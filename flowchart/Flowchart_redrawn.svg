@@ -31,7 +31,7 @@
 <text x="16.00" y="45.88" font-size="8.0" font-weight="bold">Excluded: data quality</text>
 <text x="16.00" y="55.34" font-size="7.0" font-weight="normal">Insufficient usable data after</text>
 <text x="16.00" y="64.30" font-size="7.0" font-weight="normal">preprocessing (&lt; 120 volumes,</text>
-<text x="16.00" y="73.26" font-size="7.0" font-weight="normal">&lt; 4 min)</text>
+<text x="16.00" y="73.26" font-size="7.0" font-weight="normal">&lt; 4 min at TR = 2 s)</text>
 <text x="16.00" y="82.22" font-size="7.0" font-weight="normal">Scans: n = 186</text>
 <text x="16.00" y="91.18" font-size="7.0" font-weight="normal">Participants excluded: n = 25</text>
 <line x1="196.00" y1="67.16" x2="133.50" y2="67.16" stroke="#2a78d6" stroke-width="1.0"/>
@@ -45,8 +45,8 @@
 <rect x="390.40" y="33.64" width="118.00" height="67.04" fill="#ffffff" stroke="#cc2936" stroke-width="1.0"/>
 <text x="396.40" y="45.88" font-size="8.0" font-weight="bold">Excluded: data quality</text>
 <text x="396.40" y="55.34" font-size="7.0" font-weight="normal">Insufficient usable data after</text>
-<text x="396.40" y="64.30" font-size="7.0" font-weight="normal">preprocessing (&lt; 120 volumes,</text>
-<text x="396.40" y="73.26" font-size="7.0" font-weight="normal">&lt; 4 min)</text>
+<text x="396.40" y="64.30" font-size="7.0" font-weight="normal">preprocessing (&lt; 80 volumes,</text>
+<text x="396.40" y="73.26" font-size="7.0" font-weight="normal">&lt; 4 min at TR = 3 s)</text>
 <text x="396.40" y="82.22" font-size="7.0" font-weight="normal">Scans: n = 343</text>
 <text x="396.40" y="91.18" font-size="7.0" font-weight="normal">Participants excluded: n = 224</text>
 <line x1="322.40" y1="67.16" x2="384.90" y2="67.16" stroke="#cc2936" stroke-width="1.0"/>
