@@ -1268,8 +1268,9 @@ bn_edge_col      <- "#333333"
 bn_surface_col   <- "#c8c8c8"
 bn_surface_alpha <- 0.12              # surface opacity (lower = see the nodes through the brain more easily)
 bn_fov           <- 0                 # 0 = orthographic (nodes the same size at any depth, like a glass-brain figure); 30-60 = perspective
-bn_zoom          <- 0.6               # SMALLER = brain fills more of the image (1.1 made it smaller than 0.8 did); try 0.45-0.8
-bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels (= the rgl window size; lower it if the window does not fit your screen)
+bn_zoom          <- c(right_lateral = 0.6, left_lateral = 0.6, dorsal = 0.85, ventral = 0.85, anterior = 0.8, posterior = 0.8)
+                                      # per view; SMALLER = brain fills more of the image. The dorsal view is taller than the lateral ones, so it needs a larger value
+bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels (= the rgl window size; keep it within your screen: a window larger than the screen is cut off)
 # Views to save: theta (rotation about the vertical axis, degrees) and phi (elevation, degrees).
 # If left and right come out swapped, swap the signs of theta in the two lateral views.
 bn_views <- list(right_lateral = c(theta = 90,  phi = 0),  left_lateral = c(theta = -90, phi = 0),
@@ -1316,7 +1317,7 @@ if (RUN_BRAIN_RENDER && !requireNamespace("rgl", quietly = TRUE)) {
   rgl::open3d(windowRect = c(20, 20, 20 + bn_png_px[1], 20 + bn_png_px[2]))      # the saved PNG has the size of this window
   draw_brain()
   for (v in bn_views_saved) {
-    rgl::view3d(theta = bn_views[[v]][["theta"]], phi = bn_views[[v]][["phi"]], fov = bn_fov, zoom = bn_zoom)
+    rgl::view3d(theta = bn_views[[v]][["theta"]], phi = bn_views[[v]][["phi"]], fov = bn_fov, zoom = bn_zoom[[v]])
     if (SAVE_FIGS) rgl::snapshot3d(file.path(figureDir, paste0("Fig3_PanelA_", v, ".png")), webshot = FALSE)   # plain screen capture; no webshot2/Chrome needed
   }
   # The window stays open at the last view: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
