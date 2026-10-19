@@ -1409,6 +1409,21 @@ if (RUN_EXTRA_CONTROLS) {
   #   of edges where that model has the lowest BIC; then likelihood-ratio tests (1 df, FDR over edges) of
   #   whether postnatal age adds to PMA and whether PMA adds to postnatal age. "Postnatal adds to PMA" is the
   #   same as "birth GA matters at a given PMA". Run for all edges and for the 16 primary edges.
+  # RESULT: lowest BIC over all 3,003 edges: PMA only 2,046 (68%), postnatal only 936 (31%), the other four
+  #   models 21 combined (BIC charges about 5.9 per added parameter). Median BIC vs. PMA only: postnatal only
+  #   +0.8 (near ties), PMA + postnatal +5.4, PMA x BirthCat +19.6, postnatal x BirthCat +19.9, PMA x
+  #   postnatal +10.1. Likelihood-ratio tests (FDR over edges): postnatal age adds to PMA in 0 of 3,003 edges
+  #   (0 of the 16 primary edges); PMA adds to postnatal age in 366 edges (5 of the 16). Primary 16 edges,
+  #   lowest BIC: PMA x BirthCat 8, PMA only 6, postnatal only 1, postnatal x BirthCat 1; postnatal x BirthCat
+  #   is 2.6 BIC worse than PMA x BirthCat (median +2.7 vs +0.1 relative to PMA only).
+  # INTERPRETATION: connectivity tracks maturational age (PMA), not time since birth: PMA fits as well or
+  #   better than postnatal age, and postnatal age (equivalently, linear birth GA at a given PMA) adds
+  #   nothing. BIC is conservative, so the categorical model only ties PMA-only on median BIC even for the 16
+  #   edges whose interaction is FDR-significant. PMA and postnatal age are 0.92-0.96 correlated, so this is
+  #   the absence of a detectable postnatal-age effect, not proof that none exists.
+  # REPORT: "Connectivity was better described by PMA than by postnatal age (PMA-only model had the lowest
+  #   BIC in 68% of edges vs. 31% for postnatal age only). Postnatal age added nothing beyond PMA (0 of 3,003
+  #   edges, FDR-corrected likelihood-ratio tests), whereas PMA added beyond postnatal age in 366 edges."
   ic_models <- list(pma        = FCz ~ scanner + ScanPMA,
                     post       = FCz ~ scanner + postnatal,
                     both       = FCz ~ scanner + ScanPMA + postnatal,
