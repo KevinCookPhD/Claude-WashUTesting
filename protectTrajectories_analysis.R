@@ -1357,7 +1357,7 @@ if (RUN_EXTRA_CONTROLS) {
   # RESULT: fetal vs. preterm: 1,439 edges significant, all 1,404 primary edges remain, all the same
   #   direction, correlation of betas 1.000 (scanner is already a covariate and fetal scans are all 1.5T, so
   #   harmonization changes nothing here). PMA x prematurity: 9 of the 16 edges significant, none new; the 7
-  #   that drop are near misses (adjusted p .049-.15 for the edges that were lost; chi-square 14-24).
+  #   that drop have adjusted p of .058-.147 (most just above .05) and chi-square of 14-17.
   # INTERPRETATION: the group difference is fully robust to harmonization; the interaction pattern persists
   #   without it, but harmonization improves power (16 vs. 9 edges). Report both numbers.
   # Repeats the two main analyses on the connectivity values BEFORE LongComBat. Every model already
