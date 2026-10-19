@@ -75,7 +75,7 @@ RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (s
 RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges (slow serially; fast with N_CORES, cached)
 RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
-RUN_QC_COVARIATE_CONTROL  <- FALSE  # needs finalVol / tSNR for fetal scans (section 9e)
+RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol covariate and similar-volume reruns (add tSNR / motion via qc_more)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
 
@@ -1237,53 +1237,88 @@ if (RUN_SENSITIVITY) {
   print(slopes_within_wide); print(slopes_between_wide)
 }
 
-## ---- 9e. Fetal vs. preterm with data-quality covariates (pending data) ------
-# WHAT IT TESTS: whether the fetal-vs-preterm group difference is explained by differences in the amount
-#   or quality of data (volumes retained, tSNR, motion) between fetal and preterm scans.
-# STATUS: NOT RUN. Needs a finalVol value for every fetal scan, and tSNR / motion for both groups.
-# EXPECTED USE: compare the number of FDR-significant edges, the direction agreement and the correlation of
-#   the betas with the primary result (same summary as 9f).
-# Adds covariates to the fetal-vs-preterm model and compares the group effect.
-# Requires the covariate for BOTH fetal and preterm scans. finalVol is already in
-# scanInfo (fetal values must be present); add tSNR / motion as new columns, e.g.:
-#   scanInfo$tSNR <- tsnr_table$tSNR[match(scanInfo$longID, tsnr_table$longID)]
-# Re-centering within group (group-mean-centered covariate) is also advisable,
-# because raw covariates can be collinear with group.
-if (RUN_QC_COVARIATE_CONTROL) {
-  qc_covars <- c("finalVol")                                          # add "tSNR", ... when available
-  stopifnot(!anyNA(scanInfo[qc_covars]))
-  fetalRes_qc <- do.call(rbind, lapply(allConn, fit_fetal_edge, extra = qc_covars))
-  fetalRes_qc$scanTypep.Adj <- p.adjust(fetalRes_qc$scanTypep, "fdr")
-  print(c(fdr05_primary = sum(sigFetal),
-    fdr05_with_covariates = sum(fetalRes_qc$scanTypep.Adj < .05, na.rm = TRUE),
-    still_sig = sum(sigFetal & fetalRes_qc$scanTypep.Adj < .05, na.rm = TRUE),
-    same_direction = sum(sigFetal & sign(fetalRes_qc$scanTypeb) == sign(fetalRes$scanTypeb), na.rm = TRUE),
-    r_beta = cor(fetalRes$scanTypeb, fetalRes_qc$scanTypeb, use = "complete.obs")))
+## ---- Shared helpers for 9e-9h (fetal vs. preterm reruns) -------------------------
+# Summary of a fetal-vs-preterm rerun against the primary result (fetalRes / sigFetal)
+cmp_fetal <- function(res_alt, n_scans = NA) {
+  s_alt <- res_alt$scanTypep.Adj < .05 & !is.na(res_alt$scanTypep.Adj)
+  c(scans = n_scans, fdr05 = sum(s_alt), preterm_greater = sum(s_alt & res_alt$scanTypeb > 0),
+    fetal_greater = sum(s_alt & res_alt$scanTypeb < 0),
+    primary_n = sum(sigFetal), still_sig_of_primary = sum(s_alt & sigFetal),
+    same_direction_of_primary = sum(sigFetal & sign(res_alt$scanTypeb) == sign(fetalRes$scanTypeb), na.rm = TRUE),
+    r_beta_with_primary = round(cor(fetalRes$scanTypeb, res_alt$scanTypeb, use = "complete.obs"), 3))
 }
-# Still to do (need data not yet in this script): the equal-data-per-scan reanalysis
-# (needs the ROI time series so FC can be recomputed on truncated scans) and tSNR / motion
-# as covariates (9e, once those values are added to scanInfo).
+# Fetal-vs-preterm scan over all edges for a given scan table; `extra` adds covariates (parallel, cached)
+run_fetal <- function(d, tag, extra = character(0)) {
+  res <- cached(paste0("fetalRes_", tag), key = paste(data_key, "fetal", tag, paste(extra, collapse = "+"), table_key(d)),
+                do.call(rbind, par_lapply(allConn, fit_fetal_edge, export = c("goodFCData", "ctrl", "scn_term", "scanInfo"),
+                                          extra = extra, data = d)))
+  res$scanPMAp.Adj  <- p.adjust(res$scanPMAp,  method = "fdr")
+  res$scanTypep.Adj <- p.adjust(res$scanTypep, method = "fdr")
+  res
+}
+# 1:1 nearest-neighbor matching of fetal to preterm scans on a numeric variable within a caliper
+# (greedy, without replacement; repeated scans of one infant are kept)
+match_scans <- function(d, var, caliper) {
+  fet <- d[d$scanType == "Fetal", ]; pre <- d[d$scanType == "Preterm", ]
+  free <- rep(TRUE, nrow(pre)); ki <- integer(0); kj <- integer(0)
+  for (i in order(fet[[var]])) {
+    dist <- abs(pre[[var]] - fet[[var]][i]); dist[!free] <- Inf
+    j <- which.min(dist)
+    if (is.finite(dist[j]) && dist[j] <= caliper) { ki <- c(ki, i); kj <- c(kj, j); free[j] <- FALSE }
+  }
+  rbind(fet[ki, ], pre[kj, ])
+}
+
+## ---- 9e. Fetal vs. preterm with data-quality covariates and similar data amounts -----
+# WHAT IT TESTS: whether the fetal-vs-preterm group difference is explained by differences in the amount
+#   or quality of data between fetal and preterm scans. finalVol = number of volumes retained per scan.
+#   (A) finalVol as a covariate (raw); (B) finalVol centered within group (so the covariate is not
+#   collinear with group); (C) similar volumes: restrict to the finalVol range both groups share, and
+#   1:1 match fetal to preterm scans on finalVol; (D) all QC covariates together once tSNR / motion are
+#   added (add columns to scanInfo and list them in qc_more).
+# STATUS: finalVol is set; tSNR / motion not yet. Result summaries use the same columns as 9f:
+#   fdr05, still_sig_of_primary (of the 1,404 primary edges), same_direction_of_primary, r_beta_with_primary.
+# NOTE: this is a proxy for "equal amounts of data". The strict version (truncate every scan to the same number
+#   of volumes and recompute FC) needs the ROI time series.
+if (RUN_QC_COVARIATE_CONTROL) {
+  stopifnot("finalVol" %in% names(scanInfo))
+  print(tapply(scanInfo$finalVol, scanInfo$scanType, function(x)
+    c(n = sum(!is.na(x)), missing = sum(is.na(x)), min = min(x, na.rm = TRUE), median = median(x, na.rm = TRUE), max = max(x, na.rm = TRUE))))
+  stopifnot(!anyNA(scanInfo$finalVol))                                 # every scan needs a value
+  print(c(r_finalVol_with_group = cor(scanInfo$finalVol, as.numeric(scanInfo$scanType == "Preterm"))))   # collinearity with group
+  scanInfo$finalVol_c <- scanInfo$finalVol - ave(scanInfo$finalVol, scanInfo$scanType)                   # group-mean-centered
+
+  ## A. raw finalVol as a covariate
+  res_qc_raw <- run_fetal(scanInfo, "finalVol", extra = "finalVol")
+  print(cmp_fetal(res_qc_raw, n_scans = nrow(scanInfo)))
+  ## B. finalVol centered within group
+  res_qc_cen <- run_fetal(scanInfo, "finalVolC", extra = "finalVol_c")
+  print(cmp_fetal(res_qc_cen, n_scans = nrow(scanInfo)))
+
+  ## C. similar volumes between fetal and preterm scans
+  vol_rng <- lapply(split(scanInfo$finalVol, scanInfo$scanType), range)
+  vol_lo <- max(sapply(vol_rng, `[`, 1)); vol_hi <- min(sapply(vol_rng, `[`, 2))
+  si_vol_range <- droplevels(scanInfo[scanInfo$finalVol >= vol_lo & scanInfo$finalVol <= vol_hi, ])
+  print(c(vol_lo = vol_lo, vol_hi = vol_hi)); print(table(si_vol_range$scanType))
+  res_vol_range <- run_fetal(si_vol_range, "volRange")
+  print(cmp_fetal(res_vol_range, n_scans = nrow(si_vol_range)))
+  si_vol_match <- droplevels(match_scans(scanInfo, "finalVol", caliper = 0.1 * sd(scanInfo$finalVol)))
+  print(c(matched_pairs = sum(si_vol_match$scanType == "Fetal")))
+  print(tapply(si_vol_match$finalVol, si_vol_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))   # balance on volumes
+  res_vol_match <- run_fetal(si_vol_match, "volMatched")
+  print(cmp_fetal(res_vol_match, n_scans = nrow(si_vol_match)))
+
+  ## D. every QC covariate together (add e.g. scanInfo$tSNR_c <- ... and set qc_more <- c("tSNR_c"))
+  qc_more <- character(0)
+  if (length(qc_more) > 0) {
+    stopifnot(all(qc_more %in% names(scanInfo)), !anyNA(scanInfo[qc_more]))
+    res_qc_all <- run_fetal(scanInfo, "allQC", extra = c("finalVol_c", qc_more))
+    print(cmp_fetal(res_qc_all, n_scans = nrow(scanInfo)))
+  }
+}
 
 ## ---- 9f-9h. Controls that use only data already in this script -------------------
 if (RUN_EXTRA_CONTROLS) {
-
-  ## Summary of a fetal-vs-preterm rerun against the primary result (fetalRes / sigFetal)
-  cmp_fetal <- function(res_alt, n_scans = NA) {
-    s_alt <- res_alt$scanTypep.Adj < .05 & !is.na(res_alt$scanTypep.Adj)
-    c(scans = n_scans, fdr05 = sum(s_alt), preterm_greater = sum(s_alt & res_alt$scanTypeb > 0),
-      fetal_greater = sum(s_alt & res_alt$scanTypeb < 0),
-      primary_n = sum(sigFetal), still_sig_of_primary = sum(s_alt & sigFetal),
-      same_direction_of_primary = sum(sigFetal & sign(res_alt$scanTypeb) == sign(fetalRes$scanTypeb), na.rm = TRUE),
-      r_beta_with_primary = round(cor(fetalRes$scanTypeb, res_alt$scanTypeb, use = "complete.obs"), 3))
-  }
-  # Fetal-vs-preterm scan over all edges for a given scan table (parallel, cached)
-  run_fetal <- function(d, tag) {
-    res <- cached(paste0("fetalRes_", tag), key = paste(data_key, "fetal", tag, table_key(d)),
-                  do.call(rbind, par_lapply(allConn, fit_fetal_edge, export = c("goodFCData", "ctrl", "scn_term", "scanInfo"), data = d)))
-    res$scanPMAp.Adj  <- p.adjust(res$scanPMAp,  method = "fdr")
-    res$scanTypep.Adj <- p.adjust(res$scanTypep, method = "fdr")
-    res
-  }
 
   ## ---- 9f. Age-matched fetal vs. preterm (control #3) ---------------------------
   # WHAT IT TESTS: whether the fetal-vs-preterm difference is an artifact of the groups covering different
@@ -1309,17 +1344,7 @@ if (RUN_EXTRA_CONTROLS) {
   res_am_range <- run_fetal(si_range, "ageRange")
   print(cmp_fetal(res_am_range, n_scans = nrow(si_range)))
 
-  match_pma <- function(d, caliper = 1) {
-    fet <- d[d$scanType == "Fetal", ]; pre <- d[d$scanType == "Preterm", ]
-    free <- rep(TRUE, nrow(pre)); ki <- integer(0); kj <- integer(0)
-    for (i in order(fet$ScanPMA)) {
-      dist <- abs(pre$ScanPMA - fet$ScanPMA[i]); dist[!free] <- Inf
-      j <- which.min(dist)
-      if (is.finite(dist[j]) && dist[j] <= caliper) { ki <- c(ki, i); kj <- c(kj, j); free[j] <- FALSE }
-    }
-    rbind(fet[ki, ], pre[kj, ])
-  }
-  si_match <- droplevels(match_pma(scanInfo, caliper = 1))
+  si_match <- droplevels(match_scans(scanInfo, "ScanPMA", caliper = 1))
   print(c(matched_pairs = sum(si_match$scanType == "Fetal"), fetal_infants = nlevels(droplevels(si_match$shortID[si_match$scanType == "Fetal"])),
           preterm_infants = nlevels(droplevels(si_match$shortID[si_match$scanType == "Preterm"]))))
   print(tapply(si_match$ScanPMA, si_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))   # balance on PMA after matching
