@@ -890,14 +890,13 @@ MAT_SOURCE      <- "harmonized"   # "harmonized" (LongComBat, as in all analyses
 mat_lim         <- 1              # color scale runs from -mat_lim to +mat_lim
 mat_ramp        <- c(low = "#2b2d9e", mid = "#ffffff", high = "#e4281f")
 mat_diag_col    <- "#7f7f7f"      # diagonal cells
-mat_label_pt    <- 3              # ROI tick-label size (points); 78 labels per axis need a small size
+mat_label_pt    <- 2              # ROI tick-label size (points); 78 labels per axis need a very small size
 mat_line_w      <- 0.25           # lobe boundary lines
-mat_bar_len_in  <- 1.7            # colorbar length, inches
-mat_bar_w_in    <- 0.2            # colorbar proportions (length : width); the bar's size follows from the margins below
-mat_bar_margin_pt <- 45           # space above and below the colorbar in its cell (larger = shorter bar), points
-mat_margin_right_pt <- 40         # right margin of every matrix (room for the lobe names beside the fetal matrix), points
-si2_w_in        <- 9              # combined figure width, inches (3 columns)
-si2_h_in        <- 8.6            # combined figure height, inches (2 rows)
+mat_bar_len_in  <- 1.5            # colorbar length, inches
+mat_bar_w_in    <- 0.18           # colorbar width, inches
+mat_margin_right_pt <- 6          # right margin of every matrix, points (the fetal lobe names spill into the empty cell beside it)
+si2_cell_w_in   <- 3.0            # width of each of the 3 columns, inches (figure width = 3 x this)
+si2_cell_h_in   <- 3.1            # height of each of the 2 rows, inches (figure height = 2 x this); lower it to remove vertical white space
 
 if (RUN_SI_MATRICES) {
   fc_mat_src <- if (MAT_SOURCE == "unharmonized") combFCData else goodFCData
@@ -961,16 +960,26 @@ if (RUN_SI_MATRICES) {
 
   print(sapply(mat_groups, length))                                                 # scans per group
   # Combined figure: EPT, VPT, MPT on top; colorbar, fetal (with lobe names), empty cell on the bottom.
-  # Every matrix gets the same right margin so all four panels come out the same size.
+  # Every matrix gets the same margins so all four panels come out the same size.
   m_pt <- c(6, mat_margin_right_pt, 2, 2)
   p_si_ept <- mat_plot(mat_groups$EPT, margin_pt = m_pt)
   p_si_vpt <- mat_plot(mat_groups$VPT, margin_pt = m_pt)
   p_si_mpt <- mat_plot(mat_groups$MPT, margin_pt = m_pt)
-  p_si_ft  <- mat_plot(mat_groups$Fetal, lobe_labels = TRUE, margin_pt = m_pt)
-  p_si_bar <- mat_bar + theme(aspect.ratio = mat_bar_len_in / mat_bar_w_in, plot.margin = margin(mat_bar_margin_pt, 30, mat_bar_margin_pt, 40, "pt"))
-  p_si_fig <- ggpubr::ggarrange(p_si_ept, p_si_vpt, p_si_mpt, p_si_bar, p_si_ft, ggplot() + theme_void(),
-                                ncol = 3, nrow = 2, align = "none")
-  show_fig("SIFig2_connectivity_matrices", si2_w_in, si2_h_in, function() print(p_si_fig))   # the only file written for SI Fig. 2
+  p_si_ft  <- mat_plot(mat_groups$Fetal, lobe_labels = TRUE, margin_pt = m_pt)      # lobe names overflow to the right (no clipping)
+  p_si_bar <- mat_bar + theme(plot.margin = margin(4, 0, 4, 4, "pt"))
+  # Fixed-size layout in inches (no automatic stretching): 3 columns x 2 rows of equal cells
+  draw_si2 <- function() {
+    grid::grid.newpage()
+    grid::pushViewport(grid::viewport(layout = grid::grid.layout(2, 3, widths = grid::unit(rep(si2_cell_w_in, 3), "in"),
+                                                                  heights = grid::unit(rep(si2_cell_h_in, 2), "in"))))
+    cell <- function(r, c) grid::viewport(layout.pos.row = r, layout.pos.col = c)
+    print(p_si_ept, vp = cell(1, 1)); print(p_si_vpt, vp = cell(1, 2)); print(p_si_mpt, vp = cell(1, 3))
+    print(p_si_ft,  vp = cell(2, 2))
+    grid::pushViewport(cell(2, 1))                                                  # colorbar: exact size, centered in its cell
+    print(p_si_bar, vp = grid::viewport(width = grid::unit(mat_bar_w_in + 0.55, "in"), height = grid::unit(mat_bar_len_in + 0.15, "in")))
+    grid::popViewport(2)
+  }
+  show_fig("SIFig2_connectivity_matrices", 3 * si2_cell_w_in, 2 * si2_cell_h_in, draw_si2)   # the only file written for SI Fig. 2
 }
 
 
