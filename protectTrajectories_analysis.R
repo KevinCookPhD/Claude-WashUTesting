@@ -1208,7 +1208,7 @@ pt_legend_plot <- function() {
     guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4, size = 2.2))) +
     theme_void() + theme(legend.position = "left", legend.text = element_text(size = legend_text_size, color = "#000000"),
                          legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"),
-                         legend.background = element_rect(color = "#000000", fill = "#ffffff", linewidth = 0.5),   # box around the legend
+                         legend.background = element_rect(color = "#000000", fill = "#ffffff", linewidth = 0.3),   # box around the legend
                          legend.margin = margin(7, 10, 7, 10))
   ggpubr::as_ggplot(ggpubr::get_legend(p))
 }
@@ -1444,7 +1444,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
       key_w  <- c(0.62, 0.7, 0.62, 0.55)                                                          # width of each dot + label (inches); the last is the label's own width
       key_x0 <- (panelB_w_in - sum(key_w)) / 2
       grid::grid.rect(x = grid::unit(panelB_w_in / 2, "in"), y = grid::unit(key_y, "in"), width = grid::unit(sum(key_w) + 0.2, "in"),
-                      height = grid::unit(bn_key_h_in - 0.04, "in"), gp = grid::gpar(col = "#000000", fill = NA, lwd = 0.6))   # box around the lobe key
+                      height = grid::unit(bn_key_h_in - 0.04, "in"), gp = grid::gpar(col = "#000000", fill = NA, lwd = 0.85))   # box around the lobe key (same weight as the group legend box)
       for (k in seq_along(lobe_pal)) {
         xk <- key_x0 + sum(key_w[seq_len(k - 1)])
         grid::grid.circle(x = grid::unit(xk + 0.07, "in"), y = grid::unit(key_y, "in"), r = grid::unit(0.065, "in"),
