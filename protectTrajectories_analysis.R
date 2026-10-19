@@ -1283,11 +1283,14 @@ bn_inset          <- TRUE             # add a magnified panel of the most medial
 bn_inset_view     <- "dorsal"         # view used for the main picture with the box and for the magnification
 bn_inset_n_edges  <- 6                # the magnified region frames the n most medial frontal-frontal connections (rectangle around their nodes)
 bn_inset_margin_mm <- 6               # extra space around those nodes inside the rectangle (mm)
+bn_inset_shift_mm <- c(x = -5, y = 0)  # nudge the rectangle and the magnified view (mm): negative x = left, positive y = toward the front
+bn_inset_scale    <- 0.85             # height of the magnified panel relative to the other images (it is wide, so a smaller height saves width)
 bn_inset_zoom     <- NULL             # NULL = estimated from the box size; set a number (smaller = more magnified) to tune by hand
 bn_box_col        <- "#000000"        # color of the box and the magnification frame
 bn_layout         <- "row"            # "row": all images side by side (a wide, short figure that sits above the interaction plots); "grid": two rows
 bn_panel_h_in     <- 2.3              # height of every image in the combined figure, inches
-bn_pad_in         <- 0.45             # white space around each image for hand-labeling the ROIs, inches
+bn_pad_x_in       <- 0.2              # white space between images, inches (room for ROI labels; raise it if you need more)
+bn_pad_y_in       <- 0.1              # white space above and below the images, inches
 bn_save_views     <- FALSE            # TRUE: also write each view as its own PNG (needs SAVE_FIGS)
 
 bn_dir <- c(file.path(figureDir, "brainNetPlotting"), file.path(figureDir, "bainNetPlotting"))   # either spelling of the folder
@@ -1341,7 +1344,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
   box_lo <- apply(nd_xyz[cl, , drop = FALSE], 2, min); box_hi <- apply(nd_xyz[cl, , drop = FALSE], 2, max)
   hx <- (box_hi[1] - box_lo[1]) / 2 + bn_inset_margin_mm; hy <- (box_hi[2] - box_lo[2]) / 2 + bn_inset_margin_mm   # half-width / half-height of the rectangle (mm)
   clampc <- function(v, r, h) if (2 * h + 2 >= diff(r)) mean(r) else min(max(v, r[1] + h + 1), r[2] - h - 1)
-  cl_ctr  <- (box_lo + box_hi) / 2
+  cl_ctr  <- (box_lo + box_hi) / 2 + c(bn_inset_shift_mm, 0)                         # centre of the rectangle, nudged by bn_inset_shift_mm (x = left/right, y = back/front)
   box_ctr <- c(clampc(cl_ctr[1], range(xyz[, 1]), hx), clampc(cl_ctr[2], range(xyz[, 2]), hy), cl_ctr[3])   # centre, kept inside the brain
   box_pts <- to_rgl(cbind(box_ctr[1] + c(-1, 1, 1, -1) * hx, box_ctr[2] + c(-1, -1, 1, 1) * hy, box_ctr[3]))   # at the depth of the nodes, so it lines up with the magnification
   message("Magnified region: connections ", paste(sigEdges[pick], collapse = ", "), "; box ", round(2 * hx, 1), " x ", round(2 * hy, 1), " mm")
@@ -1380,7 +1383,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     for (nm in c(bn_panels, if (bn_inset) "inset")) file.copy(f_png(nm), file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")), overwrite = TRUE)
   } else {
     rd <- function(f) png::readPNG(f)[, , 1:3, drop = FALSE]
-    trim <- function(im, m = 12) { nw <- im[, , 1] < .99 | im[, , 2] < .99 | im[, , 3] < .99          # trim to the drawing, keep m px of white (the faint outer surface must not be clipped)
+    trim <- function(im, m = 6) { nw <- im[, , 1] < .99 | im[, , 2] < .99 | im[, , 3] < .99          # trim to the drawing, keep m px of white (the faint outer surface must not be clipped)
                            r <- range(which(rowSums(nw) > 0)); cc <- range(which(colSums(nw) > 0))
                            r <- c(max(1, r[1] - m), min(dim(im)[1], r[2] + m)); cc <- c(max(1, cc[1] - m), min(dim(im)[2], cc[2] + m))
                            im[r[1]:r[2], cc[1]:cc[2], , drop = FALSE] }
@@ -1389,22 +1392,24 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
                                         im[r0 + seq_len(h), c0 + seq_len(w), , drop = FALSE] }
     ims   <- setNames(lapply(bn_panels, function(v) trim(rd(f_png(v)))), bn_panels)
     if (bn_inset) ims$inset <- centre_rect(rd(f_png("inset")), round(2 * hx * px_mm_t), round(2 * hy * px_mm_t))
-    H     <- bn_panel_h_in; pad <- bn_pad_in
-    wid   <- sapply(ims, function(im) H * dim(im)[2] / dim(im)[1])
+    H     <- bn_panel_h_in; padx <- bn_pad_x_in; pady <- bn_pad_y_in
+    hgt   <- setNames(rep(H, length(ims)), names(ims)); if (bn_inset) hgt[["inset"]] <- H * bn_inset_scale
+    wid   <- sapply(names(ims), function(nm) hgt[[nm]] * dim(ims[[nm]])[2] / dim(ims[[nm]])[1])
     rows  <- if (bn_layout == "row") list(c(bn_panels, if (bn_inset) "inset"))
              else list(bn_panels[-length(bn_panels)], c(bn_panels[length(bn_panels)], if (bn_inset) "inset"))
-    row_w <- function(r) sum(wid[r]) + (length(r) + 1) * pad
-    W     <- max(sapply(rows, row_w)); Hfig <- length(rows) * H + (length(rows) + 1) * pad
+    row_w <- function(r) sum(wid[r]) + (length(r) + 1) * padx
+    W     <- max(sapply(rows, row_w)); Hfig <- length(rows) * H + (length(rows) + 1) * pady
     draw_combined <- function() {
       grid::grid.newpage()
       for (k in seq_along(rows)) {
-        r <- rows[[k]]; x <- (W - row_w(r)) / 2 + pad; y0 <- Hfig - k * (H + pad)                 # row k from the top
+        r <- rows[[k]]; x <- (W - row_w(r)) / 2 + padx; y0 <- Hfig - k * (H + pady)               # row k from the top
         for (nm in r) {
-          grid::grid.raster(ims[[nm]], x = grid::unit(x, "in"), y = grid::unit(y0, "in"), width = grid::unit(wid[[nm]], "in"),
-                            height = grid::unit(H, "in"), just = c("left", "bottom"), interpolate = TRUE)
-          if (nm == "inset") grid::grid.rect(x = grid::unit(x, "in"), y = grid::unit(y0, "in"), width = grid::unit(wid[[nm]], "in"),
-                                             height = grid::unit(H, "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = 1.5))
-          x <- x + wid[[nm]] + pad
+          yy <- y0 + (H - hgt[[nm]]) / 2                                                          # centred vertically in the row
+          grid::grid.raster(ims[[nm]], x = grid::unit(x, "in"), y = grid::unit(yy, "in"), width = grid::unit(wid[[nm]], "in"),
+                            height = grid::unit(hgt[[nm]], "in"), just = c("left", "bottom"), interpolate = TRUE)
+          if (nm == "inset") grid::grid.rect(x = grid::unit(x, "in"), y = grid::unit(yy, "in"), width = grid::unit(wid[[nm]], "in"),
+                                             height = grid::unit(hgt[[nm]], "in"), just = c("left", "bottom"), gp = grid::gpar(col = bn_box_col, fill = NA, lwd = 1.5))
+          x <- x + wid[[nm]] + padx
         }
       }
     }
