@@ -101,30 +101,12 @@ birth_cat <- function(ga, rule = "paper") {
 
 # Colors: fetal = red, preterm = blue. Lobe sidebar/sector colors (frontal pink,
 # temporal yellow, parietal green, occipital blue) are separate and unchanged.
-#   "new"      : brighter blue (#2a78d6; passes the color-blind/contrast checks), and the
-#                preterm heatmap and the Fig. 3B subgroup ramp are built from that same blue
-#   "cyan"     : like "new", but EPT is a cyan (#12b5cf) and MPT the navy (no pale blue)
-#                (the pale blue reads gray and has poor contrast on white)
-#   "periwinkle": navy -> periwinkle (#4a63d9) -> cyan; the most separated of the blue options for the three groups
-#   "original" : earlier palette (navy #08415c, indigo heatmap)  -> set this to revert
-COLOR_SCHEME <- "cyan"
-pal <- switch(COLOR_SCHEME,
-  new = list(fetal = "#cc2936", preterm = "#2a78d6",
-             cols_pt      = c(EPT = "#0d366b", VPT = "#2a78d6", MPT = "#86b6ef"),   # dark -> light blue
-             heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),                     # low, mid, high
-             heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
-  cyan = list(fetal = "#cc2936", preterm = "#2a78d6",
-             cols_pt      = c(EPT = "#12b5cf", VPT = "#2a78d6", MPT = "#0d366b"),   # EPT cyan -> MPT navy
-             heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),
-             heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
-  periwinkle = list(fetal = "#cc2936", preterm = "#2a78d6",
-             cols_pt      = c(EPT = "#12b5cf", VPT = "#4a63d9", MPT = "#14306b"),   # EPT cyan -> MPT navy
-             heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),
-             heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
-  original = list(fetal = "#cc2936", preterm = "#08415c",
-                  cols_pt      = c(EPT = "#08415c", VPT = "#2f7fb0", MPT = "#8cc2e0"),
-                  heat_preterm = c("#adb3cf", "#373d7e", "#15085c"),
-                  heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")))
+# Preterm blue #2a78d6 (passes the color-blind/contrast checks); the preterm heatmap is built from the same blue.
+# Fig. 3B/C groups run cyan (EPT) -> blue (VPT) -> navy (MPT).
+pal <- list(fetal = "#cc2936", preterm = "#2a78d6",
+            cols_pt      = c(EPT = "#12b5cf", VPT = "#2a78d6", MPT = "#0d366b"),
+            heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),                     # low, mid, high
+            heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16"))
 col_fetal   <- pal$fetal
 col_preterm <- pal$preterm
 cols_pt     <- pal$cols_pt
@@ -316,18 +298,7 @@ if (RUN_QA_PLOTS) {
     xlab("Participants") + ylab("PMA at Scan") +
     theme_paper() + theme(axis.text.x = element_blank())
 
-  # (b) usable scans only, by scanner
-  p_qa_good <- ggplot(subset(scanQA, good4Min == 1), aes(x = shortID, y = scanPMA)) +
-    scale_y_continuous(limits = c(24, 46), breaks = seq(20, 60, 2), expand = c(0, 0)) +
-    scale_shape_manual(values = c(21, 23)) +
-    scale_fill_manual(values = c("#0096FF", "#90EE90")) +
-    scale_color_manual(values = c("#00008B", "#095c00")) +
-    geom_line(aes(group = shortID), linewidth = 1) +
-    geom_point(aes(shape = as.factor(scanner), color = as.factor(scanner), fill = as.factor(scanner)), size = 3, stroke = 2) +
-    xlab("Participants") + ylab("PMA at Scan") +
-    theme_paper() + theme(axis.text.x = element_blank())
-
-  # (c) salvage histogram: PMA of usable vs. excluded scans
+  # (b) salvage histogram: PMA of usable vs. excluded scans
   p_qa_hist <- ggplot(scanQA, aes(x = scanPMA)) +
     scale_x_continuous(limits = c(24, 46), breaks = seq(20, 60, 2), expand = c(0, 0)) +
     scale_y_continuous(limits = c(0, 30), breaks = seq(0, 40, 2), expand = c(0, 0)) +
@@ -335,13 +306,12 @@ if (RUN_QA_PLOTS) {
     geom_histogram(data = subset(scanQA, good4Min == 0), color = "#911717", fill = "#c75b5baa", bins = 30) +
     xlab("PMA at Scan") + theme_paper() + theme(axis.title.y = element_blank())
 
-  # (d) volumes per scan with the 120-volume cutoff
+  # (c) volumes per scan with the 120-volume cutoff
   p_qa_vol <- ggplot(scanQA, aes(x = finalVol)) +
     geom_vline(xintercept = 120, linetype = "dashed") +
     geom_histogram(color = "#000000", fill = "#000055aa", bins = 30) +
     xlab("Final Volumes") + theme_paper() + theme(axis.title.y = element_blank())
 
-  show_fig("qaPlot_goodOnly.tif", 18, 8, function() print(p_qa_good))
   print(p_qa_all); print(p_qa_hist); print(p_qa_vol)
 }
 
@@ -362,7 +332,7 @@ fetalDemoData$scanType <- "Fetal"
 goodData$scanType      <- "Preterm"
 
 ## ---- Supplementary figure: usable scans per participant, preterm (top) and fetal (bottom) ----
-# Same style as qaPlot_goodOnly (section 1); both panels share the PMA axis so the groups are comparable.
+# Usable scans only, colored by scanner; both panels share the PMA axis so the groups are comparable.
 # Fetal scans are all 1.5T; the legend lists both scanners.
 if (RUN_QA_PLOTS) {
   qa_good_pt <- subset(scanQA, good4Min == 1)
@@ -1137,7 +1107,7 @@ tab3_display
 # 6. FIG. 3 PANEL B: GROUP TRAJECTORIES FOR THE SIGNIFICANT EDGES (Fisher z)
 #    Points: scans, adjusted to the average of the two scanners.
 #    Lines: model-estimated trends over each group's observed ages (no
-#    extrapolation). Layout: panel_ncol columns with one shared legend below.
+#    extrapolation). Layout: Panel B (the 13 consistent connections) and Panel C (the 3 oddballs), panel_ncol_split columns wide.
 ###############################################################################
 
 # Appearance (tune here)
@@ -1147,10 +1117,10 @@ pt_size         <- 0.75    # point size
 pt_alpha        <- 0.45    # point opacity
 line_w          <- 0.9     # colored line width
 halo_w          <- 0.2     # extra width of the white halo under each line
-panel_ncol      <- 4       # panels per row; 16 edges fit a 4x4 grid exactly (legend goes below the grid)
+panel_ncol_split <- 5      # panels per row (Panel B and Panel C are both this many columns wide)
 # Size: design the figure at the size it will be printed, so the text sizes below are the printed sizes.
 panelB_w_in      <- 7.5    # export width (inches); a bit wider than tall leaves room for the brain image above
-panelB_row_h_in  <- 1.3    # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
+panelB_row_h_in  <- 1.3    # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label
 axis_text_size   <- 5.5    # tick labels (points)
 axis_title_size  <- 6      # axis titles (points), both axes
 legend_text_size <- 7      # legend (points)
@@ -1188,7 +1158,7 @@ ylab_for <- function(cn) {                                            # two line
   paste0(nm(p[1]), " \u2013\n", nm(p[2]))
 }
 
-make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
+make_panel_b <- function(edges, ncol = panel_ncol_split) {
   pd        <- lapply(edges, panel_data)
   lab_order <- sub("_", " \u2013 ", gsub("\\.", "-", edges))
   pts       <- do.call(rbind, lapply(pd, `[[`, "pts"));       pts$label       <- factor(pts$label, levels = lab_order)
@@ -1211,7 +1181,6 @@ make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
       coord_cartesian(xlim = c(24, 49), ylim = ylim) +
       labs(x = "PMA at scan (weeks)", y = ylab_for(cn), color = NULL, fill = NULL) +
-      guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, linewidth = 1.2)), fill = "none") +
       theme_classic(base_size = 8) +
       theme(aspect.ratio = 1,                                            # square plotting area
             axis.line = element_line(color = "#000000", linewidth = .5),
@@ -1221,13 +1190,12 @@ make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
             axis.title.y = element_text(size = axis_title_size, color = "#000000"),
             plot.margin = margin(3, panelB_margin_r_pt, 1, 1),
             panel.grid.major.y = element_line(color = "#e6e6e6", linewidth = .3),
-            legend.position = "bottom", legend.text = element_text(size = legend_text_size))
+            legend.position = "none")                                        # the legend is drawn separately (pt_legend_plot)
   }
   plots <- lapply(seq_along(edges), function(j) edge_plot(edges[j], lab_order[j]))
   nrow_fig <- ceiling(length(plots) / ncol)
-  # One shared legend below the grid (taken from the first panel); legend = FALSE leaves it out
   list(fig = ggpubr::ggarrange(plotlist = plots, ncol = ncol, nrow = nrow_fig, align = "hv",
-                               common.legend = legend, legend = if (legend) "bottom" else "none"),
+                               legend = "none"),
        nrow = nrow_fig)
 }
 
@@ -1241,29 +1209,19 @@ pt_legend_plot <- function() {
                          legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"), legend.margin = margin(0, 0, 0, 0))
   ggpubr::as_ggplot(ggpubr::get_legend(p))
 }
-# draws the legend in the right-hand part of a Panel C area of the given size (columns beyond the three plots)
+# draws the legend in the right-hand part of the Panel C area of the given size (columns beyond the three plots)
 draw_pt_legend <- function(w_in, h_in, x0_in = 0, y0_in = 0, first_col = 3, ncols = panel_ncol_split) {
   print(pt_legend_plot(), vp = grid::viewport(x = grid::unit(x0_in + w_in * first_col / ncols, "in"), y = grid::unit(y0_in, "in"),
                                               width = grid::unit(w_in * (ncols - first_col) / ncols, "in"), height = grid::unit(h_in, "in"), just = c("left", "bottom")))
 }
 
-# Split into B and C? TRUE: Panel B = the connections where MPT differs from VPT and EPT (which look alike), Panel C = the
-# three oddballs (listed below), both panel_ncol_split columns wide; the legend sits in the empty cells to the right of C. FALSE: one Panel B, as before.
-panelB_split     <- TRUE
+# Panel B = the connections where MPT differs from VPT and EPT (which look alike); Panel C = the three oddballs (listed
+# below). Both are panel_ncol_split columns wide; the legend sits in the empty cells to the right of C.
 panelC_edges     <- c("PreCG.L_ORBmid.R", "SPG.L_HES.R", "SMG.L_SMG.R")
-panel_ncol_split <- 5
-if (panelB_split) {
-  stopifnot(all(panelC_edges %in% sigEdges))
-  edgesB <- setdiff(sigEdges, panelC_edges)                                      # keeps the order set in edge_order
-  panelB <- make_panel_b(edgesB,       ncol = panel_ncol_split, legend = FALSE)
-  panelC <- make_panel_b(panelC_edges, ncol = panel_ncol_split, legend = FALSE)
-  show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow, function() print(panelB$fig))                 # width x height in inches
-  show_fig("Figure3_PanelC", panelB_w_in, panelB_row_h_in * panelC$nrow,
-           function() { print(panelC$fig); draw_pt_legend(panelB_w_in, panelB_row_h_in * panelC$nrow) })
-} else {
-  panelB <- make_panel_b(sigEdges)
-  show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + 0.55, function() print(panelB$fig))           # width x height in inches
-}
+stopifnot(all(panelC_edges %in% sigEdges))
+edgesB <- setdiff(sigEdges, panelC_edges)                                        # keeps the order set in edge_order
+panelB <- make_panel_b(edgesB)
+panelC <- make_panel_b(panelC_edges)
 
 
 ###############################################################################
@@ -1326,16 +1284,13 @@ bn_inset_shift_mm <- c(x = -3, y = 0)  # nudge the rectangle and the magnified v
 bn_inset_scale    <- 0.85             # height of the magnified panel relative to the other images (it is wide, so a smaller height saves width)
 bn_inset_zoom     <- NULL             # NULL = estimated from the box size; set a number (smaller = more magnified) to tune by hand
 bn_box_col        <- "#000000"        # color of the box and the magnification frame
-bn_layout         <- "row"            # "row": all images side by side (a wide, short figure that sits above the interaction plots); "grid": two rows
 bn_panel_h_in     <- 2.3              # height of every image in the combined figure, inches
 bn_pad_x_in       <- 0.2              # white space between images, inches (room for ROI labels; raise it if you need more)
 bn_pad_y_in       <- 0.1              # white space above and below the images, inches
-bn_save_strip     <- FALSE            # TRUE: also save the image strip (Panel A) on its own
 bn_gap_ab_in      <- 0.1              # space between Panel A and Panel B in the combined figure, inches
 bn_letter_pt      <- 14               # panel letters A and B (points)
 bn_panel_left_in  <- 0.22             # Panels B and C are indented by this much (inches) so the letters do not sit on the y-axis labels
 bn_letter_in      <- 0.03             # distance of the letters from the top-left corner of each panel, inches
-bn_save_views     <- FALSE            # TRUE: also write each view as its own PNG (needs SAVE_FIGS)
 
 bn_dir <- c(file.path(figureDir, "brainNetPlotting"), file.path(figureDir, "bainNetPlotting"))   # either spelling of the folder
 bn_dir <- bn_dir[dir.exists(bn_dir)][1]
@@ -1403,7 +1358,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     }
     rgl::snapshot3d(file, webshot = FALSE)                                          # plain screen capture; no webshot2/Chrome needed
   }
-  f_png <- function(nm) if (bn_save_views && SAVE_FIGS) file.path(figureDir, paste0("Fig3_PanelA_", nm, ".png")) else file.path(tempdir(), paste0("bn_", nm, ".png"))
+  f_png <- function(nm) file.path(tempdir(), paste0("bn_", nm, ".png"))                 # intermediate snapshots are not kept
   rgl::open3d(windowRect = c(20, 20, 20 + bn_png_px[1], 20 + bn_png_px[2]))      # the saved PNG has the size of this window
   for (v in bn_panels) snap(v, f_png(v), bn_zoom[[v]], box = bn_inset && v == bn_inset_view)
   if (bn_inset) {
@@ -1418,7 +1373,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     snap(bn_inset_view, f_png("inset"), inset_zoom, center_on = to_rgl(matrix(box_ctr, 1))[1, ])
   }
 
-  # ---- combine into one figure: the views in bn_panels, then the magnification (bn_layout = "row"; "grid" gives 2 rows) ----
+  # ---- combine into one figure: the views in bn_panels, then the magnification (all in one row) ----
   # Each image is trimmed to the brain and surrounded by bn_pad_x_in and bn_pad_y_in of white space for labeling the ROIs by hand.
   # The magnification is calibrated from the dorsal image so that the box in the dorsal view and the magnified panel cover the same region.
   {
@@ -1435,12 +1390,11 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     H     <- bn_panel_h_in; padx <- bn_pad_x_in; pady <- bn_pad_y_in
     hgt   <- setNames(rep(H, length(ims)), names(ims)); if (bn_inset) hgt[["inset"]] <- H * bn_inset_scale
     wid   <- sapply(names(ims), function(nm) hgt[[nm]] * dim(ims[[nm]])[2] / dim(ims[[nm]])[1])
-    rows  <- if (bn_layout == "row") list(c(bn_panels, if (bn_inset) "inset"))
-             else list(bn_panels[-length(bn_panels)], c(bn_panels[length(bn_panels)], if (bn_inset) "inset"))
+    rows  <- list(c(bn_panels, if (bn_inset) "inset"))                                          # all images in one row
     row_w <- function(r) sum(wid[r]) + (length(r) + 1) * padx
     W     <- max(sapply(rows, row_w)); Hfig <- length(rows) * H + (length(rows) + 1) * pady
     # Draws the image strip (Panel A) in the current viewport; sc scales every size (1 = natural size in inches).
-    draw_strip <- function(sc = 1, lwd = 1.5) {
+    draw_strip <- function(sc = 1, lwd = 1) {
       for (k in seq_along(rows)) {
         r <- rows[[k]]; x <- (W - row_w(r)) / 2 + padx; y0 <- Hfig - k * (H + pady)               # row k from the top
         for (nm in r) {
@@ -1453,14 +1407,12 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
         }
       }
     }
-    if (bn_save_strip) show_fig("Fig3_PanelA_brain", W, Hfig, function() { grid::grid.newpage(); draw_strip() })
-
     # Figure 3, Panels A + B: the image strip on top (scaled to the width of Panel B), the interaction plots below.
     # Panel B is drawn at its own design size (section 6), so its text sizes are unchanged.
     sc_a    <- panelB_w_in / W
     a_h_in  <- Hfig * sc_a
-    b_h_in  <- if (panelB_split) panelB_row_h_in * panelB$nrow else panelB_row_h_in * panelB$nrow + 0.55   # Panel B (no legend row when split)
-    c_h_in  <- if (panelB_split) panelB_row_h_in * panelC$nrow else 0                                        # Panel C (its legend sits beside the plots)
+    b_h_in  <- panelB_row_h_in * panelB$nrow                                                                # Panel B
+    c_h_in  <- panelB_row_h_in * panelC$nrow                                                                # Panel C (its legend sits beside the plots)
     fig3_h  <- a_h_in + bn_gap_ab_in + b_h_in + c_h_in
     draw_fig3 <- function() {
       grid::grid.newpage()
@@ -1471,11 +1423,9 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
                                                         just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
       bx <- bn_panel_left_in; bw <- panelB_w_in - bx                                              # Panels B and C start bx in from the left, leaving room for the letters
       vpB <- function(y0, h) grid::viewport(x = grid::unit(bx, "in"), y = grid::unit(y0, "in"), width = grid::unit(bw, "in"), height = grid::unit(h, "in"), just = c("left", "bottom"))
-      if (panelB_split) {
-        print(panelB$fig, vp = vpB(c_h_in, b_h_in)); print(panelC$fig, vp = vpB(0, c_h_in))
-        draw_pt_legend(bw, c_h_in, x0_in = bx)
-      } else print(panelB$fig, vp = vpB(c_h_in, b_h_in))
-      letter("A", fig3_h); letter("B", c_h_in + b_h_in); if (panelB_split) letter("C", c_h_in)
+      print(panelB$fig, vp = vpB(c_h_in, b_h_in)); print(panelC$fig, vp = vpB(0, c_h_in))
+      draw_pt_legend(bw, c_h_in, x0_in = bx)
+      letter("A", fig3_h); letter("B", c_h_in + b_h_in); letter("C", c_h_in)
     }
     show_fig("Fig3_PanelsAB", panelB_w_in, fig3_h, draw_fig3)
   }
