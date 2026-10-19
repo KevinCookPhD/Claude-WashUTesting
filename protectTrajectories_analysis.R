@@ -1146,7 +1146,7 @@ slopesMain_wide
 #      9b  continuous birth GA ..... 0 significant (the effect is a step, not a linear gradient)
 #      9c  scans after 32 wk PMA ... 6 of 16 hold; same slope pattern (less power)
 #      9d  within/between infant ... omnibus not significant (underpowered); within-infant slopes match
-#      9e  QC covariates ........... NOT RUN (needs finalVol for fetal scans, tSNR, motion)
+#      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); tSNR / motion not yet run
 #      9f  age-matched fetal/preterm  robust (1,174-1,354 of 1,404 edges stay significant; all same direction)
 #      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted)
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
@@ -1276,10 +1276,28 @@ match_scans <- function(d, var, caliper) {
 #   collinear with group); (C) similar volumes: restrict to the finalVol range both groups share, and
 #   1:1 match fetal to preterm scans on finalVol; (D) all QC covariates together once tSNR / motion are
 #   added (add columns to scanInfo and list them in qc_more).
-# STATUS: finalVol is set; tSNR / motion not yet. Result summaries use the same columns as 9f:
+# STATUS: finalVol RUN; tSNR / motion not yet available. Result summaries use the same columns as 9f:
 #   fdr05, still_sig_of_primary (of the 1,404 primary edges), same_direction_of_primary, r_beta_with_primary.
 # NOTE: this is a proxy for "equal amounts of data". The strict version (truncate every scan to the same number
 #   of volumes and recompute FC) needs the ROI time series.
+# DATA: finalVol differs by group: fetal 32-281 (median 117, 192 scans), preterm 120-296 (median 220, 346
+#   scans); correlation with group r = 0.63. More than half of the fetal scans have < 120 volumes while every
+#   preterm scan has >= 120, so the fetal inclusion criterion must be stated correctly in Methods and in the
+#   flowchart (the flowchart box currently says "< 120 volumes" for fetal scans too).
+# RESULT (each vs. the primary 1,404 significant edges; 'same direction' = of those 1,404):
+#   A raw finalVol covariate ........ 1,112 significant; 1,028 still significant; 1,403 same direction; r = 0.961
+#   B finalVol centered in group .... 1,428 significant; 1,387 still significant; 1,404 same direction; r = 0.999
+#   C1 shared range (120-281) ....... 374 scans (89 fetal); 1,161 significant; 1,073 still; 1,402 same; r = 0.961
+#   C2 1:1 matched on finalVol ...... 92 pairs (165 vs 168 volumes, SD about 48); 614 significant; 592 still;
+#                                      1,370 same direction; r = 0.909
+# INTERPRETATION: the group difference is not explained by the amount of data: direction is preserved for at
+#   least 97% of edges and the betas correlate 0.91-0.999. Fewer significant edges in A (collinearity inflates
+#   standard errors by about 30%) and C (89-92 fetal scans) reflect precision, not a changed effect. B equals the
+#   primary result by construction (centering leaves the group coefficient unchanged); it only shows that
+#   volumes matter little within groups. This covers data AMOUNT, not data QUALITY: tSNR and motion are still open.
+# REPORT: "Results were unchanged when including finalVol as a covariate (1,112 significant edges; 1,403 of
+#   1,404 primary edges in the same direction) or restricting to scans with >= 120 volumes in both groups
+#   (1,161 significant edges; 1,402 of 1,404 in the same direction)."
 if (RUN_QC_COVARIATE_CONTROL) {
   stopifnot("finalVol" %in% names(scanInfo))
   print(tapply(scanInfo$finalVol, scanInfo$scanType, function(x)
