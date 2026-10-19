@@ -548,6 +548,18 @@ round(prop.table(table(inf$MatEd[inf$MatEd != 0], useNA = "no")) * 100, 1)
 c(PMA_at_scan_mean = mean(pt$ScanPMA), PMA_sd = sd(pt$ScanPMA), PMA_min = min(pt$ScanPMA), PMA_max = max(pt$ScanPMA),
   scans_per_infant_median = median(table(pt$shortID)), pct_scans_3T = mean(pt$scanner == "750") * 100)
 
+# Table 1 data-amount rows (scan level): volumes retained and minutes of data per scan, mean (SD).
+# Minutes = volumes x TR / 60 (TR = 2 s preterm, 3 s fetal). Columns: fetal, all preterm, then preterm groups.
+TR_SEC  <- c(Fetal = 3, Preterm = 2)
+scan_min <- scanInfo$finalVol * TR_SEC[as.character(scanInfo$scanType)] / 60   # kept out of scanInfo so cache keys do not change
+scan_cols <- list(Fetal = scanInfo$scanType == "Fetal", `All preterm` = scanInfo$scanType == "Preterm",
+                  EPT = scanInfo$BirthCat %in% "EPT", VPT = scanInfo$BirthCat %in% "VPT", MPT = scanInfo$BirthCat %in% "MPT")
+table1_scan <- rbind(
+  `Scans, n`                          = sapply(scan_cols, sum),
+  `Volumes per scan, mean (SD)`       = sapply(scan_cols, function(i) ms(scanInfo$finalVol[i])),
+  `Minutes of data per scan, mean (SD)` = sapply(scan_cols, function(i) sprintf("%.1f (%.1f)", mean(scan_min[i]), sd(scan_min[i]))))
+table1_scan
+
 # Fetal vs. preterm sample comparison (PMA at scan; sex)
 inf_all <- scanInfo[!duplicated(scanInfo$shortID), ]
 t.test(ScanPMA ~ scanType, data = scanInfo, var.equal = TRUE)
