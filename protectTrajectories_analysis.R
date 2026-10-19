@@ -31,7 +31,7 @@
 #   1  Read data and scan-level QA
 #   2  Fetal controls + LongComBat harmonization (+ harmonization checks)
 #   3  Analysis data: connection table, scan table, preterm table, Table 1
-#   4  Fetal vs. preterm, all edges (Fig. 2A-B, Table 2)
+#   4  Fetal vs. preterm, all edges (Fig. 2: matrices, chords, homotopic bars; Table 2)
 #   5  Preterm only: PMA x prematurity, all edges (Fig. 3, Table 3)
 #   6  Fig. 3 Panel B (group trajectories)
 #   7  Fig. 3 Panel A (BrainNet Viewer edge file)
@@ -54,7 +54,7 @@
 
 ## ---- Packages --------------------------------------------------------------
 # install.packages(c("ggplot2","nlme","lmerTest","car","emmeans","DescTools",
-#                    "circlize","ggpubr","scales","ragg"))
+#                    "circlize","ggpubr","scales","ragg","svglite"))
 # devtools::install_github("jcbeer/longCombat")
 library(ggplot2)
 library(nlme)       # lme(): linear mixed models with a random intercept
@@ -67,7 +67,8 @@ library(circlize)   # chord diagrams (Fig. 2)
 library(ggpubr)     # ggarrange() for the multi-panel Fig. 3B
 
 ## ---- Switches --------------------------------------------------------------
-SAVE_FIGS                 <- FALSE  # TRUE: write .tif files to figureDir
+SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
+FIG_FORMATS               <- c("tiff", "svg")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf"
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
@@ -109,15 +110,51 @@ pal <- switch(COLOR_SCHEME,
   new = list(fetal = "#cc2936", preterm = "#2a78d6",
              cols_pt      = c(EPT = "#0d366b", VPT = "#2a78d6", MPT = "#86b6ef"),   # dark -> light blue
              heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),                     # low, mid, high
-             heat_fetal   = c("#650f16", "#cc2936", "#f4b1ac")),
+             heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")),
   original = list(fetal = "#cc2936", preterm = "#08415c",
                   cols_pt      = c(EPT = "#08415c", VPT = "#2f7fb0", MPT = "#8cc2e0"),
                   heat_preterm = c("#adb3cf", "#373d7e", "#15085c"),
-                  heat_fetal   = c("#650f16", "#cc2936", "#f4b1ac")))
+                  heat_fetal   = c("#f4b1ac", "#cc2936", "#650f16")))
 col_fetal   <- pal$fetal
 col_preterm <- pal$preterm
 cols_pt     <- pal$cols_pt
 grp_labels  <- c(EPT = "Extremely Premature", VPT = "Very Premature", MPT = "Moderately Premature")
+
+# Lobe colors (chord sectors, matrix sidebars, bar-chart strip) and the ROIs in each lobe
+lobe_pal  <- c(Frontal = "#ef476f", Temporal = "#ffd166", Parietal = "#06d6a0", Occipital = "#118ab2")
+lobe_rois <- list(Frontal  = c("PreCG","SFGdor","ORBsupb","MFG","ORBmid","IFGoperc","IFGtriang","ORBinf","ROL","SMA","OLF","SFGmed","ORBmed","REC","ACG"),
+                  Temporal = c("INS","PHG","HES","STG","TPOsup","MTG","TPOmid","ITG"),
+                  Parietal = c("MCG","PCG","PoCG","SPG","IPL","SMG","ANG","PCUN","PCL"),
+                  Occipital = c("CAL","CUN","LING","SOG","MOG","IOG","FFG"))
+
+# REGION NAMES USED IN FIGURES (chord labels and the homotopic bar charts).
+# Left side = atlas code; right side = the label that appears in the figure. EDIT HERE.
+# Hemisphere is dropped (the chord's left/right sides and the bilateral bars show it).
+roi_display <- c(PreCG = "Precentral",               SFGdor = "Dorsal Superior Frontal", ORBsupb = "Superior Orbital",
+                 MFG = "Middle Frontal",             ORBmid = "Middle Orbital",          IFGoperc = "Inferior Operculum",
+                 IFGtriang = "Inferior Triangle",    ORBinf = "Inferior Orbital",        ROL = "Rolandic",
+                 SMA = "Supplemental Motor",         OLF = "Olfactory",                  SFGmed = "Medial Superior Frontal",
+                 ORBmed = "Medial Orbital",          REC = "Rectus",                     ACG = "Anterior Cingulate",
+                 INS = "Insula",                     PHG = "Parahippocampal",            HES = "Heschl",
+                 STG = "Superior Temporal",          TPOsup = "Superior Pole",           MTG = "Middle Temporal",
+                 TPOmid = "Middle Pole",             ITG = "Inferior Temporal",          MCG = "Middle Cingulate",
+                 PCG = "Posterior Cingulate",        PoCG = "Postcentral",               SPG = "Superior Parietal",
+                 IPL = "Inferior Parietal Lobule",   SMG = "Supramarginal",              ANG = "Angular",
+                 PCUN = "Precuneus",                 PCL = "Paracentral Lobule",         CAL = "Calcarine",
+                 CUN = "Cuneus",                     LING = "Lingual",                   SOG = "Superior Occipital",
+                 MOG = "Middle Occipital",           IOG = "Inferior Occipital",         FFG = "Fusiform")
+# display_name("PreCG.L"), display_name("PreCG-R") or display_name("PreCG") -> "Precentral" (vectorized)
+display_name <- function(x) {
+  base <- sub("[-.][LR]$", "", x)
+  out  <- unname(roi_display[base])
+  ifelse(is.na(out), base, out)                      # unknown codes fall back to the code itself
+}
+
+# ggplot2 >= 3.5 places legends inside the panel with legend.position = "inside"
+legend_inside <- function(x, y) {
+  if (utils::packageVersion("ggplot2") >= "3.5.0") theme(legend.position = "inside", legend.position.inside = c(x, y))
+  else theme(legend.position = c(x, y))
+}
 
 # Shared ggplot theme for the figures that use the lab's house style
 theme_paper <- function(grid_y = TRUE, grid_x = FALSE, legend = "none") {
@@ -134,23 +171,35 @@ theme_paper <- function(grid_y = TRUE, grid_x = FALSE, legend = "none") {
         legend.title      = element_blank())
 }
 
-# Draw a figure on screen and, if SAVE_FIGS, also write it to a .tif file.
-# `draw` is a function that prints a ggplot / draws base graphics.
-# The file is written with ragg (or, if ragg is not installed, the cairo device).
-# R's default tiff() device leaves a small notch at the top-left corner of every
-# bar outline because it never joins the start and end of a rectangle's path.
-# install.packages("ragg") once to get the best output.
+# Writes the figure in every format in FIG_FORMATS (when SAVE_FIGS is TRUE), or just
+# draws it on screen. `file` may be given with or without an extension; the extension
+# is replaced by each format. `draw` is a function that prints a ggplot / draws base graphics.
+#   tiff/png : raster via ragg (or, without ragg, the cairo device). R's default tiff()
+#              device leaves a notch at the top-left corner of bar outlines, so avoid it.
+#   svg      : editable vector for Inkscape / Illustrator (svglite, or svg() without it).
+#              Text stays live text; install the fonts or convert text to outlines on opening.
+#   pdf      : vector via cairo_pdf.
+# install.packages(c("ragg", "svglite")) once for the best output.
 show_fig <- function(file, w, h, draw, res = 600) {
-  if (SAVE_FIGS) {
-    path <- file.path(figureDir, file)
-    if (requireNamespace("ragg", quietly = TRUE)) {
-      ragg::agg_tiff(path, width = w, height = h, units = "in", res = res, compression = "lzw")
-    } else {
-      tiff(path, units = "in", width = w, height = h, res = res, compression = "lzw", type = "cairo")
-    }
-    on.exit(dev.off())
+  if (!SAVE_FIGS) { draw(); return(invisible(NULL)) }
+  base <- file.path(figureDir, tools::file_path_sans_ext(file))
+  open_dev <- function(fmt) {
+    path <- paste0(base, ".", fmt)
+    switch(fmt,
+      tiff = if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_tiff(path, width = w, height = h, units = "in", res = res, compression = "lzw")
+             else tiff(path, units = "in", width = w, height = h, res = res, compression = "lzw", type = "cairo"),
+      png  = if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png(path, width = w, height = h, units = "in", res = res)
+             else png(path, units = "in", width = w, height = h, res = res, type = "cairo"),
+      svg  = if (requireNamespace("svglite", quietly = TRUE)) svglite::svglite(path, width = w, height = h)
+             else svg(path, width = w, height = h),
+      pdf  = cairo_pdf(path, width = w, height = h),
+      stop("Unknown figure format: ", fmt))
   }
-  draw()
+  for (fmt in FIG_FORMATS) {
+    open_dev(fmt)
+    tryCatch(draw(), finally = dev.off())
+  }
+  invisible(NULL)
 }
 
 # p-value formatting for tables: "<.001" or ".034"
@@ -563,39 +612,67 @@ tally_preterm_greater <- tally_pairs(fetalRes$Connection[sigFetal & fetalRes$sca
 tally_fetal_greater   <- tally_pairs(fetalRes$Connection[sigFetal & fetalRes$scanTypeb < 0])
 tally_preterm_greater; tally_fetal_greater
 
-## ---- 4b. Fig. 2A: connectivity matrices (edge beta, significant edges only) -
+## ---- 4b. Fig. 2 matrices: triangular heatmaps of the significant edges -----
+# One panel per group. Cells show |beta| of the preterm-minus-fetal difference for edges
+# that are FDR-significant and larger in that group (fetal: beta < 0, preterm: beta > 0).
+# ROIs are ordered by lobe; lobe boundaries are drawn as lines and each lobe gets a
+# colored sidebar (left and bottom). Panel letters and titles are added by hand.
+lobeOrder <- c("Frontal", "Temporal", "Parietal", "Occipital")
 cp <- data.frame(Conn = fetalRes$Connection,
                  ROI1 = sapply(strsplit(fetalRes$Connection, "_", fixed = TRUE), `[`, 1),
                  ROI2 = sapply(strsplit(fetalRes$Connection, "_", fixed = TRUE), `[`, 2),
-                 Region1 = columnMembership$Lobe1[match(fetalRes$Connection, columnMembership$Connection)],
                  B = fetalRes$scanTypeb, pAdj = fetalRes$scanTypep.Adj, stringsAsFactors = FALSE)
-roiOrder <- unlist(lapply(c("Frontal", "Temporal", "Parietal", "Occipital"),
-                          function(l) unique(cp$ROI1[cp$Region1 == l])))
-heat_lim <- ceiling(max(abs(fetalRes$scanTypeb[sigFetal])) * 100) / 100   # symmetric color limit
 
-# Mirror each edge to fill both triangles, keeping only edges that satisfy `keep`
-heat_data <- function(keep) {
+cort       <- roiData[roiData$Cortical == 1, ]
+cort       <- cort[order(factor(cort$Lobe, levels = lobeOrder)), ]            # stable within lobe
+roi_levels <- gsub("-", ".", cort$FullLabel, fixed = TRUE)                      # "PreCG-L" -> "PreCG.L"
+stopifnot(all(c(cp$ROI1, cp$ROI2) %in% roi_levels))
+n_roi      <- length(roi_levels)
+lobe_runs  <- rle(as.character(cort$Lobe))                                      # contiguous lobe blocks
+lobe_end   <- cumsum(lobe_runs$lengths); lobe_start <- lobe_end - lobe_runs$lengths + 1
+heat_lim   <- ceiling(max(abs(fetalRes$scanTypeb[sigFetal])) * 100) / 100       # top of the color scale
+
+tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
   keep[is.na(keep)] <- FALSE
-  d <- cp; d$B[!keep] <- NA
-  d2 <- d; names(d2)[names(d2) %in% c("ROI1", "ROI2")] <- c("ROI2", "ROI1")
-  rbind(d, d2)
+  d <- cp[keep, ]
+  i <- match(d$ROI1, roi_levels); j <- match(d$ROI2, roi_levels)
+  d$x <- pmin(i, j); d$y <- pmax(i, j)                                         # lower triangle: y (row) >= x (column)
+  d$beta <- abs(d$B)
+  bnd <- lobe_end[-length(lobe_end)] + 0.5                                     # lobe boundaries
+  gap <- 1.2; thick <- 3.4                                                     # sidebar offset and thickness (cell units)
+  mid <- (lobe_start + lobe_end) / 2
+  ggplot(d) +
+    geom_tile(aes(x, y, fill = beta), width = 1, height = 1) +
+    scale_fill_gradient2(low = ramp[1], mid = ramp[2], high = ramp[3], midpoint = lim / 2,
+                         limits = c(0, lim), breaks = seq(0.1, lim, by = 0.1)) +
+    # hypotenuse and lobe boundaries (inside the triangle)
+    annotate("segment", x = 0.5, xend = n_roi + 0.5, y = 0.5, yend = n_roi + 0.5, linewidth = 0.4) +
+    annotate("segment", x = 0.5, xend = bnd, y = bnd, yend = bnd, linewidth = 0.25) +
+    annotate("segment", x = bnd, xend = bnd, y = bnd, yend = n_roi + 0.5, linewidth = 0.25) +
+    # lobe sidebars + labels: left (vertical) and bottom (horizontal)
+    annotate("rect", xmin = 0.5 - gap - thick, xmax = 0.5 - gap, ymin = lobe_start - 0.5, ymax = lobe_end + 0.5,
+             fill = lobe_pal[lobe_runs$values]) +
+    annotate("rect", xmin = lobe_start - 0.5, xmax = lobe_end + 0.5, ymin = n_roi + 0.5 + gap, ymax = n_roi + 0.5 + gap + thick,
+             fill = lobe_pal[lobe_runs$values]) +
+    annotate("text", x = 0.5 - gap - thick - 2.2, y = mid, label = lobe_runs$values, angle = 90, size = 3.4) +
+    annotate("text", x = mid, y = n_roi + 0.5 + gap + thick + 2.6, label = lobe_runs$values, size = 3.4) +
+    scale_x_continuous(expand = c(0, 0)) + scale_y_reverse(expand = c(0, 0)) +
+    coord_cartesian(xlim = c(0.5, n_roi + 0.5), ylim = c(n_roi + 0.5, 0.5), expand = FALSE, clip = "off") +
+    labs(fill = "\u03b2") +
+    guides(fill = guide_colourbar(frame.colour = "#000000", ticks.colour = "#000000")) +
+    theme_void(base_size = 10) +
+    theme(aspect.ratio = 1, plot.margin = margin(margin_pt[1], margin_pt[2], margin_pt[3], margin_pt[4], "pt"),
+          legend.key.height = unit(1.1, "in"), legend.key.width = unit(0.16, "in"),
+          legend.title = element_text(size = 12), legend.text = element_text(size = 8)) +
+    legend_inside(0.88, 0.80)
 }
-heat_plot <- function(d, low, mid, high, midpoint, limits) {
-  ggplot(d, aes(x = factor(ROI1, levels = roiOrder, ordered = TRUE),
-                y = factor(ROI2, levels = roiOrder, ordered = TRUE), fill = B)) +
-    scale_y_discrete(limits = rev) +
-    scale_fill_gradient2(low = low, mid = mid, high = high, na.value = "#ffffff00", midpoint = midpoint, limits = limits) +
-    geom_tile() + xlab("") + ylab("") +
-    theme_paper(grid_y = FALSE, legend = "bottom") + theme(axis.text.x = element_text(angle = 90))
-}
-p_heat_preterm <- heat_plot(heat_data(cp$B > 0 & cp$pAdj < .05), pal$heat_preterm[1], pal$heat_preterm[2], pal$heat_preterm[3], heat_lim / 2, c(0, heat_lim))
-p_heat_fetal   <- heat_plot(heat_data(cp$B < 0 & cp$pAdj < .05), pal$heat_fetal[1], pal$heat_fetal[2], pal$heat_fetal[3], -heat_lim / 2, c(-heat_lim, 0))
-show_fig("preterm_connectivityHeatMap.tiff", 12, 12, function() print(p_heat_preterm))
-show_fig("term_connectivityHeatMap.tiff",    12, 12, function() print(p_heat_fetal))
+p_tri_fetal   <- tri_heat(cp$B < 0 & cp$pAdj < .05, pal$heat_fetal)
+p_tri_preterm <- tri_heat(cp$B > 0 & cp$pAdj < .05, pal$heat_preterm)
+show_fig("Fig2_matrix_fetal",   6, 6, function() print(p_tri_fetal))
+show_fig("Fig2_matrix_preterm", 6, 6, function() print(p_tri_preterm))
 
-## ---- 4c. Fig. 2B: chord diagrams -------------------------------------------
+## ---- 4c. Fig. 2 chord diagrams (one file per group) ------------------------
 # ROI order and gaps: right hemisphere then left (mirrored), grouped by lobe
-lobeOrder <- c("Frontal", "Temporal", "Parietal", "Occipital")
 ord       <- order(factor(columnMembershipCortOnly$Lobe1, levels = lobeOrder))
 bilatROI  <- unique(sub("-[LR]$", "", columnMembershipCortOnly$ROI1[ord]))   # bilateral ROI names in lobe order
 roiList   <- c(paste0(bilatROI, "-R"), rev(paste0(bilatROI, "-L")))
@@ -606,33 +683,29 @@ gapSize   <- sapply(seq_along(roiList), function(i) {
   if (roi_lobe[i] == roi_lobe[i + 1]) 2 else 5                                # within lobe vs. between lobes
 })
 
-# Sector colors by lobe (frontal, temporal, parietal/cingulate, occipital)
-lobe_cols <- list("#ef476f" = c("PreCG","SFGdor","ORBsupb","MFG","ORBmid","IFGoperc","IFGtriang","ORBinf","ROL","SMA","OLF","SFGmed","ORBmed","REC","ACG"),
-                  "#ffd166" = c("INS","PHG","HES","STG","TPOsup","MTG","TPOmid","ITG"),
-                  "#06d6a0" = c("MCG","PCG","PoCG","SPG","IPL","SMG","ANG","PCUN","PCL"),
-                  "#118ab2" = c("CAL","CUN","LING","SOG","MOG","IOG","FFG"))
-roiColor <- unlist(lapply(names(lobe_cols), function(cl)
-  setNames(rep(cl, 2 * length(lobe_cols[[cl]])), c(paste0(lobe_cols[[cl]], "-L"), paste0(lobe_cols[[cl]], "-R")))))
+# Sector colors by lobe
+roiColor <- unlist(lapply(names(lobe_rois), function(l)
+  setNames(rep(lobe_pal[[l]], 2 * length(lobe_rois[[l]])), c(paste0(lobe_rois[[l]], "-L"), paste0(lobe_rois[[l]], "-R")))))
 
 chord_df <- data.frame(From = columnMembershipCortOnly$ROI1, To = columnMembershipCortOnly$ROI2,
                        Value = as.numeric(sigFetal[match(allConn, fetalRes$Connection)]), stringsAsFactors = FALSE)
 b_dir    <- fetalRes$scanTypeb[match(allConn, fetalRes$Connection)] > 0
-chord_col_all     <- ifelse(b_dir, col_preterm, col_fetal)
-chord_col_fetal   <- ifelse(b_dir, "#00000000", col_fetal)
-chord_col_preterm <- ifelse(b_dir, col_preterm, "#00000000")
+chord_col_fetal   <- ifelse(b_dir, "#00000000", col_fetal)       # fetal-greater edges only
+chord_col_preterm <- ifelse(b_dir, col_preterm, "#00000000")     # preterm-greater edges only
 
-draw_chord <- function(cols) {
+# Sector labels use roi_display (no hemisphere). label_cex sets the label size.
+draw_chord <- function(cols, label_cex = 1) {
   circos.clear()
   circos.par(start.degree = 86, gap.after = gapSize)
   chordDiagram(chord_df, order = roiList, grid.col = roiColor, col = cols, symmetric = TRUE, scale = TRUE,
                annotationTrack = "grid", annotationTrackHeight = c(0.03, 0.03))
   circos.track(track.index = 1, bg.border = NA, panel.fun = function(x, y)
-    circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
-                facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5)))
+    circos.text(CELL_META$xcenter, CELL_META$ylim[1], display_name(CELL_META$sector.index),
+                facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5), cex = label_cex))
   circos.clear()
 }
-show_fig("chordPlot2Groups_UPDATE.tiff", 16, 8, function() {
-  par(mfrow = c(1, 2)); draw_chord(chord_col_fetal); draw_chord(chord_col_preterm); par(mfrow = c(1, 1)) })
+show_fig("Fig2_chord_fetal",   8, 8, function() draw_chord(chord_col_fetal))
+show_fig("Fig2_chord_preterm", 8, 8, function() draw_chord(chord_col_preterm))
 
 ## ---- 4d. Table 2 + homotopic bar plot --------------------------------------
 # Homotopic edges = the same region in the left and right hemispheres.
@@ -664,9 +737,59 @@ p_homo <- ggplot(homoPlot, aes(x = Connection, y = Mean, group = Group)) +
   # position_dodge() puts each error bar exactly on its bar's center (dodge2 would shift a narrower bar off-center)
   geom_errorbar(width = bar_each * errbar_frac, position = position_dodge(width = bar_width), aes(ymin = Mean - SE, ymax = Mean + SE)) +
   geom_hline(yintercept = 0, linewidth = 1.5) +
+  scale_x_discrete(labels = display_name) +
   xlab("") + ylab("Estimated marginal mean connectivity (Fisher z)") +
   theme_paper(grid_x = TRUE, legend = "bottom") + theme(axis.text.x = element_text(angle = 60, hjust = 1))
-show_fig("Homotopic2Groups_UPDATE.tiff", 19.5, 6, function() print(p_homo))
+show_fig("Homotopic2Groups_UPDATE", 19.5, 6, function() print(p_homo))
+
+## ---- 4e. Homotopic connectivity, horizontal version with lobe strip (Panel C) ---
+# Rows = bilateral ROIs in lobe order (Precentral at the top). A narrow plot on the left holds the
+# region names and the lobe-colored strip; the bars sit to its right. Fetal is drawn above preterm.
+homo_rois  <- bilatROI[bilatROI %in% homo$ROI]
+homo_lobe  <- roiData$Lobe[match(paste0(homo_rois, "-L"), roiData$FullLabel)]
+roi_rev    <- rev(homo_rois)                                            # ggplot draws the first level at the bottom
+homoH      <- homoPlot
+homoH$ROI  <- factor(as.character(homoH$Connection), levels = roi_rev)
+homoH$Group <- factor(homoH$Group, levels = c("Preterm", "Fetal"))      # dodge order: Fetal ends up on top
+
+strip_df <- data.frame(ROI = factor(homo_rois, levels = roi_rev), Lobe = homo_lobe)
+wrap_label <- function(x) scales::label_wrap(16)(display_name(x))     # long names wrap onto two lines
+p_strip <- ggplot(strip_df, aes(x = 1, y = ROI, fill = Lobe)) +
+  geom_tile(width = 1, height = 1) +
+  scale_fill_manual(values = lobe_pal) +
+  scale_x_continuous(expand = c(0, 0)) + scale_y_discrete(labels = wrap_label, expand = c(0, 0)) +
+  theme_classic(base_size = 10) +
+  theme(axis.line = element_blank(), axis.ticks = element_blank(), axis.text.x = element_blank(), axis.title = element_blank(),
+        axis.text.y = element_text(size = 9, color = "#000000", hjust = 1, margin = margin(r = 4)),
+        legend.position = "none", plot.margin = margin(0, 0, 0, 4))
+
+p_bars <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
+  geom_col(aes(color = Group, fill = Group), width = bar_width, orientation = "y",
+           position = position_dodge2(padding = bar_pad), linewidth = 0.6) +
+  geom_errorbar(aes(xmin = Mean - SE, xmax = Mean + SE), orientation = "y", width = bar_each * errbar_frac,
+                position = position_dodge(width = bar_width), linewidth = 0.4) +
+  geom_vline(xintercept = 0, linewidth = 1) +
+  scale_color_manual(values = c(Fetal = col_fetal, Preterm = col_preterm)) +
+  scale_fill_manual(values = c(Fetal = paste0(col_fetal, "aa"), Preterm = paste0(col_preterm, "aa"))) +
+  scale_x_continuous(position = "top") +
+  scale_y_discrete(expand = c(0, 0)) +
+  guides(color = guide_legend(reverse = TRUE), fill = guide_legend(reverse = TRUE)) +   # legend reads Fetal, Preterm
+  labs(x = "Estimated marginal mean connectivity (Fisher z)", y = NULL) +
+  theme_classic(base_size = 10) +
+  theme(axis.line.y = element_line(color = "#000000", linewidth = 0.8),
+        axis.line.x = element_line(color = "#000000", linewidth = 0.5),
+        axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        axis.text.x = element_text(color = "#000000", size = 8),
+        axis.title.x = element_text(color = "#000000", size = 10),
+        panel.grid.major.x = element_line(color = "#d9d9d9", linewidth = 0.3),
+        legend.title = element_blank(), legend.text = element_text(size = 10),
+        legend.background = element_rect(color = "#000000", fill = "white"),
+        legend.key.size = unit(0.18, "in")) +
+  legend_inside(0.78, 0.04)
+
+p_homo_h <- ggpubr::ggarrange(p_strip, p_bars, nrow = 1, widths = c(0.30, 1), align = "h")   # tune widths if labels crowd
+show_fig("Fig2_homotopic_horizontal", 4.6, 10, function() print(p_homo_h))
+
 
 
 ###############################################################################
