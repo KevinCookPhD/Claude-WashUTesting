@@ -1282,6 +1282,7 @@ bn_inset_n_edges  <- 6                # the magnified region frames the n most m
 bn_inset_margin_mm <- 6               # extra space around those nodes inside the rectangle (mm)
 bn_inset_shift_mm <- c(x = -3, y = 0)  # nudge the rectangle and the magnified view (mm): negative x = left, positive y = toward the front
 bn_inset_scale    <- 0.85             # height of the magnified panel relative to the other images (it is wide, so a smaller height saves width)
+bn_inset_zoom_trim <- 0.955          # fine correction of the automatic magnification: the scale is measured at the brain's widest depth, the nodes sit deeper, so the view came out ~4.5% too wide (smaller = more magnified)
 bn_inset_zoom     <- NULL             # NULL = estimated from the box size; set a number (smaller = more magnified) to tune by hand
 bn_box_col        <- "#000000"        # color of the box and the magnification frame
 bn_panel_h_in     <- 2.3              # height of every image in the combined figure, inches
@@ -1370,7 +1371,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     nw_d  <- im_d[, , 1] < .985 | im_d[, , 2] < .985 | im_d[, , 3] < .985
     px_mm <- diff(range(which(colSums(nw_d) > 0))) / diff(range(xyz[, 1]))
     px_mm_t <- min(dim(im_d)[2] / (2 * hx), dim(im_d)[1] / (2 * hy))                 # target pixels per mm in the magnified picture
-    inset_zoom <- if (is.null(bn_inset_zoom)) bn_zoom[[bn_inset_view]] * px_mm / px_mm_t else bn_inset_zoom
+    inset_zoom <- if (is.null(bn_inset_zoom)) bn_zoom[[bn_inset_view]] * px_mm / px_mm_t * bn_inset_zoom_trim else bn_inset_zoom
     message("Magnification zoom: ", round(inset_zoom, 3), " (set bn_inset_zoom to override)")
     snap(bn_inset_view, f_png("inset"), inset_zoom, center_on = to_rgl(matrix(box_ctr, 1))[1, ])
   }
