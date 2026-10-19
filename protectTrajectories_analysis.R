@@ -1268,7 +1268,7 @@ bn_edge_col      <- "#333333"
 bn_surface_col   <- "#c8c8c8"
 bn_surface_alpha <- 0.12              # surface opacity (lower = see the nodes through the brain more easily)
 bn_fov           <- 0                 # 0 = orthographic (nodes the same size at any depth, like a glass-brain figure); 30-60 = perspective
-bn_zoom          <- 1.1               # larger = brain fills more of the image (it was 0.8: too much white space); try 1.0-1.3
+bn_zoom          <- 0.6               # SMALLER = brain fills more of the image (1.1 made it smaller than 0.8 did); try 0.45-0.8
 bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels (= the rgl window size; lower it if the window does not fit your screen)
 # Views to save: theta (rotation about the vertical axis, degrees) and phi (elevation, degrees).
 # If left and right come out swapped, swap the signs of theta in the two lateral views.
