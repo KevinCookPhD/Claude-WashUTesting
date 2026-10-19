@@ -34,7 +34,7 @@
 #   4  Fetal vs. preterm, all edges (Fig. 2: matrices, chords, homotopic bars; Table 2; SI Fig. 2 mean matrices)
 #   5  Preterm only: PMA x prematurity, all edges (Fig. 3, Table 3)
 #   6  Fig. 3 Panel B (group trajectories)
-#   7  Fig. 3 Panel A (BrainNet Viewer edge file)
+#   7  Fig. 3 Panel A (BrainNet Viewer edge file; 7b: the same picture in R with rgl)
 #   8  Group slopes and pairwise contrasts for the significant edges
 #   9  Sensitivity analyses and controls
 #  10  Save tables, session info
@@ -1251,6 +1251,74 @@ if (file.exists(nodeFile)) {
   edgeMat <- write_brainnet_edges(sigEdges, nodeFile, file.path(figureDir, "bainNetPlotting", "brainDiff_Update.edge"))
   print(c(edges_written = sum(edgeMat) / 2, n_sigEdges = length(sigEdges)))   # should match
 } else message("Node file not found; skipping BrainNet edge export.")
+
+## ---- 7b. Fig. 3 Panel A in R: nodes and significant edges on the neonatal surface (rgl) ----
+# Reads the neonatal surface exported from Surf Ice (preterm_mesh.obj) and the same node file used for
+# BrainNet Viewer, then draws the nodes (colored by lobe) and the significant edges on a semi-transparent
+# surface and saves PNG snapshots. Needs the rgl package and an OpenGL display (a normal desktop session).
+# Orientation: node and mesh coordinates are assumed to share one space with x = right, y = anterior,
+# z = superior (as in BrainNet Viewer); they are rotated into rgl's axes (x, z, -y), a pure rotation.
+# The bounding boxes are printed so you can confirm the mesh and nodes overlap.
+RUN_BRAIN_RENDER <- TRUE
+bn_mesh_name     <- "preterm_mesh.obj"
+bn_nodes_shown   <- "edges_only"      # "edges_only": only ROIs touched by a significant edge; "all": all 78 ROIs
+bn_node_scale    <- 0.022             # node radius as a fraction of the brain's width
+bn_edge_scale    <- 0.006             # edge (cylinder) radius as a fraction of the brain's width
+bn_edge_col      <- "#333333"
+bn_surface_col   <- "#c8c8c8"
+bn_surface_alpha <- 0.22              # surface opacity (lower = see the nodes through the brain more easily)
+bn_png_px        <- c(2000, 1600)     # snapshot width x height, pixels
+# Views to save: theta (rotation about the vertical axis, degrees) and phi (elevation, degrees).
+# If left and right come out swapped, swap the signs of theta in the two lateral views.
+bn_views <- list(right_lateral = c(theta = 90,  phi = 0),  left_lateral = c(theta = -90, phi = 0),
+                 dorsal        = c(theta = 0,   phi = 90), ventral      = c(theta = 0,   phi = -90),
+                 anterior      = c(theta = 180, phi = 0),  posterior    = c(theta = 0,   phi = 0))
+bn_views_saved <- c("right_lateral", "left_lateral", "dorsal")   # which views are written to PNG
+
+bn_dir <- c(file.path(figureDir, "brainNetPlotting"), file.path(figureDir, "bainNetPlotting"))   # either spelling of the folder
+bn_dir <- bn_dir[dir.exists(bn_dir)][1]
+if (RUN_BRAIN_RENDER && !requireNamespace("rgl", quietly = TRUE)) {
+  message("Package rgl not installed; skipping the brain render (install.packages('rgl')).")
+} else if (RUN_BRAIN_RENDER && (is.na(bn_dir) || !file.exists(file.path(bn_dir, bn_mesh_name)) || !file.exists(file.path(bn_dir, basename(nodeFile))))) {
+  message("Mesh or node file not found in the BrainNet folder; skipping the brain render.")
+} else if (RUN_BRAIN_RENDER) {
+  to_rgl <- function(m) cbind(m[, 1], m[, 3], -m[, 2])                  # (x, y, z) -> rgl (x, z, -y)
+  mesh <- rgl::readOBJ(file.path(bn_dir, bn_mesh_name))
+  xyz  <- t(mesh$vb[1:3, ]); mesh$vb[1:3, ] <- t(to_rgl(xyz))
+  mesh <- rgl::addNormals(mesh)
+  bn_nodes <- read.table(file.path(bn_dir, basename(nodeFile)), stringsAsFactors = FALSE)
+  names(bn_nodes) <- c("x", "y", "z", "color", "size", "label")
+  bn_nodes$lobe <- roiData$Lobe[match(bn_nodes$label, roiData$FullLabel)]
+  stopifnot(!anyNA(bn_nodes$lobe))
+  print(rbind(mesh = apply(xyz, 2, range)[2, ] - apply(xyz, 2, range)[1, ],                 # extent (mm) in x, y, z
+              nodes = apply(bn_nodes[, c("x", "y", "z")], 2, range)[2, ] - apply(bn_nodes[, c("x", "y", "z")], 2, range)[1, ]))
+  print(rbind(mesh_min = apply(xyz, 2, min), mesh_max = apply(xyz, 2, max),
+              node_min = apply(bn_nodes[, c("x", "y", "z")], 2, min), node_max = apply(bn_nodes[, c("x", "y", "z")], 2, max)))
+  width_mm <- diff(range(xyz[, 1]))
+
+  ends  <- do.call(rbind, strsplit(gsub(".", "-", sigEdges, fixed = TRUE), "_", fixed = TRUE))
+  p1    <- to_rgl(as.matrix(bn_nodes[match(ends[, 1], bn_nodes$label), c("x", "y", "z")]))
+  p2    <- to_rgl(as.matrix(bn_nodes[match(ends[, 2], bn_nodes$label), c("x", "y", "z")]))
+  stopifnot(!anyNA(p1), !anyNA(p2))
+  shown <- if (bn_nodes_shown == "all") seq_len(nrow(bn_nodes)) else which(bn_nodes$label %in% c(ends))
+  node_xyz <- to_rgl(as.matrix(bn_nodes[shown, c("x", "y", "z")]))
+
+  draw_brain <- function() {
+    rgl::bg3d("white")
+    rgl::shade3d(mesh, color = bn_surface_col, alpha = bn_surface_alpha, specular = "black")
+    for (i in seq_len(nrow(p1)))
+      rgl::shade3d(rgl::cylinder3d(rbind(p1[i, ], p2[i, ]), radius = bn_edge_scale * width_mm, sides = 10, closed = -2),
+                   color = bn_edge_col, specular = "black")
+    rgl::spheres3d(node_xyz, radius = bn_node_scale * width_mm, color = lobe_pal[bn_nodes$lobe[shown]], specular = "black")
+  }
+  rgl::open3d(windowRect = c(50, 50, 50 + bn_png_px[1] / 2, 50 + bn_png_px[2] / 2))
+  draw_brain()
+  for (v in bn_views_saved) {
+    rgl::view3d(theta = bn_views[[v]][["theta"]], phi = bn_views[[v]][["phi"]], zoom = 0.8)
+    if (SAVE_FIGS) rgl::snapshot3d(file.path(figureDir, paste0("Fig3_PanelA_", v, ".png")), width = bn_png_px[1], height = bn_png_px[2])
+  }
+  # The window stays open at the last view: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
+}
 
 
 ###############################################################################
