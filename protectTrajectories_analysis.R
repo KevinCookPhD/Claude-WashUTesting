@@ -1376,7 +1376,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
   }
 
   # ---- combine into one figure: the views in bn_panels, then the magnification (bn_layout = "row"; "grid" gives 2 rows) ----
-  # Each image is trimmed to the brain and surrounded by bn_pad_in of white space for labeling the ROIs by hand.
+  # Each image is trimmed to the brain and surrounded by bn_pad_x_in and bn_pad_y_in of white space for labeling the ROIs by hand.
   # The magnification is calibrated from the dorsal image so that the box in the dorsal view and the magnified panel cover the same region.
   if (!requireNamespace("png", quietly = TRUE)) {
     message("Package png not installed (install.packages('png')); the views were saved separately instead of combined.")
