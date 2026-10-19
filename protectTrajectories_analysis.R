@@ -892,8 +892,11 @@ mat_ramp        <- c(low = "#2b2d9e", mid = "#ffffff", high = "#e4281f")
 mat_diag_col    <- "#7f7f7f"      # diagonal cells
 mat_label_pt    <- 2              # ROI tick-label size (points); 78 labels per axis need a very small size
 mat_line_w      <- 0.25           # lobe boundary lines
+mat_title_pt    <- 11             # group titles above the matrices (points)
+mat_titles      <- c(EPT = "EPT", VPT = "VPT", MPT = "MPT", Fetal = "Fetal")   # edit the wording here
 mat_bar_len_in  <- 1.5            # colorbar length, inches
 mat_bar_w_in    <- 0.12           # colorbar width, inches
+mat_margin_top_pt <- 24           # top margin of every matrix, points (room for the group title above the lobe bar)
 mat_margin_right_pt <- 14         # right margin of every matrix, points: must exceed the lobe bar (gap + thickness) or it is cut off at the cell edge; the fetal lobe names spill into the empty cell beside it
 si2_cell_w_in   <- 3.0            # width of each of the 3 columns, inches (figure width = 3 x this)
 si2_cell_h_in   <- 3.1            # height of each of the 2 rows, inches (figure height = 2 x this); lower it to remove vertical white space
@@ -914,7 +917,7 @@ if (RUN_SI_MATRICES) {
     r <- tanh(colMeans(as.matrix(fc_mat_src[ids, allConn])))
     data.frame(x = c(edge_i, edge_j), y = c(edge_j, edge_i), r = c(r, r))
   }
-  mat_plot <- function(ids, lobe_labels = FALSE, margin_pt = c(6, 6, 2, 2)) {
+  mat_plot <- function(ids, title = NULL, lobe_labels = FALSE, margin_pt = c(6, 6, 2, 2)) {
     d    <- mat_long(ids)
     bnd  <- lobe_end[-length(lobe_end)] + 0.5
     gap  <- tri_strip_gap; thick <- tri_strip_thick; K <- length(lobe_start); sp <- tri_strip_split / 2
@@ -932,15 +935,16 @@ if (RUN_SI_MATRICES) {
       scale_x_continuous(breaks = seq_len(n_roi), labels = roi_tick, expand = c(0, 0)) +
       scale_y_continuous(breaks = seq_len(n_roi), labels = roi_tick, expand = c(0, 0)) +
       coord_cartesian(xlim = c(0.5, n_roi + 0.5), ylim = c(0.5, n_roi + 0.5), expand = FALSE, clip = "off") +
-      labs(x = "ROI1", y = "ROI2") +
+      labs(x = NULL, y = NULL) +
       theme_classic(base_size = 8) +
       theme(aspect.ratio = 1, plot.margin = margin(margin_pt[1], margin_pt[2], margin_pt[3], margin_pt[4], "pt"),
             axis.line = element_blank(), panel.border = element_rect(color = "#000000", fill = NA, linewidth = 0.5),
             axis.ticks = element_line(color = "#000000", linewidth = 0.2), axis.ticks.length = unit(1, "pt"),
             axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = mat_label_pt, color = "#000000"),
             axis.text.y = element_text(size = mat_label_pt, color = "#000000"),
-            axis.title = element_text(size = 5, color = "#000000"),
             plot.background = element_blank())                                       # transparent: neighbouring panels never paint over the lobe bars
+    if (!is.null(title)) p <- p +                                                  # group title centered above the top lobe bar
+      annotate("text", x = n_roi / 2 + 0.5, y = edge + 2.5, label = title, vjust = 0, size = mat_title_pt / ggplot2::.pt, fontface = "bold")
     if (lobe_labels) p <- p +                                                      # lobe names with leader lines (right of the right bar)
       annotate("segment", x = edge + 0.5, xend = edge + 6, y = mid, yend = mid, linewidth = 0.3) +
       annotate("text", x = edge + 7, y = mid, label = lobe_runs$values, hjust = 0, size = 3.4)
@@ -967,11 +971,11 @@ if (RUN_SI_MATRICES) {
   print(sapply(mat_groups, length))                                                 # scans per group
   # Combined figure: EPT, VPT, MPT on top; colorbar, fetal (with lobe names), empty cell on the bottom.
   # Every matrix gets the same margins so all four panels come out the same size.
-  m_pt <- c(6, mat_margin_right_pt, 2, 2)
-  p_si_ept <- mat_plot(mat_groups$EPT, margin_pt = m_pt)
-  p_si_vpt <- mat_plot(mat_groups$VPT, margin_pt = m_pt)
-  p_si_mpt <- mat_plot(mat_groups$MPT, margin_pt = m_pt)
-  p_si_ft  <- mat_plot(mat_groups$Fetal, lobe_labels = TRUE, margin_pt = m_pt)      # lobe names overflow to the right (no clipping)
+  m_pt <- c(mat_margin_top_pt, mat_margin_right_pt, 2, 2)
+  p_si_ept <- mat_plot(mat_groups$EPT, mat_titles[["EPT"]], margin_pt = m_pt)
+  p_si_vpt <- mat_plot(mat_groups$VPT, mat_titles[["VPT"]], margin_pt = m_pt)
+  p_si_mpt <- mat_plot(mat_groups$MPT, mat_titles[["MPT"]], margin_pt = m_pt)
+  p_si_ft  <- mat_plot(mat_groups$Fetal, mat_titles[["Fetal"]], lobe_labels = TRUE, margin_pt = m_pt)      # lobe names overflow to the right (no clipping)
   # Fixed-size layout in inches (no automatic stretching): 3 columns x 2 rows of equal cells
   draw_si2 <- function() {
     grid::grid.newpage()
