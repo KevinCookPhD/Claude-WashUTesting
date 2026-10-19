@@ -635,6 +635,7 @@ heat_lim   <- ceiling(max(abs(fetalRes$scanTypeb[sigFetal])) * 100) / 100       
 # Matrix layout settings (tune here)
 tri_strip_thick <- 2      # lobe sidebar thickness, in matrix cells (the homotopic chart's strip is about 3% of its panel width)
 tri_strip_gap   <- 1      # gap between the axis line and the sidebar, in cells
+tri_strip_split <- 0.8    # small white gap between the lobe segments of each sidebar, in cells (0 = none)
 tri_bar_len_in  <- 1.5    # colorbar length, inches
 tri_bar_w_in    <- 0.17   # colorbar width, inches
 tri_axis_lw     <- 0.5    # line width of the left/bottom axis lines and the hypotenuse
@@ -648,6 +649,10 @@ tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
   bnd <- lobe_end[-length(lobe_end)] + 0.5                                     # lobe boundaries
   gap <- tri_strip_gap; thick <- tri_strip_thick                               # sidebar offset and thickness (cell units)
   mid <- (lobe_start + lobe_end) / 2
+  K   <- length(lobe_start)
+  sp  <- tri_strip_split / 2
+  seg_lo <- lobe_start - 0.5 + c(0, rep(sp, K - 1))                           # segment start, trimmed where it meets a neighbor
+  seg_hi <- lobe_end + 0.5 - c(rep(sp, K - 1), 0)                             # segment end
   ggplot(d) +
     geom_tile(aes(x, y, fill = beta), width = 1, height = 1) +
     scale_fill_gradient2(low = ramp[1], mid = ramp[2], high = ramp[3], midpoint = lim / 2,
@@ -659,9 +664,9 @@ tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
     annotate("segment", x = 0.5, xend = bnd, y = bnd, yend = bnd, linewidth = 0.25) +
     annotate("segment", x = bnd, xend = bnd, y = bnd, yend = n_roi + 0.5, linewidth = 0.25) +
     # lobe sidebars + labels: left (vertical) and bottom (horizontal)
-    annotate("rect", xmin = 0.5 - gap - thick, xmax = 0.5 - gap, ymin = lobe_start - 0.5, ymax = lobe_end + 0.5,
+    annotate("rect", xmin = 0.5 - gap - thick, xmax = 0.5 - gap, ymin = seg_lo, ymax = seg_hi,
              fill = lobe_pal[lobe_runs$values]) +
-    annotate("rect", xmin = lobe_start - 0.5, xmax = lobe_end + 0.5, ymin = n_roi + 0.5 + gap, ymax = n_roi + 0.5 + gap + thick,
+    annotate("rect", xmin = seg_lo, xmax = seg_hi, ymin = n_roi + 0.5 + gap, ymax = n_roi + 0.5 + gap + thick,
              fill = lobe_pal[lobe_runs$values]) +
     annotate("text", x = 0.5 - gap - thick - 2.2, y = mid, label = lobe_runs$values, angle = 90, size = 3.4) +
     annotate("text", x = mid, y = n_roi + 0.5 + gap + thick + 2.6, label = lobe_runs$values, size = 3.4) +
@@ -766,6 +771,7 @@ show_fig("Homotopic2Groups_UPDATE", 19.5, 6, function() print(p_homo))
 # axis, outside the panel, so the plot margin on the left must leave room for the longest name.
 homo_label_margin_in <- 1.75    # inches reserved on the left for region names (raise if a name is cut off)
 homo_label_pt        <- 9       # region-name font size (points)
+homo_strip_split     <- 0.4     # small white gap between lobe segments of the strip, in rows (0 = none)
 homo_rois  <- bilatROI[bilatROI %in% homo$ROI]
 n_homo     <- length(homo_rois)
 homo_lobe  <- roiData$Lobe[match(paste0(homo_rois, "-L"), roiData$FullLabel)]
@@ -782,15 +788,22 @@ x_span <- x_hi - x_lo
 strip_right <- x_lo - 0.008 * x_span                                   # strip sits just left of the axis line
 strip_left  <- strip_right - 0.035 * x_span
 
+# lobe strip as one segment per lobe, trimmed slightly where neighbors meet
+homo_runs  <- rle(as.character(homo_lobe))
+homo_end   <- cumsum(homo_runs$lengths); homo_start <- homo_end - homo_runs$lengths + 1
+J          <- length(homo_runs$values)
+strip_ymax <- row_pos[homo_start] + 0.5 - c(0, rep(homo_strip_split / 2, J - 1))
+strip_ymin <- row_pos[homo_end]   - 0.5 + c(rep(homo_strip_split / 2, J - 1), 0)
+
 p_homo_h <- ggplot(homoH, aes(x = Mean, y = ROI, group = Group)) +
   geom_col(aes(color = Group, fill = Group), width = bar_width, orientation = "y",
            position = position_dodge2(padding = bar_pad), linewidth = 0.6) +
   geom_errorbar(aes(xmin = Mean - SE, xmax = Mean + SE), orientation = "y", width = bar_each * errbar_frac,
                 position = position_dodge(width = bar_width), linewidth = 0.4) +
   geom_vline(xintercept = 0, linewidth = 1) +
-  # lobe strip (one tile per row; neighbors merge into lobe blocks) and single-line region names
-  annotate("rect", xmin = strip_left, xmax = strip_right, ymin = row_pos - 0.5, ymax = row_pos + 0.5,
-           fill = unname(lobe_pal[homo_lobe])) +
+  # lobe strip (one segment per lobe) and single-line region names
+  annotate("rect", xmin = strip_left, xmax = strip_right, ymin = strip_ymin, ymax = strip_ymax,
+           fill = unname(lobe_pal[homo_runs$values])) +
   annotate("text", x = strip_left - 0.012 * x_span, y = row_pos, label = display_name(homo_rois),
            hjust = 1, size = homo_label_pt / ggplot2::.pt, color = "#000000") +
   scale_color_manual(values = c(Fetal = col_fetal, Preterm = col_preterm)) +
