@@ -653,6 +653,12 @@ tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
   sp  <- tri_strip_split / 2
   seg_lo <- lobe_start - 0.5 + c(0, rep(sp, K - 1))                           # segment start, trimmed where it meets a neighbor
   seg_hi <- lobe_end + 0.5 - c(rep(sp, K - 1), 0)                             # segment end
+  # Black frame and ticks on the colorbar: ggplot2 >= 3.5 styles them through the theme (the old
+  # guide arguments are ignored there); older versions through the guide.
+  new_gg    <- utils::packageVersion("ggplot2") >= "3.5.0"
+  bar_guide <- guides(fill = if (new_gg) guide_colourbar() else guide_colourbar(frame.colour = "#000000", ticks.colour = "#000000"))
+  bar_theme <- if (new_gg) theme(legend.frame = element_rect(colour = "#000000", fill = NA, linewidth = 0.6),
+                                 legend.ticks = element_line(colour = "#000000", linewidth = 0.4)) else theme()
   ggplot(d) +
     geom_tile(aes(x, y, fill = beta), width = 1, height = 1) +
     scale_fill_gradient2(low = ramp[1], mid = ramp[2], high = ramp[3], midpoint = lim / 2,
@@ -673,12 +679,13 @@ tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
     scale_x_continuous(expand = c(0, 0)) + scale_y_reverse(expand = c(0, 0)) +
     coord_cartesian(xlim = c(0.5, n_roi + 0.5), ylim = c(n_roi + 0.5, 0.5), expand = FALSE, clip = "off") +
     labs(fill = "\u03b2") +
-    guides(fill = guide_colourbar(frame.colour = "#000000", ticks.colour = "#000000")) +
+    bar_guide +
     theme_void(base_size = 10) +
     theme(aspect.ratio = 1, plot.margin = margin(margin_pt[1], margin_pt[2], margin_pt[3], margin_pt[4], "pt"),
           # a colorbar is 5 x legend.key.height long, so divide the wanted length by 5
           legend.key.height = unit(tri_bar_len_in / 5, "in"), legend.key.width = unit(tri_bar_w_in, "in"),
           legend.title = element_text(size = 12), legend.text = element_text(size = 8)) +
+    bar_theme +
     legend_inside(0.88, 0.80)
 }
 p_tri_fetal   <- tri_heat(cp$B < 0 & cp$pAdj < .05, pal$heat_fetal)
