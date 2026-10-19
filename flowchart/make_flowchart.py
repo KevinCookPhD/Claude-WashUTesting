@@ -32,7 +32,6 @@ FETAL = dict(
 )
 NB = "\u00a0"   # non-breaking space: keeps "< 120 volumes" and "n = 25" from splitting across lines
 QA_REASON = f"Insufficient usable data after preprocessing (<{NB}120{NB}volumes, <{NB}4{NB}min)"
-INJURY_REASON = f"Kidokoro brain injury score \u2265{NB}9"
 
 # Palette (matches the figures)
 RED, RED_TINT = "#cc2936", "#f2c9cd"
@@ -148,10 +147,11 @@ prims.append(("arrow", cx_f, y1 + hf1, cx_f, y3, RED, LW_ARROW))
 
 # ---- exclusion boxes: branch from the main arrow, into a box that states the reason and the counts ----
 def excl(title, reason, d, who):
-    return box_lines(title, [reason, f"Scans: n{NB}={NB}{d['scans']}", f"{who}: n{NB}={NB}{d['participants']}"], EXCL_W)
+    body = ([reason] if reason else []) + [f"Scans: n{NB}={NB}{d['scans']}", f"{who}: n{NB}={NB}{d['participants']}"]
+    return box_lines(title, body, EXCL_W)
 
 E1 = excl("Excluded: data quality", QA_REASON, PRETERM["qa"], "Participants excluded")
-E2 = excl("Excluded: brain injury", INJURY_REASON, PRETERM["injury"], "Participants")
+E2 = excl("Excluded: brain injury", None, PRETERM["injury"], "Participants")   # no reason line: heading, scans, participants only
 E3 = excl("Excluded: data quality", QA_REASON, FETAL["qa"], "Participants excluded")
 
 j1 = y1 + h1 + V_GAP / 2              # junction heights (middle of each arrow)

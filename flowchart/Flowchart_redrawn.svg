@@ -36,11 +36,10 @@
 <text x="16.00" y="91.18" font-size="7.0" font-weight="normal">Participants excluded: n = 25</text>
 <line x1="196.00" y1="67.16" x2="133.50" y2="67.16" stroke="#2a78d6" stroke-width="1.0"/>
 <polygon points="128.00,67.16 133.50,64.86 133.50,69.46" fill="#2a78d6"/>
-<rect x="10.00" y="116.76" width="118.00" height="49.12" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
-<text x="16.00" y="129.00" font-size="8.0" font-weight="bold">Excluded: brain injury</text>
-<text x="16.00" y="138.46" font-size="7.0" font-weight="normal">Kidokoro brain injury score ≥ 9</text>
-<text x="16.00" y="147.42" font-size="7.0" font-weight="normal">Scans: n = 14</text>
-<text x="16.00" y="156.38" font-size="7.0" font-weight="normal">Participants: n = 9</text>
+<rect x="10.00" y="121.24" width="118.00" height="40.16" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
+<text x="16.00" y="133.48" font-size="8.0" font-weight="bold">Excluded: brain injury</text>
+<text x="16.00" y="142.94" font-size="7.0" font-weight="normal">Scans: n = 14</text>
+<text x="16.00" y="151.90" font-size="7.0" font-weight="normal">Participants: n = 9</text>
 <line x1="196.00" y1="141.32" x2="133.50" y2="141.32" stroke="#2a78d6" stroke-width="1.0"/>
 <polygon points="128.00,141.32 133.50,139.02 133.50,143.62" fill="#2a78d6"/>
 <rect x="390.40" y="33.64" width="118.00" height="67.04" fill="#ffffff" stroke="#cc2936" stroke-width="1.0"/>
