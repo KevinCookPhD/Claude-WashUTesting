@@ -1155,10 +1155,10 @@ halo_w          <- 0.2     # extra width of the white halo under each line
 panel_ncol      <- 4       # panels per row; 16 edges fit a 4x4 grid exactly (legend goes below the grid)
 # Size: design the figure at the size it will be printed, so the text sizes below are the printed sizes.
 panelB_w_in      <- 7.5    # export width (inches); a bit wider than tall leaves room for the brain image above
-panelB_row_h_in  <- 1.3    # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
+panelB_row_h_in  <- 1.15   # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
 axis_text_size   <- 5.5    # tick labels (points)
 axis_title_size  <- 6      # axis titles (points), both axes
-legend_text_size <- 7.5    # legend (points)
+legend_text_size <- 7      # legend (points)
 panelB_labels    <- "short"   # y-axis names: "short" = display names with hemisphere, e.g. "Superior Orbital (L)"; "long" = atlas long names
 
 panel_data <- function(cn) {
