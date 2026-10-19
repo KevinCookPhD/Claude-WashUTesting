@@ -99,10 +99,24 @@ birth_cat <- function(ga, rule = "paper") {
       right = (rule == "paper"), include.lowest = TRUE)
 }
 
-# Colors: fetal = red, preterm = navy; preterm subgroups = navy ramp
-col_fetal   <- "#cc2936"
-col_preterm <- "#08415c"
-cols_pt     <- c(EPT = "#08415c", VPT = "#2f7fb0", MPT = "#8cc2e0")
+# Colors: fetal = red, preterm = blue. Lobe sidebar/sector colors (frontal pink,
+# temporal yellow, parietal green, occipital blue) are separate and unchanged.
+#   "new"      : brighter blue (#2a78d6; passes the color-blind/contrast checks), and the
+#                preterm heatmap and the Fig. 3B subgroup ramp are built from that same blue
+#   "original" : earlier palette (navy #08415c, indigo heatmap)  -> set this to revert
+COLOR_SCHEME <- "new"
+pal <- switch(COLOR_SCHEME,
+  new = list(fetal = "#cc2936", preterm = "#2a78d6",
+             cols_pt      = c(EPT = "#0d366b", VPT = "#2a78d6", MPT = "#86b6ef"),   # dark -> light blue
+             heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),                     # low, mid, high
+             heat_fetal   = c("#650f16", "#cc2936", "#f4b1ac")),
+  original = list(fetal = "#cc2936", preterm = "#08415c",
+                  cols_pt      = c(EPT = "#08415c", VPT = "#2f7fb0", MPT = "#8cc2e0"),
+                  heat_preterm = c("#adb3cf", "#373d7e", "#15085c"),
+                  heat_fetal   = c("#650f16", "#cc2936", "#f4b1ac")))
+col_fetal   <- pal$fetal
+col_preterm <- pal$preterm
+cols_pt     <- pal$cols_pt
 grp_labels  <- c(EPT = "Extremely Premature", VPT = "Very Premature", MPT = "Moderately Premature")
 
 # Shared ggplot theme for the figures that use the lab's house style
@@ -574,8 +588,8 @@ heat_plot <- function(d, low, mid, high, midpoint, limits) {
     geom_tile() + xlab("") + ylab("") +
     theme_paper(grid_y = FALSE, legend = "bottom") + theme(axis.text.x = element_text(angle = 90))
 }
-p_heat_preterm <- heat_plot(heat_data(cp$B > 0 & cp$pAdj < .05), "#adb3cf", "#373d7e", "#15085c", heat_lim / 2, c(0, heat_lim))
-p_heat_fetal   <- heat_plot(heat_data(cp$B < 0 & cp$pAdj < .05), "#650f16", "#cc2936", "#f4b1ac", -heat_lim / 2, c(-heat_lim, 0))
+p_heat_preterm <- heat_plot(heat_data(cp$B > 0 & cp$pAdj < .05), pal$heat_preterm[1], pal$heat_preterm[2], pal$heat_preterm[3], heat_lim / 2, c(0, heat_lim))
+p_heat_fetal   <- heat_plot(heat_data(cp$B < 0 & cp$pAdj < .05), pal$heat_fetal[1], pal$heat_fetal[2], pal$heat_fetal[3], -heat_lim / 2, c(-heat_lim, 0))
 show_fig("preterm_connectivityHeatMap.tiff", 12, 12, function() print(p_heat_preterm))
 show_fig("term_connectivityHeatMap.tiff",    12, 12, function() print(p_heat_fetal))
 
