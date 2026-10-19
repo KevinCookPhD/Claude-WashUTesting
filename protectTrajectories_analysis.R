@@ -971,12 +971,18 @@ tab3_display
 # Appearance (tune here)
 show_ci         <- FALSE   # TRUE: 95% bands
 y_span          <- 2.4     # same vertical range (Fisher z) for every panel, centered on each panel's data
-pt_size         <- 0.9     # point size
+pt_size         <- 0.75    # point size
 pt_alpha        <- 0.45    # point opacity
-line_w          <- 1.1     # colored line width
+line_w          <- 0.9     # colored line width
 halo_w          <- 0.2     # extra width of the white halo under each line
-axis_title_size <- 6.5     # used for BOTH axis titles
 panel_ncol      <- 4       # panels per row; 16 edges fit a 4x4 grid exactly (legend goes below the grid)
+# Size: design the figure at the size it will be printed, so the text sizes below are the printed sizes.
+panelB_w_in      <- 7.5    # export width (inches); a bit wider than tall leaves room for the brain image above
+panelB_row_h_in  <- 1.5    # height of each row of panels (inches); total height = rows x this + 0.55 for the legend
+axis_text_size   <- 7      # tick labels (points)
+axis_title_size  <- 7.5    # axis titles (points), both axes
+legend_text_size <- 8      # legend (points)
+panelB_labels    <- "short"   # y-axis names: "short" = display names with hemisphere, e.g. "Superior Orbital (L)"; "long" = atlas long names
 
 panel_data <- function(cn) {
   d <- pt; d$FCz <- as.numeric(goodFCData[d$longID, cn])
@@ -1002,9 +1008,11 @@ panel_data <- function(cn) {
   list(pts = d[, c("ScanPMA", "BirthCat", "val", "label")], fit_lines = nd[, c("ScanPMA", "BirthCat", "val", "lo", "hi", "label")])
 }
 
+short_name <- function(x) paste0(display_name(x), " (", substr(x, nchar(x), nchar(x)), ")")   # "ORBsupb.L" -> "Superior Orbital (L)"
 ylab_for <- function(cn) {                                            # two lines: ROI 1 -, ROI 2
-  p <- strsplit(cn, "_", fixed = TRUE)[[1]]
-  paste0(full_name(p[1]), " \u2013\n", full_name(p[2]))
+  p  <- strsplit(cn, "_", fixed = TRUE)[[1]]
+  nm <- if (panelB_labels == "short") short_name else full_name
+  paste0(nm(p[1]), " \u2013\n", nm(p[2]))
 }
 
 make_panel_b <- function(edges) {
@@ -1034,12 +1042,12 @@ make_panel_b <- function(edges) {
       theme_classic(base_size = 8) +
       theme(axis.line = element_line(color = "#000000", linewidth = .5),
             axis.ticks = element_line(color = "#000000", linewidth = .4),
-            axis.text = element_text(size = 6.5, color = "#000000"),
+            axis.text = element_text(size = axis_text_size, color = "#000000"),
             axis.title.x = element_text(size = axis_title_size, color = "#000000"),
             axis.title.y = element_text(size = axis_title_size, color = "#000000"),
             plot.margin = margin(4, 8, 2, 2),
             panel.grid.major.y = element_line(color = "#e6e6e6", linewidth = .3),
-            legend.position = "bottom", legend.text = element_text(size = 7))
+            legend.position = "bottom", legend.text = element_text(size = legend_text_size))
   }
   plots <- lapply(seq_along(edges), function(j) edge_plot(edges[j], lab_order[j]))
   nrow_fig <- ceiling(length(plots) / panel_ncol)
@@ -1050,7 +1058,7 @@ make_panel_b <- function(edges) {
 }
 
 panelB <- make_panel_b(sigEdges)
-show_fig("Figure3_PanelB.tiff", 2.6 * panel_ncol, 2.5 * panelB$nrow + 0.5, function() print(panelB$fig))   # width x height in inches
+show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + 0.55, function() print(panelB$fig))   # width x height in inches
 
 
 ###############################################################################
