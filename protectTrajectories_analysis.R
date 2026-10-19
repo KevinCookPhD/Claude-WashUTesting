@@ -890,8 +890,15 @@ MAT_SOURCE      <- "harmonized"   # "harmonized" (LongComBat, as in all analyses
 mat_lim         <- 1              # color scale runs from -mat_lim to +mat_lim
 mat_ramp        <- c(low = "#2b2d9e", mid = "#ffffff", high = "#e4281f")
 mat_diag_col    <- "#7f7f7f"      # diagonal cells
-mat_label_pt    <- 2              # ROI tick-label size (points); 78 labels per axis need a very small size
+mat_label_pt_x  <- 2.3            # x-axis ROI tick-label size (points); 78 labels per axis, so about 2.3 pt is the largest that does not overlap
+mat_label_pt_y  <- 2.3            # y-axis ROI tick-label size (points)
+mat_tick_len_pt <- 1.5            # length of the tick marks, points
+mat_tick_gap_pt <- 1.5            # space between the tick marks and the labels, points
+mat_label_hemi  <- TRUE           # TRUE: "Precentral (L)"; FALSE: "Precentral" (rows alternate L, R, so the hemisphere is implied)
 mat_line_w      <- 0.25           # lobe boundary lines
+mat_letter_pt   <- 16             # panel letters A-D (points)
+mat_letter_x_in <- 0.05           # letter position from the left edge of its cell, inches
+mat_letter_y_in <- 0.02           # letter position from the top edge of its cell, inches
 mat_title_pt    <- 11             # group titles above the matrices (points)
 mat_titles      <- c(EPT = "EPT", VPT = "VPT", MPT = "MPT", Fetal = "Fetal")   # edit the wording here
 mat_bar_len_in  <- 1.5            # colorbar length, inches
@@ -911,7 +918,8 @@ if (RUN_SI_MATRICES) {
   edge_i <- match(sapply(strsplit(allConn, "_", fixed = TRUE), `[`, 1), roi_levels)
   edge_j <- match(sapply(strsplit(allConn, "_", fixed = TRUE), `[`, 2), roi_levels)
   stopifnot(!anyNA(edge_i), !anyNA(edge_j))
-  roi_tick <- paste0(display_name(roi_levels), " (", substr(roi_levels, nchar(roi_levels), nchar(roi_levels)), ")")   # "PreCG.L" -> "Precentral (L)"
+  roi_tick <- if (mat_label_hemi) paste0(display_name(roi_levels), " (", substr(roi_levels, nchar(roi_levels), nchar(roi_levels)), ")")   # "PreCG.L" -> "Precentral (L)"
+              else display_name(roi_levels)
 
   mat_long <- function(ids) {
     r <- tanh(colMeans(as.matrix(fc_mat_src[ids, allConn])))
@@ -939,9 +947,9 @@ if (RUN_SI_MATRICES) {
       theme_classic(base_size = 8) +
       theme(aspect.ratio = 1, plot.margin = margin(margin_pt[1], margin_pt[2], margin_pt[3], margin_pt[4], "pt"),
             axis.line = element_blank(), panel.border = element_rect(color = "#000000", fill = NA, linewidth = 0.5),
-            axis.ticks = element_line(color = "#000000", linewidth = 0.2), axis.ticks.length = unit(1, "pt"),
-            axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = mat_label_pt, color = "#000000"),
-            axis.text.y = element_text(size = mat_label_pt, color = "#000000"),
+            axis.ticks = element_line(color = "#000000", linewidth = 0.2), axis.ticks.length = unit(mat_tick_len_pt, "pt"),
+            axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = mat_label_pt_x, color = "#000000", margin = margin(t = mat_tick_gap_pt)),
+            axis.text.y = element_text(size = mat_label_pt_y, color = "#000000", margin = margin(r = mat_tick_gap_pt)),
             plot.background = element_blank())                                       # transparent: neighbouring panels never paint over the lobe bars
     if (!is.null(title)) p <- p +                                                  # group title centered above the top lobe bar
       annotate("text", x = n_roi / 2 + 0.5, y = edge + 2.5, label = title, vjust = 0, size = mat_title_pt / ggplot2::.pt, fontface = "bold")
@@ -969,7 +977,7 @@ if (RUN_SI_MATRICES) {
     theme_void() + theme(plot.margin = margin(0, 0, 0, 0))
 
   print(sapply(mat_groups, length))                                                 # scans per group
-  # Combined figure: EPT, VPT, MPT on top; colorbar, fetal (with lobe names), empty cell on the bottom.
+  # Combined figure: EPT, VPT, MPT on top; empty cell, fetal (with lobe names), colorbar on the bottom.
   # Every matrix gets the same margins so all four panels come out the same size.
   m_pt <- c(mat_margin_top_pt, mat_margin_right_pt, 2, 2)
   p_si_ept <- mat_plot(mat_groups$EPT, mat_titles[["EPT"]], margin_pt = m_pt)
@@ -984,9 +992,15 @@ if (RUN_SI_MATRICES) {
     cell <- function(r, c) grid::viewport(layout.pos.row = r, layout.pos.col = c)
     print(p_si_ept, vp = cell(1, 1)); print(p_si_vpt, vp = cell(1, 2)); print(p_si_mpt, vp = cell(1, 3))
     print(p_si_ft,  vp = cell(2, 2))
-    grid::pushViewport(cell(2, 1))                                                  # colorbar: exact size, centered in its cell
+    grid::pushViewport(cell(2, 3))                                                  # colorbar: exact size, centered in the bottom-right cell
     print(mat_bar, vp = grid::viewport(width = grid::unit(bar_vp_w, "in"), height = grid::unit(bar_vp_h, "in")))
-    grid::popViewport(2)
+    grid::popViewport()
+    # Panel letters at the top-left corner of each matrix's cell: A = EPT, B = VPT, C = MPT, D = Fetal
+    letter <- function(txt, r, c) { grid::pushViewport(cell(r, c))
+      grid::grid.text(txt, x = grid::unit(mat_letter_x_in, "in"), y = grid::unit(1, "npc") - grid::unit(mat_letter_y_in, "in"),
+                      just = c("left", "top"), gp = grid::gpar(fontsize = mat_letter_pt, fontface = "bold")); grid::popViewport() }
+    letter("A", 1, 1); letter("B", 1, 2); letter("C", 1, 3); letter("D", 2, 2)
+    grid::popViewport()
   }
   show_fig("SIFig2_connectivity_matrices", 3 * si2_cell_w_in, 2 * si2_cell_h_in, draw_si2)   # the only file written for SI Fig. 2
 }
