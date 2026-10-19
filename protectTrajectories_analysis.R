@@ -1155,10 +1155,13 @@ halo_w          <- 0.2     # extra width of the white halo under each line
 panel_ncol      <- 4       # panels per row; 16 edges fit a 4x4 grid exactly (legend goes below the grid)
 # Size: design the figure at the size it will be printed, so the text sizes below are the printed sizes.
 panelB_w_in      <- 7.5    # export width (inches); a bit wider than tall leaves room for the brain image above
-panelB_row_h_in  <- 1.15   # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
+panelB_row_h_in  <- 1.2    # height of each row of panels (inches); the plots are square, so this only needs to fit the square plus its x-axis label (+ 0.55 for the legend when it sits below the grid)
 axis_text_size   <- 5.5    # tick labels (points)
 axis_title_size  <- 6      # axis titles (points), both axes
 legend_text_size <- 7      # legend (points)
+panelB_margin_r_pt <- 2    # white space to the right of each plot (points); smaller = more room for the plot itself
+panelB_shared_xlab <- TRUE # TRUE (with the B/C split): one "PMA at scan (weeks)" title under each group instead of one under every plot
+xlab_h_in        <- 0.2    # height reserved for that shared title (inches)
 panelB_labels    <- "short"   # y-axis names: "short" = display names with hemisphere, e.g. "Superior Orbital (L)"; "long" = atlas long names
 
 panel_data <- function(cn) {
@@ -1192,7 +1195,7 @@ ylab_for <- function(cn) {                                            # two line
   paste0(nm(p[1]), " \u2013\n", nm(p[2]))
 }
 
-make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
+make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE, xlab = TRUE) {
   pd        <- lapply(edges, panel_data)
   lab_order <- sub("_", " \u2013 ", gsub("\\.", "-", edges))
   pts       <- do.call(rbind, lapply(pd, `[[`, "pts"));       pts$label       <- factor(pts$label, levels = lab_order)
@@ -1214,7 +1217,7 @@ make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
       scale_x_continuous(breaks = seq(25, 45, 5)) +
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
       coord_cartesian(xlim = c(24, 49), ylim = ylim) +
-      labs(x = "PMA at scan (weeks)", y = ylab_for(cn), color = NULL, fill = NULL) +
+      labs(x = if (xlab) "PMA at scan (weeks)" else NULL, y = ylab_for(cn), color = NULL, fill = NULL) +
       guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, linewidth = 1.2)), fill = "none") +
       theme_classic(base_size = 8) +
       theme(aspect.ratio = 1,                                            # square plotting area
@@ -1223,7 +1226,7 @@ make_panel_b <- function(edges, ncol = panel_ncol, legend = TRUE) {
             axis.text = element_text(size = axis_text_size, color = "#000000"),
             axis.title.x = element_text(size = axis_title_size, color = "#000000"),
             axis.title.y = element_text(size = axis_title_size, color = "#000000"),
-            plot.margin = margin(4, 8, 2, 2),
+            plot.margin = margin(3, panelB_margin_r_pt, 1, 1),
             panel.grid.major.y = element_line(color = "#e6e6e6", linewidth = .3),
             legend.position = "bottom", legend.text = element_text(size = legend_text_size))
   }
@@ -1259,11 +1262,22 @@ panel_ncol_split <- 5
 if (panelB_split) {
   stopifnot(all(panelC_edges %in% sigEdges))
   edgesB <- setdiff(sigEdges, panelC_edges)                                      # keeps the order set in edge_order
-  panelB <- make_panel_b(edgesB,       ncol = panel_ncol_split, legend = FALSE)
-  panelC <- make_panel_b(panelC_edges, ncol = panel_ncol_split, legend = FALSE)
-  show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow, function() print(panelB$fig))                 # width x height in inches
-  show_fig("Figure3_PanelC", panelB_w_in, panelB_row_h_in * panelC$nrow,
-           function() { print(panelC$fig); draw_pt_legend(panelB_w_in, panelB_row_h_in * panelC$nrow) })
+  shared_x <- panelB_shared_xlab                                                 # one x title per group
+  panelB <- make_panel_b(edgesB,       ncol = panel_ncol_split, legend = FALSE, xlab = !shared_x)
+  panelC <- make_panel_b(panelC_edges, ncol = panel_ncol_split, legend = FALSE, xlab = !shared_x)
+  xl_h   <- if (shared_x) xlab_h_in else 0
+  # draws a plot grid in a viewport and, if shared_x, the common x title under it (centered under the plots that are there)
+  draw_group <- function(p, n_plots, x0_in, y0_in, w_in, plots_h_in) {
+    print(p$fig, vp = grid::viewport(x = grid::unit(x0_in, "in"), y = grid::unit(y0_in + xl_h, "in"), width = grid::unit(w_in, "in"),
+                                     height = grid::unit(plots_h_in, "in"), just = c("left", "bottom")))
+    if (shared_x) grid::grid.text("PMA at scan (weeks)", x = grid::unit(x0_in + w_in * min(n_plots, panel_ncol_split) / panel_ncol_split / 2 + 0.25, "in"),
+                                  y = grid::unit(y0_in + xl_h / 2, "in"), gp = grid::gpar(fontsize = axis_title_size))
+  }
+  show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + xl_h,
+           function() { grid::grid.newpage(); draw_group(panelB, length(edgesB), 0, 0, panelB_w_in, panelB_row_h_in * panelB$nrow) })                 # width x height in inches
+  show_fig("Figure3_PanelC", panelB_w_in, panelB_row_h_in * panelC$nrow + xl_h,
+           function() { grid::grid.newpage(); draw_group(panelC, length(panelC_edges), 0, 0, panelB_w_in, panelB_row_h_in * panelC$nrow)
+                        draw_pt_legend(panelB_w_in, panelB_row_h_in * panelC$nrow, y0_in = xl_h) })
 } else {
   panelB <- make_panel_b(sigEdges)
   show_fig("Figure3_PanelB", panelB_w_in, panelB_row_h_in * panelB$nrow + 0.55, function() print(panelB$fig))           # width x height in inches
@@ -1468,8 +1482,8 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     # Panel B is drawn at its own design size (section 6), so its text sizes are unchanged.
     sc_a    <- panelB_w_in / W
     a_h_in  <- Hfig * sc_a
-    b_h_in  <- if (panelB_split) panelB_row_h_in * panelB$nrow else panelB_row_h_in * panelB$nrow + 0.55   # Panel B (without legend when split)
-    c_h_in  <- if (panelB_split) panelB_row_h_in * panelC$nrow else 0                                        # Panel C (its legend sits beside the plots)
+    b_h_in  <- if (panelB_split) panelB_row_h_in * panelB$nrow + xl_h else panelB_row_h_in * panelB$nrow + 0.55   # Panel B (without legend when split; + its shared x title)
+    c_h_in  <- if (panelB_split) panelB_row_h_in * panelC$nrow + xl_h else 0                                 # Panel C (its legend sits beside the plots)
     fig3_h  <- a_h_in + bn_gap_ab_in + b_h_in + c_h_in
     draw_fig3 <- function() {
       grid::grid.newpage()
@@ -1492,11 +1506,11 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
       letter <- function(txt, y_top_in) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y_top_in, "in") - grid::unit(0.02, "in"),
                                                         just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
       bx <- bn_panel_left_in; bw <- panelB_w_in - bx                                              # Panels B and C start bx in from the left, leaving room for the letters
-      print(panelB$fig, vp = grid::viewport(x = grid::unit(bx, "in"), y = grid::unit(c_h_in, "in"), width = grid::unit(bw, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
       if (panelB_split) {
-        print(panelC$fig, vp = grid::viewport(x = grid::unit(bx, "in"), y = 0, width = grid::unit(bw, "in"), height = grid::unit(c_h_in, "in"), just = c("left", "bottom")))
-        draw_pt_legend(bw, c_h_in, x0_in = bx)
-      }
+        draw_group(panelB, length(edgesB), bx, c_h_in, bw, b_h_in - xl_h)
+        draw_group(panelC, length(panelC_edges), bx, 0, bw, c_h_in - xl_h)
+        draw_pt_legend(bw, c_h_in - xl_h, x0_in = bx, y0_in = xl_h)
+      } else print(panelB$fig, vp = grid::viewport(x = grid::unit(bx, "in"), y = grid::unit(c_h_in, "in"), width = grid::unit(bw, "in"), height = grid::unit(b_h_in, "in"), just = c("left", "bottom")))
       letter("A", fig3_h); letter("B", c_h_in + b_h_in); if (panelB_split) letter("C", c_h_in)
     }
     show_fig("Fig3_PanelsAB", panelB_w_in, fig3_h, draw_fig3)
