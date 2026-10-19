@@ -172,8 +172,8 @@ theme_paper <- function(grid_y = TRUE, grid_x = FALSE, legend = "none") {
 #              Text stays live text; install the fonts or convert text to outlines on opening.
 #   pdf      : vector via cairo_pdf.
 # install.packages(c("ragg", "svglite")) once for the best output.
-show_fig <- function(file, w, h, draw, res = 600) {
-  if (!SAVE_FIGS) { draw(); return(invisible(NULL)) }
+show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS) {
+  if (!save) { draw(); return(invisible(NULL)) }
   base <- file.path(figureDir, tools::file_path_sans_ext(file))
   open_dev <- function(fmt) {
     path <- paste0(base, ".", fmt)
@@ -1582,7 +1582,8 @@ if (RUN_SENSITIVITY) {
   pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5), pvals = p32)
   pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5), pvals = p32)
   show_fig("SIFig_gt32_trajectories", panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
-           function() { grid::grid.newpage(); draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B")) })
+           function() { grid::grid.newpage(); draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B")) },
+           save = TRUE)                                                   # always written to figureDir (the plot pane shows blank space above it: the pane is taller than the figure)
 
   ## ---- 9d. Within- vs. between-infant PMA effects ---------------------------
   # WHAT IT TESTS: whether the MPT steepening reflects change WITHIN infants over time or differences
