@@ -883,16 +883,21 @@ show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 # Full symmetric matrices of mean connectivity (r = tanh of the mean Fisher z per edge, averaged over the
 # group's scans). ROIs are ordered by lobe (same order as the Fig. 2 matrices); the diagonal runs bottom-left
 # to top-right and is drawn gray. Lobe boundaries are black lines; lobe color bars sit on top and on the right.
-# One file per group plus a separate colorbar; panel letters and titles are added by hand (Illustrator).
+# Only the combined figure is saved: preterm groups on top (EPT, VPT, MPT), fetal on the bottom with the colorbar.
+# Panel letters and titles are added by hand (Illustrator).
 RUN_SI_MATRICES <- TRUE
 MAT_SOURCE      <- "harmonized"   # "harmonized" (LongComBat, as in all analyses) or "unharmonized" (data before ComBat)
 mat_lim         <- 1              # color scale runs from -mat_lim to +mat_lim
 mat_ramp        <- c(low = "#2b2d9e", mid = "#ffffff", high = "#e4281f")
 mat_diag_col    <- "#7f7f7f"      # diagonal cells
-mat_label_pt    <- 4              # ROI tick-label size (points); 78 labels per axis need a small size
+mat_label_pt    <- 3              # ROI tick-label size (points); 78 labels per axis need a small size
 mat_line_w      <- 0.25           # lobe boundary lines
 mat_bar_len_in  <- 1.7            # colorbar length, inches
-mat_bar_w_in    <- 0.2            # colorbar width, inches
+mat_bar_w_in    <- 0.2            # colorbar proportions (length : width); the bar's size follows from the margins below
+mat_bar_margin_pt <- 45           # space above and below the colorbar in its cell (larger = shorter bar), points
+mat_margin_right_pt <- 40         # right margin of every matrix (room for the lobe names beside the fetal matrix), points
+si2_w_in        <- 9              # combined figure width, inches (3 columns)
+si2_h_in        <- 8.6            # combined figure height, inches (2 rows)
 
 if (RUN_SI_MATRICES) {
   fc_mat_src <- if (MAT_SOURCE == "unharmonized") combFCData else goodFCData
@@ -955,10 +960,17 @@ if (RUN_SI_MATRICES) {
           panel.border = element_rect(color = "#000000", fill = NA, linewidth = 0.5))
 
   print(sapply(mat_groups, length))                                                 # scans per group
-  show_fig("SIFig2_matrix_fetal", 6.8, 6, function() print(mat_plot(mat_groups$Fetal, lobe_labels = TRUE, margin_pt = c(6, 60, 2, 2))))
-  for (g in c("EPT", "VPT", "MPT"))
-    local({ gg <- g; show_fig(paste0("SIFig2_matrix_", tolower(gg)), 6, 6, function() print(mat_plot(mat_groups[[gg]]))) })
-  show_fig("SIFig2_colorbar", mat_bar_w_in + 0.9, mat_bar_len_in + 0.3, function() print(mat_bar))
+  # Combined figure: EPT, VPT, MPT on top; colorbar, fetal (with lobe names), empty cell on the bottom.
+  # Every matrix gets the same right margin so all four panels come out the same size.
+  m_pt <- c(6, mat_margin_right_pt, 2, 2)
+  p_si_ept <- mat_plot(mat_groups$EPT, margin_pt = m_pt)
+  p_si_vpt <- mat_plot(mat_groups$VPT, margin_pt = m_pt)
+  p_si_mpt <- mat_plot(mat_groups$MPT, margin_pt = m_pt)
+  p_si_ft  <- mat_plot(mat_groups$Fetal, lobe_labels = TRUE, margin_pt = m_pt)
+  p_si_bar <- mat_bar + theme(aspect.ratio = mat_bar_len_in / mat_bar_w_in, plot.margin = margin(mat_bar_margin_pt, 30, mat_bar_margin_pt, 40, "pt"))
+  p_si_fig <- ggpubr::ggarrange(p_si_ept, p_si_vpt, p_si_mpt, p_si_bar, p_si_ft, ggplot() + theme_void(),
+                                ncol = 3, nrow = 2, align = "none")
+  show_fig("SIFig2_connectivity_matrices", si2_w_in, si2_h_in, function() print(p_si_fig))   # the only file written for SI Fig. 2
 }
 
 
