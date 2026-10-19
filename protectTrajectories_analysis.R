@@ -1148,7 +1148,7 @@ slopesMain_wide
 #      9d  within/between infant ... omnibus not significant (underpowered); within-infant slopes match
 #      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); tSNR / motion not yet run
 #      9f  age-matched fetal/preterm  robust (1,174-1,354 of 1,404 edges stay significant; all same direction)
-#      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted)
+#      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted); (C) PMA vs. postnatal clock: see 9g
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
 #      9i  distance between ROIs ... group differences unrelated to distance
 ###############################################################################
@@ -1393,6 +1393,53 @@ if (RUN_EXTRA_CONTROLS) {
   slopes_pna_wide <- slope_wide(slope_table(pt_pna, sigEdges, fml_pna)); print(slopes_pna_wide)
   res_pna_axis <- wald_scan(pt_pna, FCz ~ scanner + postnatal * BirthCat, "postnatal:BirthCat")   # (B) postnatal age as the time axis
   cmp_pna_axis <- compare_sets(res_pna_axis); print(cmp_pna_axis)
+
+  ## (C) Which clock organizes connectivity better: PMA or time since birth? ----------------------
+  # WHAT IT TESTS: the "not how premature, but how many weeks postnatal" hypothesis. PMA = birth GA +
+  #   postnatal age, so any model containing PMA and postnatal age already contains birth GA; the two
+  #   ideas can only be separated by comparing single-clock models and by testing what each adds.
+  #   Six models are fitted to every edge with ML (needed to compare fixed effects), preterm scans only:
+  #     pma        FCz ~ scanner + PMA                         (maturation clock = PMA)
+  #     post       FCz ~ scanner + postnatal                   (time since birth only)
+  #     both       FCz ~ scanner + PMA + postnatal             (= PMA + linear birth GA)
+  #     pma_cat    FCz ~ scanner + PMA * BirthCat              (the primary model)
+  #     post_cat   FCz ~ scanner + postnatal * BirthCat        (same, on the postnatal clock)
+  #     pma_x_post FCz ~ scanner + PMA * postnatal             (continuous interaction)
+  #   Output: per model, the median BIC difference from the PMA-only model (negative = better) and the number
+  #   of edges where that model has the lowest BIC; then likelihood-ratio tests (1 df, FDR over edges) of
+  #   whether postnatal age adds to PMA and whether PMA adds to postnatal age. "Postnatal adds to PMA" is the
+  #   same as "birth GA matters at a given PMA". Run for all edges and for the 16 primary edges.
+  ic_models <- list(pma        = FCz ~ scanner + ScanPMA,
+                    post       = FCz ~ scanner + postnatal,
+                    both       = FCz ~ scanner + ScanPMA + postnatal,
+                    pma_cat    = FCz ~ scanner + ScanPMA * BirthCat,
+                    post_cat   = FCz ~ scanner + postnatal * BirthCat,
+                    pma_x_post = FCz ~ scanner + ScanPMA * postnatal)
+  ic_edge <- function(cn) {
+    d <- pt_pna; d$FCz <- as.numeric(goodFCData[d$longID, cn])
+    sapply(ic_models, function(f) {
+      m <- tryCatch(lme(f, random = ~ 1 | shortID, data = d, method = "ML", control = ctrl), error = function(e) NULL)
+      if (is.null(m)) c(AIC = NA, BIC = NA, logLik = NA) else c(AIC = AIC(m), BIC = BIC(m), logLik = as.numeric(logLik(m)))
+    })
+  }
+  res_ic <- cached("icClocks", key = paste(data_key, "icClocks", table_key(pt_pna)),
+                   par_lapply(allConn, ic_edge, export = c("goodFCData", "ctrl", "pt_pna", "ic_models")))
+  bic <- t(sapply(res_ic, function(m) m["BIC", ])); ll <- t(sapply(res_ic, function(m) m["logLik", ]))
+  ic_summary <- function(idx) {
+    b <- bic[idx, , drop = FALSE]; b <- b[complete.cases(b), , drop = FALSE]
+    data.frame(model = colnames(b), median_dBIC_vs_pma = round(apply(b - b[, "pma"], 2, median), 1),
+               edges_lowest_BIC = as.integer(table(factor(colnames(b)[max.col(-b, ties.method = "first")], levels = colnames(b)))),
+               row.names = NULL)
+  }
+  lrt_fdr <- function(big, small) p.adjust(pchisq(pmax(2 * (ll[, big] - ll[, small]), 0), 1, lower.tail = FALSE), "fdr")
+  sig_idx <- match(sigEdges, allConn)
+  cat("\nAll edges:\n");   print(ic_summary(seq_along(allConn)))
+  cat("\nPrimary 16 edges:\n"); print(ic_summary(sig_idx))
+  p_post_adds_pma <- lrt_fdr("both", "pma"); p_pma_adds_post <- lrt_fdr("both", "post")
+  print(c(all_edges_postnatal_adds_to_PMA   = sum(p_post_adds_pma < .05, na.rm = TRUE),
+          all_edges_PMA_adds_to_postnatal   = sum(p_pma_adds_post < .05, na.rm = TRUE),
+          primary16_postnatal_adds_to_PMA   = sum(p_post_adds_pma[sig_idx] < .05, na.rm = TRUE),
+          primary16_PMA_adds_to_postnatal   = sum(p_pma_adds_post[sig_idx] < .05, na.rm = TRUE)))
 
   ## ---- 9h. Unharmonized data with scanner as a covariate (control #11) ------------
   # WHAT IT TESTS: whether the findings depend on LongComBat. All models include scanner as a fixed effect,
