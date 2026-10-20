@@ -1598,6 +1598,7 @@ slopesMain_wide
 #      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted); (C) PMA vs. postnatal clock: see 9g
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
 #      9i  distance between ROIs ... group differences unrelated to distance
+#      9j  motion (mean FD) ............ collinearity with group; motion vs. FC within each group (results pending)
 ###############################################################################
 
 compare_sets <- function(res_alt) {
