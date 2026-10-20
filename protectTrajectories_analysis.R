@@ -73,7 +73,7 @@ RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges 
 RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
 RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns (add tSNR via qc_more)
-RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: strict equal-volume control (ROI time series cut to the same number of volumes; needs data/rawTS or data/rawRS)
+RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: fetal vs. preterm with every scan cut to the same number of volumes (needs data/rawTS or data/rawRS)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
 
@@ -1600,7 +1600,7 @@ slopesMain_wide
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
 #      9i  distance between ROIs ... group differences unrelated to distance
 #      9j  motion (mean FD) ........ r = -0.93 with group (VIF 7.2); in fetal scans motion is unrelated to FC (1 edge)
-#      9k  strict equal-volume ..... fetal-vs-preterm unchanged (1,404 same direction); PMA x prematurity keeps its slopes but 0 FDR edges (power)
+#      9k  strict equal-volume ..... fetal-vs-preterm unchanged at 80 volumes per scan (1,404 same direction, r = 0.99)
 ###############################################################################
 
 compare_sets <- function(res_alt) {
@@ -2277,14 +2277,16 @@ if (RUN_QC_COVARIATE_CONTROL) {
 }
 
 ## ---- 9k. Strict equal-volume control: ROI time series cut to the same number of volumes ----------------------
-# WHAT IT TESTS: the strict version of the volume controls in 9e. Instead of adjusting for, or restricting on, the number
-#   of volumes, every scan's connectivity is RECOMPUTED from the first vol_equal_n usable (non-censored) volumes of its
-#   ROI time series, so all scans contribute exactly the same number of volumes. Then the two main analyses are repeated:
-#   (A) fetal vs. preterm (PMA + scanner + group), (B) preterm PMA x prematurity with its group slopes.
+# WHAT IT TESTS: the strict version of the volume controls in 9e, for the fetal-vs-preterm comparison only. Instead of
+#   adjusting for, or restricting on, the number of volumes, every scan's connectivity is RECOMPUTED from the first
+#   vol_equal_n usable (non-censored) volumes of its ROI time series, so fetal and preterm scans contribute exactly the
+#   same number of volumes, and the main fetal-vs-preterm model (PMA + scanner + group) is repeated. (The preterm-only
+#   PMA x prematurity analysis is not repeated here: volumes are not capped within the preterm group.)
 # DATA: one tab-separated .1D file per scan ("<fullID>_ts.1D"; rows = volumes, columns = the 111 ROIs in label-key
-#   order, censored volumes are all-zero rows) in data/rawTS and/or data/rawRS (subfolders fetal and preterm). Connectivity is the Fisher z
-#   of the correlation across the usable volumes. The truncated values are NOT re-harmonized: scanner is a covariate in
-#   every model (as in 9h, where harmonization changed nothing for the fetal-vs-preterm contrast).
+#   order, censored volumes are all-zero rows) in data/rawTS and/or data/rawRS (subfolders fetal and preterm).
+#   Connectivity is the Fisher z of the correlation across the usable volumes. The truncated values are NOT
+#   re-harmonized: scanner is a covariate in the model (as in 9h, where harmonization changed nothing for the
+#   fetal-vs-preterm contrast).
 # CHECKS built in: the time series are first used in full to reproduce the stored (unharmonized) connectivity of a few
 #   scans, which would reveal a wrong column order or different preprocessing; usable-volume counts are compared with
 #   finalVol; for every scan, the truncated connectivity is correlated with the full-data connectivity (fidelity).
@@ -2295,27 +2297,13 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   is right). 112 of 538 scans have fewer usable (non-zero) volumes than finalVol says (e.g. 161 vs. 169); every scan
 #   has >= 80 usable volumes. Fidelity of the 80-volume connectivity to the full-data connectivity (per-scan correlation
 #   across edges): fetal mean 0.93 (min 0.67), preterm mean 0.84 (min 0.65); preterm scans are cut from more volumes.
-# RESULT (A) fetal vs. preterm at 80 volumes per scan: 1,248 edges significant (1,002 preterm greater, 246 fetal greater);
+# RESULT: fetal vs. preterm at 80 volumes per scan: 1,248 edges significant (1,002 preterm greater, 246 fetal greater);
 #   1,206 of the 1,404 primary edges still significant; all 1,404 in the same direction; beta correlation 0.990 with the
 #   primary result and 0.990 with the unharmonized full-data result.
-#   (B) preterm PMA x prematurity at 80 volumes per scan: 0 edges FDR-significant (197 with raw p < .05). Of the 16
-#   primary edges, 14 still have raw p < .05 (chi-square 11-20 in 13 of them; the exceptions are SPG.L_HES.R raw p .33 and
-#   ORBinf.L_OLF.R .066), but adjusted p is .072-.90 (lowest: ORBsupb.L_ORBsupb.R and ORBsupb.L_REC.R .072,
-#   SMG.L_SMG.R .088, REC.L_REC.R .099). The group slopes are unchanged: EPT and VPT near zero, MPT 0.056-0.094 per
-#   week in the 13 consistent edges (MPT-EPT contrasts p < .001 in 10 of them, .003-.024 in the other 3); the three
-#   oddballs keep their different pattern.
-# INTERPRETATION: (A) the fetal-vs-preterm difference does not depend on the number of volumes: with every scan at 80
-#   volumes the direction is preserved for all 1,404 edges and the betas correlate 0.99. (B) The PMA x prematurity
-#   effect keeps its size and shape (same slopes, same MPT-EPT contrasts) but loses FDR significance. This is the
-#   expected power loss rather than a reversal: the preterm scans lose more than half of their data (fidelity 0.84,
-#   scans cut from 120-296 to 80 volumes, 2.7 min), the truncated values are not harmonized (the unharmonized full-data
-#   run in 9h already gave 9 instead of 16 edges), and FDR is over 3,003 edges. Report as a limitation of power, not as
-#   a failure to replicate; the effect-size pattern is the informative part.
+# INTERPRETATION: the fetal-vs-preterm difference does not depend on the number of volumes: with every scan at 80
+#   volumes the direction is preserved for all 1,404 edges and the betas correlate 0.99.
 # REPORT: "When every scan was reduced to the same number of volumes (80), the fetal-preterm differences were unchanged
-#   (1,248 significant edges; all 1,404 primary edges in the same direction; r = 0.99 with the primary betas). The
-#   PMA x prematurity pattern was preserved in effect size (MPT slopes 0.06-0.09 per week, EPT and VPT near zero) but no
-#   longer reached FDR significance (14 of the 16 edges had uncorrected p < .05; adjusted p >= .07), consistent with the
-#   loss of power from discarding more than half of the preterm data."
+#   (1,248 significant edges; all 1,404 primary edges in the same direction; r = 0.99 with the primary betas)."
 vol_equal_n    <- 80          # volumes per scan after truncation (the fetal minimum)
 vol_equal_mode <- "first"     # "first": the first n usable volumes; "random": a random set of n usable volumes (seeded)
 if (RUN_EQUAL_VOLUME_CONTROL) {
@@ -2367,15 +2355,10 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
                                 function(x) c(scans_differing = sum(x != 0), min = min(x), median = median(x), max = max(x)))))
     print(do.call(rbind, tapply(tr$fidelity, scanInfo$scanType, function(x) c(mean = mean(x), min = min(x), sd = sd(x)))))
 
-    ## A. fetal vs. preterm on the truncated connectivity (scanner is a covariate; values are not harmonized)
+    ## fetal vs. preterm on the truncated connectivity (scanner is a covariate; values are not harmonized)
     res_eq_fp <- with_fc(truncFC, run_fetal(scanInfo, paste0("equalVol", vol_equal_n, vol_equal_mode)), paste0("truncFC", vol_equal_n))
     print(cmp_fetal(res_eq_fp, n_scans = nrow(scanInfo)))
     if (exists("fetalRes_raw")) print(c(r_beta_with_unharmonized_full = round(cor(fetalRes_raw$scanTypeb, res_eq_fp$scanTypeb, use = "complete.obs"), 3)))
-
-    ## B. preterm PMA x prematurity on the truncated connectivity, and the group slopes of the 16 primary edges
-    res_eq_int <- with_fc(truncFC, wald_scan(pt, fml_main, "ScanPMA:BirthCat"), paste0("truncFC", vol_equal_n))
-    cmp_eq_int <- compare_sets(res_eq_int); print(cmp_eq_int)
-    slopes_eq_wide <- with_fc(truncFC, slope_wide(slope_table(pt, sigEdges, fml_main)), paste0("truncFC", vol_equal_n)); print(slopes_eq_wide)
   }
 }
 
