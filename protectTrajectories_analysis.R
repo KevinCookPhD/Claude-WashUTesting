@@ -1598,7 +1598,7 @@ slopesMain_wide
 #      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted); (C) PMA vs. postnatal clock: see 9g
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
 #      9i  distance between ROIs ... group differences unrelated to distance
-#      9j  motion (mean FD) ............ collinearity with group; motion vs. FC within each group (results pending)
+#      9j  motion (mean FD) ........ r = -0.93 with group (VIF 7.2); in fetal scans motion is unrelated to FC (1 edge)
 ###############################################################################
 
 compare_sets <- function(res_alt) {
@@ -2186,7 +2186,27 @@ if (RUN_DISTANCE_CONTROL) {
 #   fetal and preterm separately, FDR across the 3,003 edges. Then: do the edge-wise motion effects resemble the
 #   edge-wise fetal-vs-preterm differences? (If the group difference were a motion artifact, edges that motion
 #   changes most should also be the edges that differ most between groups, and in the matching direction.)
-# RESULT / INTERPRETATION / REPORT: to be added after the run.
+# RESULT (A): meanFD is almost the same variable as group (r = -0.925, R2 = 0.86). Variance inflation of the group term
+#   rises from 1.33 to 7.16 when meanFD is added (meanFD itself 6.97; PMA 1.70 and scanner 1.86 unchanged). The group
+#   standard errors grow by a median factor of 2.32 across edges, exactly what the VIF predicts (sqrt(7.16/1.33)).
+#   (B) fetal scans only (192 scans, 161 infants): 203 edges with raw p < .05 (about 150 expected by chance), 1 FDR-
+#   significant; median effect -0.0005 z per SD of FD (51% of edges negative; largest |effect| 0.148 z). Preterm scans
+#   only (346 scans, 179 infants): 843 raw, 392 FDR-significant; median -0.0121 z per SD of FD (70% negative; largest
+#   0.111). Edge-wise Spearman correlations: fetal vs. preterm motion effects 0.034; fetal motion effect vs. group
+#   difference -0.112; preterm motion effect vs. group difference 0.057.
+# INTERPRETATION: (A) with VIF > 7 the raw-meanFD model (D1 in 9e) cannot separate group from motion, which explains its
+#   loss of significant edges (inflated standard errors), not a change in the effect. (B) In the fetal data, where
+#   motion varies most (SD 0.22 mm), motion is essentially unrelated to connectivity (1 of 3,003 edges). In preterm
+#   infants motion is modestly associated with lower connectivity (about -0.012 z per SD of 0.032 mm, or -0.38 z per
+#   mm, over a 0.02-0.22 mm range). Extrapolating that preterm slope across the 0.68 mm fetal-preterm gap would give
+#   about 0.26 z, on the order of the group differences, but that is far outside the preterm range and the fetal data
+#   (-0.002 z per mm over 0.26-1.4 mm) do not show it. The edge patterns of the motion effects also do not resemble the
+#   group differences (|rho| <= 0.11). Together this argues against motion as the explanation of the fetal-preterm
+#   difference, though group and motion cannot be separated statistically (state as a limitation).
+# REPORT: "Mean framewise displacement was almost completely collinear with group (r = -0.93; variance inflation 7.2),
+#   so it could not be included as a covariate. Within the fetal scans, where motion varied most, it was unrelated to
+#   connectivity (1 of 3,003 edges significant after FDR), and the edge-wise motion effects did not resemble the
+#   fetal-preterm differences (Spearman rho = -0.11 and 0.06 for fetal and preterm motion effects)."
 if (RUN_QC_COVARIATE_CONTROL) {
   ## A. collinearity of meanFD with group
   dv <- data.frame(group = as.numeric(si_fd$scanType == "Preterm"), PMA = si_fd$ScanPMA,
