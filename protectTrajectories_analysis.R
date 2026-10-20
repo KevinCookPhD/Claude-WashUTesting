@@ -1593,7 +1593,7 @@ slopesMain_wide
 #      9b  continuous birth GA ..... 0 significant (the effect is a step, not a linear gradient)
 #      9c  scans after 32 wk PMA ... 6 of 16 hold; same slope pattern (less power)
 #      9d  within/between infant ... omnibus not significant (underpowered); within-infant slopes match
-#      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); tSNR / motion not yet run
+#      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); motion wired in (results pending); tSNR not yet run
 #      9f  age-matched fetal/preterm  robust (1,174-1,354 of 1,404 edges stay significant; all same direction)
 #      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted); (C) PMA vs. postnatal clock: see 9g
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
@@ -1787,6 +1787,7 @@ if (RUN_QC_COVARIATE_CONTROL) {
   # Uses a copy of the scan table (si_fd) restricted to scans with a motion value, so scanInfo and the caches stay as they are.
   si_fd <- scanInfo; si_fd$meanFD <- scan_fd
   si_fd <- droplevels(si_fd[!is.na(si_fd$meanFD), ])
+  if (nlevels(si_fd$scanType) < 2) stop("meanFD is missing for every scan of one group, so a fetal-vs-preterm comparison is not possible.")
   si_fd$meanFD_c <- si_fd$meanFD - ave(si_fd$meanFD, si_fd$scanType)                                    # group-mean-centered
   print(tapply(si_fd$meanFD, si_fd$scanType, function(x) c(n = length(x), mean = mean(x), sd = sd(x), min = min(x), median = median(x), max = max(x))))
   print(c(r_meanFD_with_group = cor(si_fd$meanFD, as.numeric(si_fd$scanType == "Preterm"))))             # collinearity with group
