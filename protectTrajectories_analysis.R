@@ -73,6 +73,7 @@ RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges 
 RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
 RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns (add tSNR via qc_more)
+RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: strict equal-volume control (ROI time series cut to the same number of volumes; needs data/rawTS or data/rawRS)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
 
@@ -1599,6 +1600,7 @@ slopesMain_wide
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
 #      9i  distance between ROIs ... group differences unrelated to distance
 #      9j  motion (mean FD) ........ r = -0.93 with group (VIF 7.2); in fetal scans motion is unrelated to FC (1 edge)
+#      9k  strict equal-volume ..... ROI time series cut to the same number of volumes (results pending)
 ###############################################################################
 
 compare_sets <- function(res_alt) {
@@ -1607,6 +1609,16 @@ compare_sets <- function(res_alt) {
                    of_primary = sum(sigEdges %in% s), n_primary = length(sigEdges), newly_sig = sum(!s %in% sigEdges))
   list(summary = summary_vec, dropped = setdiff(sigEdges, s), entered = setdiff(s, sigEdges),
        primary_edges = res_alt[match(sigEdges, res_alt$Connection), c("Connection", "chi", "p", "pAdj")])
+}
+
+# Temporarily swaps the connectivity matrix (and the cache key) used by the scan functions (wald_scan, run_fetal, slope_table),
+# so any analysis can be repeated on another version of the connectivity values (unharmonized in 9h, truncated in 9k).
+with_fc <- function(fc, code, tag = "alt") {
+  old <- list(goodFCData = goodFCData, data_key = data_key)
+  on.exit({ goodFCData <<- old$goodFCData; data_key <<- old$data_key }, add = TRUE)
+  goodFCData <<- fc
+  data_key   <<- paste(old$data_key, tag, sum(as.matrix(fc)))
+  force(code)
 }
 
 if (RUN_SENSITIVITY) {
@@ -2001,17 +2013,9 @@ if (RUN_EXTRA_CONTROLS) {
   # includes scanner as a fixed effect, so this shows whether the findings depend on harmonization.
   rawFC <- combFCData[scanInfo$longID, colnames(goodFCData)]
   stopifnot(!anyNA(rawFC), identical(dim(rawFC), dim(goodFCData)))
-  # Temporarily swap the connectivity matrix (and the cache key) used by the scan functions
-  with_fc <- function(fc, code) {
-    old <- list(goodFCData = goodFCData, data_key = data_key)
-    on.exit({ goodFCData <<- old$goodFCData; data_key <<- old$data_key }, add = TRUE)
-    goodFCData <<- fc
-    data_key   <<- paste(old$data_key, "unharmonized", sum(as.matrix(fc)))
-    force(code)
-  }
-  fetalRes_raw <- with_fc(rawFC, run_fetal(scanInfo, "unharmonized"))
+  fetalRes_raw <- with_fc(rawFC, run_fetal(scanInfo, "unharmonized"), "unharmonized")
   print(cmp_fetal(fetalRes_raw, n_scans = nrow(scanInfo)))
-  res_raw <- with_fc(rawFC, wald_scan(pt, fml_main, "ScanPMA:BirthCat"))
+  res_raw <- with_fc(rawFC, wald_scan(pt, fml_main, "ScanPMA:BirthCat"), "unharmonized")
   cmp_raw <- compare_sets(res_raw); print(cmp_raw)
 }
 
@@ -2270,6 +2274,82 @@ if (RUN_QC_COVARIATE_CONTROL) {
   print(c(rho_fetal_vs_preterm_motion_effect  = rho(res_fd_fet$beta_perSD, res_fd_pre$beta_perSD),
           rho_fetal_motion_vs_group_difference   = rho(res_fd_fet$beta_perSD, fetalRes$scanTypeb),
           rho_preterm_motion_vs_group_difference = rho(res_fd_pre$beta_perSD, fetalRes$scanTypeb)))
+}
+
+## ---- 9k. Strict equal-volume control: ROI time series cut to the same number of volumes ----------------------
+# WHAT IT TESTS: the strict version of the volume controls in 9e. Instead of adjusting for, or restricting on, the number
+#   of volumes, every scan's connectivity is RECOMPUTED from the first vol_equal_n usable (non-censored) volumes of its
+#   ROI time series, so all scans contribute exactly the same number of volumes. Then the two main analyses are repeated:
+#   (A) fetal vs. preterm (PMA + scanner + group), (B) preterm PMA x prematurity with its group slopes.
+# DATA: one tab-separated .1D file per scan ("<fullID>_ts.1D"; rows = volumes, columns = the 111 ROIs in label-key
+#   order, censored volumes are all-zero rows) in data/rawTS and/or data/rawRS (subfolders fetal and preterm). Connectivity is the Fisher z
+#   of the correlation across the usable volumes. The truncated values are NOT re-harmonized: scanner is a covariate in
+#   every model (as in 9h, where harmonization changed nothing for the fetal-vs-preterm contrast).
+# CHECKS built in: the time series are first used in full to reproduce the stored (unharmonized) connectivity of a few
+#   scans, which would reveal a wrong column order or different preprocessing; usable-volume counts are compared with
+#   finalVol; for every scan, the truncated connectivity is correlated with the full-data connectivity (fidelity).
+# NOTE: all scans at vol_equal_n volumes means fetal scans keep all their data at the minimum (80 volumes = 4 min at TR
+#   3 s) while preterm scans (>= 120 volumes at TR 2 s) are cut to 80 volumes = 2.7 min; duration and volume count
+#   cannot both be equated. RESULT / INTERPRETATION / REPORT: to be added after the run.
+vol_equal_n    <- 80          # volumes per scan after truncation (the fetal minimum)
+vol_equal_mode <- "first"     # "first": the first n usable volumes; "random": a random set of n usable volumes (seeded)
+if (RUN_EQUAL_VOLUME_CONTROL) {
+  ts_dirs <- file.path(dataDir, c("rawTS", "rawRS")); ts_dirs <- ts_dirs[dir.exists(ts_dirs)]
+  ts_files <- if (length(ts_dirs) > 0) list.files(ts_dirs, pattern = "_ts\\.1D$", recursive = TRUE, full.names = TRUE) else character(0)
+  names(ts_files) <- sub("_ts\\.1D$", "", basename(ts_files))
+  if (length(ts_files) == 0) {
+    message("No time series found in data/rawTS or data/rawRS; skipping 9k.")
+  } else {
+    stopifnot(!anyDuplicated(names(ts_files)))
+    miss <- setdiff(scanInfo$longID, names(ts_files))
+    if (length(miss) > 0) stop(length(miss), " scans have no time series file, e.g. ", paste(head(miss, 3), collapse = ", "))
+
+    read_ts <- function(f) {                                              # AFNI .1D text: tab-separated, first field empty
+      fields <- lapply(strsplit(readLines(f), "\t", fixed = TRUE), function(x) x[nzchar(x)])
+      stopifnot(length(unique(lengths(fields))) == 1)
+      matrix(as.numeric(unlist(fields)), nrow = length(fields), byrow = TRUE)
+    }
+    ts_roi <- gsub("-", ".", roiData$FullLabel[1:111], fixed = TRUE)      # column order of the .1D files = first 111 rows of the label key
+    parts  <- strsplit(allConn, "_", fixed = TRUE)
+    ei <- match(sapply(parts, `[`, 1), ts_roi); ej <- match(sapply(parts, `[`, 2), ts_roi)
+    stopifnot(!anyNA(ei), !anyNA(ej))
+    used <- sort(unique(c(ei, ej))); ci <- match(ei, used); cj <- match(ej, used)
+    fz <- function(x) { cm <- suppressWarnings(cor(x[, used])); atanh(pmin(pmax(cm[cbind(ci, cj)], -0.999999), 0.999999)) }   # Fisher z for the 3,003 edges
+    ts_of <- function(id) { m <- read_ts(ts_files[[id]]); stopifnot(ncol(m) == 111); m[rowSums(abs(m)) > 0, , drop = FALSE] }   # usable volumes only
+
+    ## check 1: full time series must reproduce the stored unharmonized connectivity
+    chk_ids <- head(scanInfo$longID[scanInfo$scanType == "Fetal"], 3); chk_ids <- c(chk_ids, head(scanInfo$longID[scanInfo$scanType == "Preterm"], 3))
+    chk <- t(sapply(chk_ids, function(id) c(usable_volumes = nrow(ts_of(id)), finalVol = scanInfo$finalVol[scanInfo$longID == id],
+                                            r_with_stored = round(cor(fz(ts_of(id)), as.numeric(combFCData[id, allConn])), 4))))
+    print(chk)
+    if (any(chk[, "r_with_stored"] < 0.99)) stop("Recomputed connectivity does not match the stored values (r < .99): check the ROI column order / preprocessing before using this control.")
+
+    trunc_key <- paste(data_key, "truncFC", vol_equal_n, vol_equal_mode, length(ts_files), sum(file.size(ts_files[scanInfo$longID])))
+    tr <- cached("truncFC", key = trunc_key, {
+      out <- matrix(NA_real_, nrow(scanInfo), length(allConn), dimnames = list(scanInfo$longID, allConn)); n_use <- integer(nrow(scanInfo)); fid <- numeric(nrow(scanInfo))
+      for (k in seq_len(nrow(scanInfo))) {
+        x <- ts_of(scanInfo$longID[k]); n_use[k] <- nrow(x)
+        if (nrow(x) < vol_equal_n) stop(scanInfo$longID[k], " has only ", nrow(x), " usable volumes")
+        if (vol_equal_mode == "random") { set.seed(2026 + k); sel <- sort(sample(nrow(x), vol_equal_n)) } else sel <- seq_len(vol_equal_n)
+        out[k, ] <- fz(x[sel, , drop = FALSE]); fid[k] <- cor(out[k, ], fz(x))        # fidelity: truncated vs. full-data connectivity
+      }
+      list(fc = as.data.frame(out), usable = n_use, fidelity = fid)
+    })
+    truncFC <- tr$fc
+    ## check 2 and fidelity
+    print(c(scans_where_usable_ne_finalVol = sum(tr$usable != scanInfo$finalVol)))
+    print(do.call(rbind, tapply(tr$fidelity, scanInfo$scanType, function(x) c(mean = mean(x), min = min(x), sd = sd(x)))))
+
+    ## A. fetal vs. preterm on the truncated connectivity (scanner is a covariate; values are not harmonized)
+    res_eq_fp <- with_fc(truncFC, run_fetal(scanInfo, paste0("equalVol", vol_equal_n, vol_equal_mode)), paste0("truncFC", vol_equal_n))
+    print(cmp_fetal(res_eq_fp, n_scans = nrow(scanInfo)))
+    if (exists("fetalRes_raw")) print(c(r_beta_with_unharmonized_full = round(cor(fetalRes_raw$scanTypeb, res_eq_fp$scanTypeb, use = "complete.obs"), 3)))
+
+    ## B. preterm PMA x prematurity on the truncated connectivity, and the group slopes of the 16 primary edges
+    res_eq_int <- with_fc(truncFC, wald_scan(pt, fml_main, "ScanPMA:BirthCat"), paste0("truncFC", vol_equal_n))
+    cmp_eq_int <- compare_sets(res_eq_int); print(cmp_eq_int)
+    slopes_eq_wide <- with_fc(truncFC, slope_wide(slope_table(pt, sigEdges, fml_main)), paste0("truncFC", vol_equal_n)); print(slopes_eq_wide)
+  }
 }
 
 ###############################################################################
