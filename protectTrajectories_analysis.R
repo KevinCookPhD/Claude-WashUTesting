@@ -72,7 +72,7 @@ RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (s
 RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges (slow serially; fast with N_CORES, cached)
 RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
-RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns (add tSNR via qc_more)
+RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns
 RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: fetal vs. preterm with every scan cut to the same number of volumes (needs data/rawTS or data/rawRS)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
@@ -1594,7 +1594,7 @@ slopesMain_wide
 #      9b  continuous birth GA ..... 0 significant (the effect is a step, not a linear gradient)
 #      9c  scans after 32 wk PMA ... 6 of 16 hold; same slope pattern (less power)
 #      9d  within/between infant ... omnibus not significant (underpowered); within-infant slopes match
-#      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); motion: group and FD do not overlap, within-group adjustment leaves results unchanged; tSNR not yet run
+#      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); motion: group and FD do not overlap, within-group adjustment leaves results unchanged; tSNR not planned (add on request at review)
 #      9f  age-matched fetal/preterm  robust (1,174-1,354 of 1,404 edges stay significant; all same direction)
 #      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted); (C) PMA vs. postnatal clock: see 9g
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
@@ -1742,9 +1742,10 @@ match_scans <- function(d, var, caliper) {
 #   collinear with group); (C) similar volumes: restrict to the finalVol range both groups share, and
 #   1:1 match fetal to preterm scans on finalVol; (D) motion (mean framewise displacement): as a raw and a
 #   group-centered covariate, restricted to the range both groups share, and 1:1 matched on motion;
-#   (E) finalVol and motion together (tSNR can be added via qc_more); (F) preterm only: the PMA x prematurity
+#   (E) finalVol and motion together; (F) preterm only: the PMA x prematurity
 #   test (Fig. 3) with motion as a covariate, since motion does overlap within the preterm group.
-# STATUS: finalVol RUN; motion (D, E) wired in, results to be added after the run; tSNR not yet available.
+# STATUS: finalVol and motion RUN (D-F). tSNR is not planned; if a reviewer asks, add a tSNR column to si_fd (centered
+#   within group) and list it in qc_more in part E.
 #   Result summaries use the same columns as 9f:
 #   fdr05, still_sig_of_primary (of the 1,404 primary edges), same_direction_of_primary, r_beta_with_primary.
 # NOTE: this is a proxy for "equal amounts of data". The strict version (truncate every scan to the same number
@@ -1794,7 +1795,7 @@ match_scans <- function(d, var, caliper) {
 #   least 97.8% of edges and the betas correlate 0.91-0.999. Fewer significant edges in A (collinearity inflates
 #   standard errors by about 30%) and C (90-92 fetal scans) reflect precision, not a changed effect. B equals the
 #   primary result by construction (centering leaves the group coefficient unchanged); it only shows that
-#   volumes matter little within groups. This covers data AMOUNT; for data QUALITY see MOTION above (tSNR is still open).
+#   volumes matter little within groups. This covers data AMOUNT; for data QUALITY see MOTION above (tSNR is not planned; see STATUS).
 # REPORT: "Results were unchanged when including finalVol as a covariate (1,113 significant edges; 1,403 of
 #   1,404 primary edges in the same direction) or restricting to scans with >= 120 volumes in both groups
 #   (1,164 significant edges; 1,403 of 1,404 in the same direction)."
