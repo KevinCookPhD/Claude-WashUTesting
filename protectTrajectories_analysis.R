@@ -1764,8 +1764,18 @@ match_scans <- function(d, var, caliper) {
 #   groups (0.75 vs 0.08 mm), so group differences cannot be separated from motion differences. Adjusting for
 #   within-group variation in motion, alone or together with the number of volumes, left the results unchanged (1,402
 #   and 1,431 significant edges; all 1,404 primary edges in the same direction)."
-# MOTION, PRETERM ONLY (F): PMA x prematurity with meanFD as a covariate: results to be added after the run (printed:
-#   motion by birth group, correlation of meanFD with PMA, FDR counts with how many of the 16 hold, and the slopes).
+# MOTION, PRETERM ONLY (F): PMA x prematurity with meanFD as a covariate (all 346 preterm scans have a value).
+#   Motion (mean FD, mm): EPT 0.082 (SD 0.034), VPT 0.074 (0.031), MPT 0.067 (0.024); meanFD falls with PMA
+#   (r = -0.29 overall; -0.30 EPT, -0.27 VPT, -0.18 MPT), so motion could in principle reach the interaction.
+#   RESULT: 15 edges FDR-significant; 14 of the 16 retained, 1 new (SFGmed.R_REC.R). The 2 that drop are near misses
+#   (ORBinf.L_OLF.R adjusted p .051; ORBsupb.L_ORBmid.R .056). Group slopes are essentially unchanged: EPT and VPT near
+#   zero, MPT 0.05-0.09 per week in the 13 consistent edges (MPT-EPT contrasts p < .001 in 12 of them), and the three
+#   oddballs keep their different pattern.
+#   INTERPRETATION: the PMA x prematurity result is not a motion effect. Motion is slightly higher in the youngest
+#   and most premature infants, but adjusting for it leaves the interaction and the slopes intact.
+#   REPORT: "The PMA x prematurity interaction was robust to adjustment for mean framewise displacement (14 of the 16
+#   edges remained FDR-significant; the other two had adjusted p = .051 and .056), and the group slopes were
+#   unchanged."
 # INTERPRETATION: the group difference is not explained by the amount of data: direction is preserved for at
 #   least 97.8% of edges and the betas correlate 0.91-0.999. Fewer significant edges in A (collinearity inflates
 #   standard errors by about 30%) and C (90-92 fetal scans) reflect precision, not a changed effect. B equals the
