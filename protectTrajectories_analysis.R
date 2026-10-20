@@ -292,8 +292,9 @@ if (length(bad_birth_ids) > 0) {
 
 ## ---- QA summary -------------------------------------------------------------
 round(c(pct_usable_all   = mean(scanQA$finalVol > 119) * 100,
-        pct_usable_lt37  = mean(scanQA$finalVol[scanQA$scanPMA <  37] > 119) * 100,
-        pct_usable_gt37  = mean(scanQA$finalVol[scanQA$scanPMA >  37] > 119) * 100), 1)
+        pct_usable_lt37  = mean(scanQA$finalVol[which(scanQA$scanPMA <  37)] > 119) * 100,     # which(): scans with a missing scanPMA are left out
+        pct_usable_gt37  = mean(scanQA$finalVol[which(scanQA$scanPMA >  37)] > 119) * 100), 1)
+c(scans_missing_scanPMA = sum(is.na(scanQA$scanPMA)))                                         # these scans are dropped from the QA plots below (ggplot warns about removed rows)
 c(infants_all = length(unique(scanQA$shortID)), infants_usable = length(unique(goodData$shortID)),
   scans_all = nrow(scanQA), scans_usable = nrow(goodData))
 table(table(goodData$shortID))                                  # infants by number of usable scans
