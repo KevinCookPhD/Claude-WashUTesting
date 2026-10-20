@@ -564,10 +564,36 @@ round(prop.table(table(inf$MatEd[inf$MatEd != 0], useNA = "no")) * 100, 1)
 c(PMA_at_scan_mean = mean(pt$ScanPMA), PMA_sd = sd(pt$ScanPMA), PMA_min = min(pt$ScanPMA), PMA_max = max(pt$ScanPMA),
   scans_per_infant_median = median(table(pt$shortID)), pct_scans_3T = mean(pt$scanner == "750") * 100)
 
-# Table 1 data-amount rows (scan level): volumes retained and minutes of data per scan, mean (SD).
+## ---- 3e. Usable volumes per scan, from the ROI time series -----------------------------------------------------
+# The scan QA table's finalVol and the ROI time series disagree for about 1 scan in 5 (426 of 538 match exactly: fetal 186
+# of 192, preterm 240 of 346; the rest differ by -87 to +109 volumes). The stored connectivity of EVERY scan (all 538, r =
+# 1.000) is reproduced from the non-zero rows of its time series, so that count (scan_vol) is the number of volumes the
+# connectivity is based on. It is used for Table 1 and the volume controls (9e, 9k); finalVol is kept only for the QA
+# plots in section 1. Every scan meets the inclusion rule with either count (preterm >= 120, fetal >= 80 volumes).
+# Time series: one tab-separated .1D file per scan ("<fullID>_ts.1D"; rows = volumes, columns = the 111 ROIs, censored
+# volumes are all-zero rows) in data/rawTS and/or data/rawRS (subfolders fetal and preterm).
+ts_dirs <- file.path(dataDir, c("rawTS", "rawRS")); ts_dirs <- ts_dirs[dir.exists(ts_dirs)]
+ts_files <- if (length(ts_dirs) > 0) list.files(ts_dirs, pattern = "_ts\\.1D$", recursive = TRUE, full.names = TRUE) else character(0)
+names(ts_files) <- sub("_ts\\.1D$", "", basename(ts_files))
+read_ts <- function(f) {                                              # AFNI .1D text: tab-separated, first field empty
+  fields <- lapply(strsplit(readLines(f), "\t", fixed = TRUE), function(x) x[nzchar(x)])
+  stopifnot(length(unique(lengths(fields))) == 1)
+  matrix(as.numeric(unlist(fields)), nrow = length(fields), byrow = TRUE)
+}
+if (length(ts_files) > 0 && all(scanInfo$longID %in% names(ts_files))) {
+  stopifnot(!anyDuplicated(names(ts_files)))
+  scan_vol <- cached("usableVolumes", key = paste(nrow(scanInfo), length(ts_files), sum(file.size(ts_files[scanInfo$longID]))),
+                     unname(vapply(scanInfo$longID, function(id) sum(rowSums(abs(read_ts(ts_files[[id]]))) > 0), numeric(1))))
+  print(c(scans_where_usable_ne_finalVol = sum(scan_vol != scanInfo$finalVol)))
+} else {
+  message("Time series not found for every scan: using finalVol from the QA table for the volume counts (3e, Table 1, 9e).")
+  scan_vol <- scanInfo$finalVol
+}
+
+# Table 1 data-amount rows (scan level): usable volumes (3e) and minutes of data per scan, mean (SD).
 # Minutes = volumes x TR / 60 (TR = 2 s preterm, 3 s fetal). Columns: fetal, all preterm, then preterm groups.
 TR_SEC  <- c(Fetal = 3, Preterm = 2)
-scan_min <- scanInfo$finalVol * TR_SEC[as.character(scanInfo$scanType)] / 60   # kept out of scanInfo so cache keys do not change
+scan_min <- scan_vol * TR_SEC[as.character(scanInfo$scanType)] / 60   # kept out of scanInfo so cache keys do not change
 # Motion: mean framewise displacement per scan (motionSummary.csv: project, fullID, shortID, scan, meanFD)
 motion <- read.csv("motionSummary.csv", stringsAsFactors = FALSE)
 stopifnot(!anyDuplicated(motion$fullID))
@@ -578,7 +604,7 @@ scan_cols <- list(Fetal = scanInfo$scanType == "Fetal", `All preterm` = scanInfo
                   EPT = scanInfo$BirthCat %in% "EPT", VPT = scanInfo$BirthCat %in% "VPT", MPT = scanInfo$BirthCat %in% "MPT")
 table1_scan <- rbind(
   `Scans, n`                          = sapply(scan_cols, sum),
-  `Volumes per scan, mean (SD)`       = sapply(scan_cols, function(i) ms(scanInfo$finalVol[i])),
+  `Volumes per scan, mean (SD)`       = sapply(scan_cols, function(i) ms(scan_vol[i])),
   `Minutes of data per scan, mean (SD)` = sapply(scan_cols, function(i) sprintf("%.1f (%.1f)", mean(scan_min[i]), sd(scan_min[i]))),
   `Mean framewise displacement, mm, mean (SD)` = sapply(scan_cols, function(i) sprintf("%.2f (%.2f)", mean(scan_fd[i], na.rm = TRUE), sd(scan_fd[i], na.rm = TRUE))),
   `Scans with motion data, n`         = sapply(scan_cols, function(i) sum(!is.na(scan_fd[i]))))
@@ -1595,7 +1621,7 @@ slopesMain_wide
 #      9b  continuous birth GA ..... 0 significant (the effect is a step, not a linear gradient)
 #      9c  scans after 32 wk PMA ... 6 of 16 hold; same slope pattern (less power)
 #      9d  within/between infant ... omnibus not significant (underpowered); within-infant slopes match
-#      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); motion: group and FD do not overlap, within-group adjustment leaves results unchanged; tSNR not planned (add on request at review)
+#      9e  data amount (usable volumes; rerun pending) .. robust (direction kept for >= 97% of edges); motion: group and FD do not overlap, within-group adjustment leaves results unchanged; tSNR not planned (add on request at review)
 #      9f  age-matched fetal/preterm  robust (1,174-1,354 of 1,404 edges stay significant; all same direction)
 #      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted); (C) PMA vs. postnatal clock: see 9g
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
@@ -1738,14 +1764,17 @@ match_scans <- function(d, var, caliper) {
 
 ## ---- 9e. Fetal vs. preterm with data-quality covariates and similar data amounts -----
 # WHAT IT TESTS: whether the fetal-vs-preterm group difference is explained by differences in the amount
-#   or quality of data between fetal and preterm scans. finalVol = number of volumes retained per scan.
-#   (A) finalVol as a covariate (raw); (B) finalVol centered within group (so the covariate is not
-#   collinear with group); (C) similar volumes: restrict to the finalVol range both groups share, and
-#   1:1 match fetal to preterm scans on finalVol; (D) motion (mean framewise displacement): as a raw and a
+#   or quality of data between fetal and preterm scans. Volumes = number of usable (non-censored) volumes per scan from the
+#   ROI time series (section 3e; the QA table's finalVol differs from it in about 1 scan in 5).
+#   (A) volumes as a covariate (raw); (B) volumes centered within group (so the covariate is not
+#   collinear with group); (C) similar volumes: restrict to the volume range both groups share, and
+#   1:1 match fetal to preterm scans on volumes; (D) motion (mean framewise displacement): as a raw and a
 #   group-centered covariate, restricted to the range both groups share, and 1:1 matched on motion;
-#   (E) finalVol and motion together; (F) preterm only: the PMA x prematurity
+#   (E) volumes and motion together; (F) preterm only: the PMA x prematurity
 #   test (Fig. 3) with motion as a covariate, since motion does overlap within the preterm group.
-# STATUS: finalVol and motion RUN (D-F). tSNR is not planned; if a reviewer asks, add a tSNR column to si_fd (centered
+# STATUS: motion RUN (D-F). Volume controls A-C and E were first run with finalVol and then switched to the usable
+#   volume count (scan_vol); the numbers marked [finalVol] below are from the first version and are to be replaced by
+#   the rerun. tSNR is not planned; if a reviewer asks, add a tSNR column to si_fd (centered
 #   within group) and list it in qc_more in part E.
 #   Result summaries use the same columns as 9f:
 #   fdr05, still_sig_of_primary (of the 1,404 primary edges), same_direction_of_primary, r_beta_with_primary.
@@ -1757,7 +1786,8 @@ match_scans <- function(d, var, caliper) {
 #   criterion is 4 min of data in both groups: >= 120 volumes at TR = 2 s (preterm) and >= 80 volumes at
 #   TR = 3 s (fetal). Fetal scans therefore have fewer volumes by design, and both groups have the same
 #   duration of data; the volume controls below address the difference in volume count.
-# RESULT (each vs. the primary 1,404 significant edges; 'same direction' = of those 1,404):
+# RESULT [finalVol version, to be replaced by the usable-volume rerun] (each vs. the primary 1,404 significant edges;
+#   'same direction' = of those 1,404):
 #   A raw finalVol covariate ........ 1,113 significant; 1,029 still significant; 1,403 same direction; r = 0.962
 #   B finalVol centered in group .... 1,426 significant; 1,387 still significant; 1,404 same direction; r = 0.999
 #   C1 shared range (120-281) ....... 375 scans (90 fetal); 1,164 significant; 1,083 still; 1,403 same; r = 0.962
@@ -1801,36 +1831,37 @@ match_scans <- function(d, var, caliper) {
 #   1,404 primary edges in the same direction) or restricting to scans with >= 120 volumes in both groups
 #   (1,164 significant edges; 1,403 of 1,404 in the same direction)."
 if (RUN_QC_COVARIATE_CONTROL) {
-  stopifnot("finalVol" %in% names(scanInfo))
-  print(tapply(scanInfo$finalVol, scanInfo$scanType, function(x)
-    c(n = sum(!is.na(x)), missing = sum(is.na(x)), min = min(x, na.rm = TRUE), median = median(x, na.rm = TRUE), max = max(x, na.rm = TRUE))))
-  stopifnot(!anyNA(scanInfo$finalVol))                                 # every scan needs a value
-  print(c(r_finalVol_with_group = cor(scanInfo$finalVol, as.numeric(scanInfo$scanType == "Preterm"))))   # collinearity with group
-  scanInfo$finalVol_c <- scanInfo$finalVol - ave(scanInfo$finalVol, scanInfo$scanType)                   # group-mean-centered
+  # Volume measure: usable volumes per scan from the time series (scan_vol, section 3e). Copies of the scan table carry it,
+  # so scanInfo (and every cache keyed on it) stays as it is.
+  si_vol <- scanInfo; si_vol$vol <- scan_vol
+  stopifnot(!anyNA(si_vol$vol))                                        # every scan needs a value
+  print(tapply(si_vol$vol, si_vol$scanType, function(x) c(n = length(x), min = min(x), median = median(x), max = max(x))))
+  print(c(r_vol_with_group = cor(si_vol$vol, as.numeric(si_vol$scanType == "Preterm"))))                  # collinearity with group
+  si_vol$vol_c <- si_vol$vol - ave(si_vol$vol, si_vol$scanType)                                          # group-mean-centered
 
-  ## A. raw finalVol as a covariate
-  res_qc_raw <- run_fetal(scanInfo, "finalVol", extra = "finalVol")
-  print(cmp_fetal(res_qc_raw, n_scans = nrow(scanInfo)))
-  ## B. finalVol centered within group
-  res_qc_cen <- run_fetal(scanInfo, "finalVolC", extra = "finalVol_c")
-  print(cmp_fetal(res_qc_cen, n_scans = nrow(scanInfo)))
+  ## A. raw volumes as a covariate
+  res_qc_raw <- run_fetal(si_vol, "usableVol", extra = "vol")
+  print(cmp_fetal(res_qc_raw, n_scans = nrow(si_vol)))
+  ## B. volumes centered within group
+  res_qc_cen <- run_fetal(si_vol, "usableVolC", extra = "vol_c")
+  print(cmp_fetal(res_qc_cen, n_scans = nrow(si_vol)))
 
   ## C. similar volumes between fetal and preterm scans
-  vol_rng <- lapply(split(scanInfo$finalVol, scanInfo$scanType), range)
+  vol_rng <- lapply(split(si_vol$vol, si_vol$scanType), range)
   vol_lo <- max(sapply(vol_rng, `[`, 1)); vol_hi <- min(sapply(vol_rng, `[`, 2))
-  si_vol_range <- droplevels(scanInfo[scanInfo$finalVol >= vol_lo & scanInfo$finalVol <= vol_hi, ])
+  si_vol_range <- droplevels(si_vol[si_vol$vol >= vol_lo & si_vol$vol <= vol_hi, ])
   print(c(vol_lo = vol_lo, vol_hi = vol_hi)); print(table(si_vol_range$scanType))
-  res_vol_range <- run_fetal(si_vol_range, "volRange")
+  res_vol_range <- run_fetal(si_vol_range, "usableVolRange")
   print(cmp_fetal(res_vol_range, n_scans = nrow(si_vol_range)))
-  si_vol_match <- droplevels(match_scans(scanInfo, "finalVol", caliper = 0.1 * sd(scanInfo$finalVol)))
+  si_vol_match <- droplevels(match_scans(si_vol, "vol", caliper = 0.1 * sd(si_vol$vol)))
   print(c(matched_pairs = sum(si_vol_match$scanType == "Fetal")))
-  print(tapply(si_vol_match$finalVol, si_vol_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))   # balance on volumes
-  res_vol_match <- run_fetal(si_vol_match, "volMatched")
+  print(tapply(si_vol_match$vol, si_vol_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))   # balance on volumes
+  res_vol_match <- run_fetal(si_vol_match, "usableVolMatched")
   print(cmp_fetal(res_vol_match, n_scans = nrow(si_vol_match)))
 
   ## D. motion (mean framewise displacement, from Table 1): as a covariate, and similar motion between groups.
   # Uses a copy of the scan table (si_fd) restricted to scans with a motion value, so scanInfo and the caches stay as they are.
-  si_fd <- scanInfo; si_fd$meanFD <- scan_fd
+  si_fd <- scanInfo; si_fd$meanFD <- scan_fd; si_fd$vol_c <- si_vol$vol_c[match(si_fd$longID, si_vol$longID)]
   si_fd <- droplevels(si_fd[!is.na(si_fd$meanFD), ])
   if (nlevels(si_fd$scanType) < 2) stop("meanFD is missing for every scan of one group, so a fetal-vs-preterm comparison is not possible.")
   si_fd$meanFD_c <- si_fd$meanFD - ave(si_fd$meanFD, si_fd$scanType)                                    # group-mean-centered
@@ -1860,11 +1891,11 @@ if (RUN_QC_COVARIATE_CONTROL) {
     print(cmp_fetal(res_fd_match, n_scans = nrow(si_fd_match)))
   }
 
-  ## E. every QC covariate together: finalVol (centered) + meanFD (centered) + anything in qc_more
+  ## E. every QC covariate together: volumes (centered) + meanFD (centered) + anything in qc_more
   ## (tSNR: add e.g. si_fd$tSNR_c <- ... above and set qc_more <- c("tSNR_c"))
   qc_more <- "meanFD_c"
   stopifnot(all(qc_more %in% names(si_fd)), !anyNA(si_fd[qc_more]))
-  res_qc_all <- run_fetal(si_fd, "allQC", extra = c("finalVol_c", qc_more))
+  res_qc_all <- run_fetal(si_fd, "allQC", extra = c("vol_c", qc_more))
   print(cmp_fetal(res_qc_all, n_scans = nrow(si_fd)))
 
   ## F. preterm only: does the PMA x prematurity result (Fig. 3) survive adjusting for motion? Motion overlaps within the
@@ -2333,21 +2364,13 @@ if (RUN_QC_COVARIATE_CONTROL) {
 vol_equal_n    <- 80          # volumes per scan after truncation (the fetal minimum)
 vol_equal_mode <- "first"     # "first": the first n usable volumes; "random": a random set of n usable volumes (seeded)
 if (RUN_EQUAL_VOLUME_CONTROL) {
-  ts_dirs <- file.path(dataDir, c("rawTS", "rawRS")); ts_dirs <- ts_dirs[dir.exists(ts_dirs)]
-  ts_files <- if (length(ts_dirs) > 0) list.files(ts_dirs, pattern = "_ts\\.1D$", recursive = TRUE, full.names = TRUE) else character(0)
-  names(ts_files) <- sub("_ts\\.1D$", "", basename(ts_files))
-  if (length(ts_files) == 0) {
+  if (length(ts_files) == 0) {                                          # ts_files and read_ts come from section 3e
     message("No time series found in data/rawTS or data/rawRS; skipping 9k.")
   } else {
     stopifnot(!anyDuplicated(names(ts_files)))
     miss <- setdiff(scanInfo$longID, names(ts_files))
     if (length(miss) > 0) stop(length(miss), " scans have no time series file, e.g. ", paste(head(miss, 3), collapse = ", "))
 
-    read_ts <- function(f) {                                              # AFNI .1D text: tab-separated, first field empty
-      fields <- lapply(strsplit(readLines(f), "\t", fixed = TRUE), function(x) x[nzchar(x)])
-      stopifnot(length(unique(lengths(fields))) == 1)
-      matrix(as.numeric(unlist(fields)), nrow = length(fields), byrow = TRUE)
-    }
     ts_roi <- gsub("-", ".", roiData$FullLabel[1:111], fixed = TRUE)      # column order of the .1D files = first 111 rows of the label key
     parts  <- strsplit(allConn, "_", fixed = TRUE)
     ei <- match(sapply(parts, `[`, 1), ts_roi); ej <- match(sapply(parts, `[`, 2), ts_roi)
