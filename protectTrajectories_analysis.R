@@ -1593,7 +1593,7 @@ slopesMain_wide
 #      9b  continuous birth GA ..... 0 significant (the effect is a step, not a linear gradient)
 #      9c  scans after 32 wk PMA ... 6 of 16 hold; same slope pattern (less power)
 #      9d  within/between infant ... omnibus not significant (underpowered); within-infant slopes match
-#      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); motion wired in (results pending); tSNR not yet run
+#      9e  data amount (finalVol) .. robust (direction kept for >= 97% of edges); motion: group and FD do not overlap, within-group adjustment leaves results unchanged; tSNR not yet run
 #      9f  age-matched fetal/preterm  robust (1,174-1,354 of 1,404 edges stay significant; all same direction)
 #      9g  postnatal age ........... robust (14 of 16 edges hold when adjusted); (C) PMA vs. postnatal clock: see 9g
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
@@ -1747,11 +1747,27 @@ match_scans <- function(d, var, caliper) {
 #   C1 shared range (120-281) ....... 375 scans (90 fetal); 1,164 significant; 1,083 still; 1,403 same; r = 0.962
 #   C2 1:1 matched on finalVol ...... 92 pairs (165.0 vs 167.7 volumes, SD 48.5 vs 46.5); 603 significant;
 #                                      581 still; 1,373 same direction; r = 0.910
+# MOTION (mean framewise displacement, mm; D, E): fetal 0.753 (SD 0.219, range 0.265-1.405), preterm 0.076 (SD 0.032,
+#   range 0.023-0.225): the ranges do NOT overlap, and meanFD correlates -0.93 with group.
+#   D1 raw meanFD covariate ......... 355 significant; 310 still; 1,257 same direction; r = 0.749 (group and motion
+#                                      are nearly the same variable, so this model cannot separate them: do not interpret)
+#   D2 meanFD centered in group ..... 1,402 significant; 1,391 still; 1,404 same direction; r = 1.000
+#   D3 shared range / 1:1 matching .. not possible (no overlap)
+#   E  finalVol + meanFD centered ... 1,431 significant; 1,389 still; 1,404 same direction; r = 0.999
+# INTERPRETATION (motion): between-group motion cannot be controlled: every fetal scan has more motion than every
+#   preterm scan, so group and motion are confounded by design (and fetal and infant FD are probably not measured on
+#   the same footing: the fetal head moves inside the mother and is registered differently). This is a limitation to
+#   state. What can be shown is that motion variation WITHIN each group does not drive the result: centering within
+#   group leaves every beta unchanged (r = 1.000, all 1,404 in the same direction), also with finalVol included.
+# REPORT (motion): "Mean framewise displacement was higher in fetal than preterm scans, with no overlap between the
+#   groups (0.75 vs 0.08 mm), so group differences cannot be separated from motion differences. Adjusting for
+#   within-group variation in motion, alone or together with the number of volumes, left the results unchanged (1,402
+#   and 1,431 significant edges; all 1,404 primary edges in the same direction)."
 # INTERPRETATION: the group difference is not explained by the amount of data: direction is preserved for at
 #   least 97.8% of edges and the betas correlate 0.91-0.999. Fewer significant edges in A (collinearity inflates
 #   standard errors by about 30%) and C (90-92 fetal scans) reflect precision, not a changed effect. B equals the
 #   primary result by construction (centering leaves the group coefficient unchanged); it only shows that
-#   volumes matter little within groups. This covers data AMOUNT, not data QUALITY: tSNR and motion are still open.
+#   volumes matter little within groups. This covers data AMOUNT; for data QUALITY see MOTION above (tSNR is still open).
 # REPORT: "Results were unchanged when including finalVol as a covariate (1,113 significant edges; 1,403 of
 #   1,404 primary edges in the same direction) or restricting to scans with >= 120 volumes in both groups
 #   (1,164 significant edges; 1,403 of 1,404 in the same direction)."
@@ -1796,18 +1812,24 @@ if (RUN_QC_COVARIATE_CONTROL) {
   print(cmp_fetal(res_fd_raw, n_scans = nrow(si_fd)))
   res_fd_cen <- run_fetal(si_fd, "meanFDC", extra = "meanFD_c")
   print(cmp_fetal(res_fd_cen, n_scans = nrow(si_fd)))
-  # D3. similar motion: the meanFD range both groups share, and 1:1 matching on meanFD
+  # D3. similar motion: the meanFD range both groups share, and 1:1 matching on meanFD. Skipped when the groups do not overlap
+  # (the case here: every preterm scan is below every fetal scan, so there is no shared range to restrict to or match within).
   fd_rng <- lapply(split(si_fd$meanFD, si_fd$scanType), range)
   fd_lo <- max(sapply(fd_rng, `[`, 1)); fd_hi <- min(sapply(fd_rng, `[`, 2))
-  si_fd_range <- droplevels(si_fd[si_fd$meanFD >= fd_lo & si_fd$meanFD <= fd_hi, ])
-  print(c(fd_lo = fd_lo, fd_hi = fd_hi)); print(table(si_fd_range$scanType))
-  res_fd_range <- run_fetal(si_fd_range, "fdRange")
-  print(cmp_fetal(res_fd_range, n_scans = nrow(si_fd_range)))
-  si_fd_match <- droplevels(match_scans(si_fd, "meanFD", caliper = 0.1 * sd(si_fd$meanFD)))
-  print(c(matched_pairs = sum(si_fd_match$scanType == "Fetal")))
-  print(tapply(si_fd_match$meanFD, si_fd_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))      # balance on motion
-  res_fd_match <- run_fetal(si_fd_match, "fdMatched")
-  print(cmp_fetal(res_fd_match, n_scans = nrow(si_fd_match)))
+  if (fd_lo >= fd_hi) {
+    message("meanFD ranges of the two groups do not overlap (fetal ", round(fd_rng$Fetal[1], 3), "-", round(fd_rng$Fetal[2], 3),
+            "; preterm ", round(fd_rng$Preterm[1], 3), "-", round(fd_rng$Preterm[2], 3), "): similar-motion restriction and matching skipped.")
+  } else {
+    si_fd_range <- droplevels(si_fd[si_fd$meanFD >= fd_lo & si_fd$meanFD <= fd_hi, ])
+    print(c(fd_lo = fd_lo, fd_hi = fd_hi)); print(table(si_fd_range$scanType))
+    res_fd_range <- run_fetal(si_fd_range, "fdRange")
+    print(cmp_fetal(res_fd_range, n_scans = nrow(si_fd_range)))
+    si_fd_match <- droplevels(match_scans(si_fd, "meanFD", caliper = 0.1 * sd(si_fd$meanFD)))
+    print(c(matched_pairs = sum(si_fd_match$scanType == "Fetal")))
+    print(tapply(si_fd_match$meanFD, si_fd_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))      # balance on motion
+    res_fd_match <- run_fetal(si_fd_match, "fdMatched")
+    print(cmp_fetal(res_fd_match, n_scans = nrow(si_fd_match)))
+  }
 
   ## E. every QC covariate together: finalVol (centered) + meanFD (centered) + anything in qc_more
   ## (tSNR: add e.g. si_fd$tSNR_c <- ... above and set qc_more <- c("tSNR_c"))
