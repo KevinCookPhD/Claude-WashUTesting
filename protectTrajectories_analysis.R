@@ -2302,8 +2302,19 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   primary result and 0.990 with the unharmonized full-data result.
 # INTERPRETATION: the fetal-vs-preterm difference does not depend on the number of volumes: with every scan at 80
 #   volumes the direction is preserved for all 1,404 edges and the betas correlate 0.99.
-# REPORT: "When every scan was reduced to the same number of volumes (80), the fetal-preterm differences were unchanged
-#   (1,248 significant edges; all 1,404 primary edges in the same direction; r = 0.99 with the primary betas)."
+# OUTPUT FOR THE SUPPLEMENT (printed, and kept as objects): table_s_equal_desc = descriptives by group (scans, infants,
+#   TR, usable volumes and minutes before truncation, volumes and minutes after, fidelity of the truncated connectivity
+#   to the full-data connectivity); table_s_equal = results for the primary analysis, the unharmonized full-data
+#   analysis (9h) and the equal-volume analysis (FDR-significant edges and direction split, how many primary edges
+#   stay significant / keep their direction, Pearson and Spearman correlation of the betas with the primary betas,
+#   the regression slope of the betas on the primary betas, and the median ratio of the betas on the primary
+#   significant edges, which shows whether effect sizes shrink when scans are shortened). Both are written to csv when
+#   SAVE_TABLES is TRUE (section 10). Fill the numbers into the supplement from these tables; the values recorded above
+#   (1,248 / 1,206 / 1,404 / r = 0.990) are from the first run.
+# REPORT: "When every scan was reduced to the same number of volumes (80; 4.0 min for fetal scans at TR 3 s, 2.7 min for
+#   preterm scans at TR 2 s), the fetal-preterm differences were unchanged (1,248 significant edges; 1,206 of the 1,404
+#   primary edges still significant and all 1,404 in the same direction; r = 0.99 with the primary betas). The
+#   truncated connectivity correlated 0.93 (fetal) and 0.84 (preterm) with the full-data connectivity within scans."
 vol_equal_n    <- 80          # volumes per scan after truncation (the fetal minimum)
 vol_equal_mode <- "first"     # "first": the first n usable volumes; "random": a random set of n usable volumes (seeded)
 if (RUN_EQUAL_VOLUME_CONTROL) {
@@ -2359,6 +2370,42 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
     res_eq_fp <- with_fc(truncFC, run_fetal(scanInfo, paste0("equalVol", vol_equal_n, vol_equal_mode)), paste0("truncFC", vol_equal_n))
     print(cmp_fetal(res_eq_fp, n_scans = nrow(scanInfo)))
     if (exists("fetalRes_raw")) print(c(r_beta_with_unharmonized_full = round(cor(fetalRes_raw$scanTypeb, res_eq_fp$scanTypeb, use = "complete.obs"), 3)))
+
+    ## ---- Tables for the supplement ----
+    # (1) Descriptives: scans, infants, usable volumes and minutes before and after truncation, and the fidelity of the
+    #     truncated connectivity to the full-data connectivity, by group.
+    fmt_ms <- function(x, d = 1) sprintf(paste0("%.", d, "f (%.", d, "f)"), mean(x), sd(x))
+    table_s_equal_desc <- do.call(rbind, lapply(c("Fetal", "Preterm"), function(g) {
+      i  <- scanInfo$scanType == g
+      tr_s <- TR_SEC[[g]]
+      data.frame(Group = g, Scans = sum(i), Infants = length(unique(scanInfo$shortID[i])), TR_s = tr_s,
+                 `Usable volumes before, mean (SD)` = fmt_ms(tr$usable[i]), `Usable volumes before, range` = paste(range(tr$usable[i]), collapse = "-"),
+                 `Minutes before, mean (SD)` = fmt_ms(tr$usable[i] * tr_s / 60),
+                 `Volumes after` = vol_equal_n, `Minutes after` = round(vol_equal_n * tr_s / 60, 2),
+                 `Fidelity r, mean (SD)` = fmt_ms(tr$fidelity[i], 2), `Fidelity r, minimum` = round(min(tr$fidelity[i]), 2),
+                 check.names = FALSE)
+    }))
+    print(table_s_equal_desc, row.names = FALSE)
+
+    # (2) Results: the primary analysis, the unharmonized full-data analysis (9h, if it was run) and the equal-volume
+    #     analysis, each against the primary result. beta ratio = median over the primary significant edges of
+    #     (beta in this analysis / primary beta); slope = regression slope of this analysis' betas on the primary betas.
+    eq_row <- function(res, label, n_scans = nrow(scanInfo)) {
+      cf <- cmp_fetal(res, n_scans = n_scans)
+      data.frame(Analysis = label, Scans = n_scans, `FDR-significant edges` = cf[["fdr05"]],
+                 `Preterm > fetal` = cf[["preterm_greater"]], `Fetal > preterm` = cf[["fetal_greater"]],
+                 `Primary edges still significant` = sprintf("%d (%.1f%%)", cf[["still_sig_of_primary"]], 100 * cf[["still_sig_of_primary"]] / cf[["primary_n"]]),
+                 `Primary edges, same direction` = sprintf("%d (%.1f%%)", cf[["same_direction_of_primary"]], 100 * cf[["same_direction_of_primary"]] / cf[["primary_n"]]),
+                 `Pearson r with primary betas` = round(cf[["r_beta_with_primary"]], 3),
+                 `Spearman rho with primary betas` = round(cor(fetalRes$scanTypeb, res$scanTypeb, method = "spearman", use = "complete.obs"), 3),
+                 `Slope on primary betas` = round(unname(coef(lm(res$scanTypeb ~ fetalRes$scanTypeb))[2]), 3),
+                 `Beta ratio (median, primary sig. edges)` = round(median(res$scanTypeb[sigFetal] / fetalRes$scanTypeb[sigFetal], na.rm = TRUE), 3),
+                 check.names = FALSE)
+    }
+    table_s_equal <- rbind(eq_row(fetalRes, "Primary: harmonized, all volumes"),
+                           if (exists("fetalRes_raw")) eq_row(fetalRes_raw, "Unharmonized, all volumes"),
+                           eq_row(res_eq_fp, paste0("Unharmonized, ", vol_equal_n, " volumes per scan")))
+    print(t(table_s_equal), quote = FALSE)                                    # transposed for reading in the console
   }
 }
 
@@ -2367,6 +2414,8 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
 ###############################################################################
 
 if (SAVE_TABLES) {
+  if (exists("table_s_equal"))      write.csv(table_s_equal,      file.path(figureDir, "SuppTable_equalVolume_results.csv"),      row.names = FALSE)
+  if (exists("table_s_equal_desc")) write.csv(table_s_equal_desc, file.path(figureDir, "SuppTable_equalVolume_descriptives.csv"), row.names = FALSE)
   write.csv(fetalRes,        file.path(figureDir, "fetalVsPreterm_allEdges.csv"),        row.names = FALSE)
   write.csv(table2,          file.path(figureDir, "Table2_homotopic.csv"),               row.names = FALSE)
   write.csv(intxRes,         file.path(figureDir, "pmaByPrematurity_allEdges.csv"),      row.names = FALSE)
