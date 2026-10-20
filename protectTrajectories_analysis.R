@@ -72,7 +72,7 @@ RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (s
 RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges (slow serially; fast with N_CORES, cached)
 RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
-RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol covariate and similar-volume reruns (add tSNR / motion via qc_more)
+RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns (add tSNR via qc_more)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
 
@@ -1727,9 +1727,11 @@ match_scans <- function(d, var, caliper) {
 #   or quality of data between fetal and preterm scans. finalVol = number of volumes retained per scan.
 #   (A) finalVol as a covariate (raw); (B) finalVol centered within group (so the covariate is not
 #   collinear with group); (C) similar volumes: restrict to the finalVol range both groups share, and
-#   1:1 match fetal to preterm scans on finalVol; (D) all QC covariates together once tSNR / motion are
-#   added (add columns to scanInfo and list them in qc_more).
-# STATUS: finalVol RUN; tSNR / motion not yet available. Result summaries use the same columns as 9f:
+#   1:1 match fetal to preterm scans on finalVol; (D) motion (mean framewise displacement): as a raw and a
+#   group-centered covariate, restricted to the range both groups share, and 1:1 matched on motion;
+#   (E) finalVol and motion together (tSNR can be added via qc_more).
+# STATUS: finalVol RUN; motion (D, E) wired in, results to be added after the run; tSNR not yet available.
+#   Result summaries use the same columns as 9f:
 #   fdr05, still_sig_of_primary (of the 1,404 primary edges), same_direction_of_primary, r_beta_with_primary.
 # NOTE: this is a proxy for "equal amounts of data". The strict version (truncate every scan to the same number
 #   of volumes and recompute FC) needs the ROI time series.
@@ -1781,13 +1783,37 @@ if (RUN_QC_COVARIATE_CONTROL) {
   res_vol_match <- run_fetal(si_vol_match, "volMatched")
   print(cmp_fetal(res_vol_match, n_scans = nrow(si_vol_match)))
 
-  ## D. every QC covariate together (add e.g. scanInfo$tSNR_c <- ... and set qc_more <- c("tSNR_c"))
-  qc_more <- character(0)
-  if (length(qc_more) > 0) {
-    stopifnot(all(qc_more %in% names(scanInfo)), !anyNA(scanInfo[qc_more]))
-    res_qc_all <- run_fetal(scanInfo, "allQC", extra = c("finalVol_c", qc_more))
-    print(cmp_fetal(res_qc_all, n_scans = nrow(scanInfo)))
-  }
+  ## D. motion (mean framewise displacement, from Table 1): as a covariate, and similar motion between groups.
+  # Uses a copy of the scan table (si_fd) restricted to scans with a motion value, so scanInfo and the caches stay as they are.
+  si_fd <- scanInfo; si_fd$meanFD <- scan_fd
+  si_fd <- droplevels(si_fd[!is.na(si_fd$meanFD), ])
+  si_fd$meanFD_c <- si_fd$meanFD - ave(si_fd$meanFD, si_fd$scanType)                                    # group-mean-centered
+  print(tapply(si_fd$meanFD, si_fd$scanType, function(x) c(n = length(x), mean = mean(x), sd = sd(x), min = min(x), median = median(x), max = max(x))))
+  print(c(r_meanFD_with_group = cor(si_fd$meanFD, as.numeric(si_fd$scanType == "Preterm"))))             # collinearity with group
+  # D1. raw meanFD as a covariate; D2. meanFD centered within group
+  res_fd_raw <- run_fetal(si_fd, "meanFD", extra = "meanFD")
+  print(cmp_fetal(res_fd_raw, n_scans = nrow(si_fd)))
+  res_fd_cen <- run_fetal(si_fd, "meanFDC", extra = "meanFD_c")
+  print(cmp_fetal(res_fd_cen, n_scans = nrow(si_fd)))
+  # D3. similar motion: the meanFD range both groups share, and 1:1 matching on meanFD
+  fd_rng <- lapply(split(si_fd$meanFD, si_fd$scanType), range)
+  fd_lo <- max(sapply(fd_rng, `[`, 1)); fd_hi <- min(sapply(fd_rng, `[`, 2))
+  si_fd_range <- droplevels(si_fd[si_fd$meanFD >= fd_lo & si_fd$meanFD <= fd_hi, ])
+  print(c(fd_lo = fd_lo, fd_hi = fd_hi)); print(table(si_fd_range$scanType))
+  res_fd_range <- run_fetal(si_fd_range, "fdRange")
+  print(cmp_fetal(res_fd_range, n_scans = nrow(si_fd_range)))
+  si_fd_match <- droplevels(match_scans(si_fd, "meanFD", caliper = 0.1 * sd(si_fd$meanFD)))
+  print(c(matched_pairs = sum(si_fd_match$scanType == "Fetal")))
+  print(tapply(si_fd_match$meanFD, si_fd_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))      # balance on motion
+  res_fd_match <- run_fetal(si_fd_match, "fdMatched")
+  print(cmp_fetal(res_fd_match, n_scans = nrow(si_fd_match)))
+
+  ## E. every QC covariate together: finalVol (centered) + meanFD (centered) + anything in qc_more
+  ## (tSNR: add e.g. si_fd$tSNR_c <- ... above and set qc_more <- c("tSNR_c"))
+  qc_more <- "meanFD_c"
+  stopifnot(all(qc_more %in% names(si_fd)), !anyNA(si_fd[qc_more]))
+  res_qc_all <- run_fetal(si_fd, "allQC", extra = c("finalVol_c", qc_more))
+  print(cmp_fetal(res_qc_all, n_scans = nrow(si_fd)))
 }
 
 ## ---- 9f-9h. Controls that use only data already in this script -------------------
