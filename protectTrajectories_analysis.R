@@ -1600,7 +1600,7 @@ slopesMain_wide
 #      9h  unharmonized data ....... fetal-vs-preterm fully robust; PMA x prematurity 9 of 16 hold
 #      9i  distance between ROIs ... group differences unrelated to distance
 #      9j  motion (mean FD) ........ r = -0.93 with group (VIF 7.2); in fetal scans motion is unrelated to FC (1 edge)
-#      9k  strict equal-volume ..... ROI time series cut to the same number of volumes (results pending)
+#      9k  strict equal-volume ..... fetal-vs-preterm unchanged (1,404 same direction); PMA x prematurity keeps its slopes but 0 FDR edges (power)
 ###############################################################################
 
 compare_sets <- function(res_alt) {
@@ -2290,7 +2290,32 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   finalVol; for every scan, the truncated connectivity is correlated with the full-data connectivity (fidelity).
 # NOTE: all scans at vol_equal_n volumes means fetal scans keep all their data at the minimum (80 volumes = 4 min at TR
 #   3 s) while preterm scans (>= 120 volumes at TR 2 s) are cut to 80 volumes = 2.7 min; duration and volume count
-#   cannot both be equated. RESULT / INTERPRETATION / REPORT: to be added after the run.
+#   cannot both be equated.
+# CHECKS (run): the full time series reproduce the stored connectivity (r = 1.000 for 6 test scans, so the column order
+#   is right). 112 of 538 scans have fewer usable (non-zero) volumes than finalVol says (e.g. 161 vs. 169); every scan
+#   has >= 80 usable volumes. Fidelity of the 80-volume connectivity to the full-data connectivity (per-scan correlation
+#   across edges): fetal mean 0.93 (min 0.67), preterm mean 0.84 (min 0.65); preterm scans are cut from more volumes.
+# RESULT (A) fetal vs. preterm at 80 volumes per scan: 1,248 edges significant (1,002 preterm greater, 246 fetal greater);
+#   1,206 of the 1,404 primary edges still significant; all 1,404 in the same direction; beta correlation 0.990 with the
+#   primary result and 0.990 with the unharmonized full-data result.
+#   (B) preterm PMA x prematurity at 80 volumes per scan: 0 edges FDR-significant (197 with raw p < .05). Of the 16
+#   primary edges, 14 still have raw p < .05 (chi-square 11-20 in 13 of them; the exceptions are SPG.L_HES.R raw p .33 and
+#   ORBinf.L_OLF.R .066), but adjusted p is .072-.90 (lowest: ORBsupb.L_ORBsupb.R and ORBsupb.L_REC.R .072,
+#   SMG.L_SMG.R .088, REC.L_REC.R .099). The group slopes are unchanged: EPT and VPT near zero, MPT 0.056-0.094 per
+#   week in the 13 consistent edges (MPT-EPT contrasts p < .001 in 10 of them, .003-.024 in the other 3); the three
+#   oddballs keep their different pattern.
+# INTERPRETATION: (A) the fetal-vs-preterm difference does not depend on the number of volumes: with every scan at 80
+#   volumes the direction is preserved for all 1,404 edges and the betas correlate 0.99. (B) The PMA x prematurity
+#   effect keeps its size and shape (same slopes, same MPT-EPT contrasts) but loses FDR significance. This is the
+#   expected power loss rather than a reversal: the preterm scans lose more than half of their data (fidelity 0.84,
+#   scans cut from 120-296 to 80 volumes, 2.7 min), the truncated values are not harmonized (the unharmonized full-data
+#   run in 9h already gave 9 instead of 16 edges), and FDR is over 3,003 edges. Report as a limitation of power, not as
+#   a failure to replicate; the effect-size pattern is the informative part.
+# REPORT: "When every scan was reduced to the same number of volumes (80), the fetal-preterm differences were unchanged
+#   (1,248 significant edges; all 1,404 primary edges in the same direction; r = 0.99 with the primary betas). The
+#   PMA x prematurity pattern was preserved in effect size (MPT slopes 0.06-0.09 per week, EPT and VPT near zero) but no
+#   longer reached FDR significance (14 of the 16 edges had uncorrected p < .05; adjusted p >= .07), consistent with the
+#   loss of power from discarding more than half of the preterm data."
 vol_equal_n    <- 80          # volumes per scan after truncation (the fetal minimum)
 vol_equal_mode <- "first"     # "first": the first n usable volumes; "random": a random set of n usable volumes (seeded)
 if (RUN_EQUAL_VOLUME_CONTROL) {
