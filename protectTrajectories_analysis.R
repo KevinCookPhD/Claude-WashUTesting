@@ -1729,7 +1729,8 @@ match_scans <- function(d, var, caliper) {
 #   collinear with group); (C) similar volumes: restrict to the finalVol range both groups share, and
 #   1:1 match fetal to preterm scans on finalVol; (D) motion (mean framewise displacement): as a raw and a
 #   group-centered covariate, restricted to the range both groups share, and 1:1 matched on motion;
-#   (E) finalVol and motion together (tSNR can be added via qc_more).
+#   (E) finalVol and motion together (tSNR can be added via qc_more); (F) preterm only: the PMA x prematurity
+#   test (Fig. 3) with motion as a covariate, since motion does overlap within the preterm group.
 # STATUS: finalVol RUN; motion (D, E) wired in, results to be added after the run; tSNR not yet available.
 #   Result summaries use the same columns as 9f:
 #   fdr05, still_sig_of_primary (of the 1,404 primary edges), same_direction_of_primary, r_beta_with_primary.
@@ -1763,6 +1764,8 @@ match_scans <- function(d, var, caliper) {
 #   groups (0.75 vs 0.08 mm), so group differences cannot be separated from motion differences. Adjusting for
 #   within-group variation in motion, alone or together with the number of volumes, left the results unchanged (1,402
 #   and 1,431 significant edges; all 1,404 primary edges in the same direction)."
+# MOTION, PRETERM ONLY (F): PMA x prematurity with meanFD as a covariate: results to be added after the run (printed:
+#   motion by birth group, correlation of meanFD with PMA, FDR counts with how many of the 16 hold, and the slopes).
 # INTERPRETATION: the group difference is not explained by the amount of data: direction is preserved for at
 #   least 97.8% of edges and the betas correlate 0.91-0.999. Fewer significant edges in A (collinearity inflates
 #   standard errors by about 30%) and C (90-92 fetal scans) reflect precision, not a changed effect. B equals the
@@ -1837,6 +1840,19 @@ if (RUN_QC_COVARIATE_CONTROL) {
   stopifnot(all(qc_more %in% names(si_fd)), !anyNA(si_fd[qc_more]))
   res_qc_all <- run_fetal(si_fd, "allQC", extra = c("finalVol_c", qc_more))
   print(cmp_fetal(res_qc_all, n_scans = nrow(si_fd)))
+
+  ## F. preterm only: does the PMA x prematurity result (Fig. 3) survive adjusting for motion? Motion overlaps within the
+  ## preterm group, so unlike D this adjustment is meaningful. Same test as the primary scan plus meanFD as a covariate.
+  pt_fd <- pt; pt_fd$meanFD <- scan_fd[match(pt$longID, scanInfo$longID)]
+  pt_fd <- droplevels(pt_fd[!is.na(pt_fd$meanFD), ])
+  print(c(scans = nrow(pt_fd), dropped_no_motion = nrow(pt) - nrow(pt_fd)))
+  print(round(tapply(pt_fd$meanFD, pt_fd$BirthCat, function(x) c(mean = mean(x), sd = sd(x))) |> do.call(what = rbind), 3))   # motion by birth group
+  print(c(r_meanFD_PMA = round(cor(pt_fd$meanFD, pt_fd$ScanPMA), 3),                                                       # motion vs. age at scan
+          sapply(split(pt_fd, pt_fd$BirthCat), function(d) c(round(cor(d$meanFD, d$ScanPMA), 3)))))
+  fml_fd <- FCz ~ scanner + ScanPMA * BirthCat + meanFD
+  res_pt_fd <- wald_scan(pt_fd, fml_fd, "ScanPMA:BirthCat")
+  cmp_pt_fd <- compare_sets(res_pt_fd); print(cmp_pt_fd)
+  slopes_pt_fd_wide <- slope_wide(slope_table(pt_fd, sigEdges, fml_fd)); print(slopes_pt_fd_wide)
 }
 
 ## ---- 9f-9h. Controls that use only data already in this script -------------------
