@@ -566,12 +566,20 @@ c(PMA_at_scan_mean = mean(pt$ScanPMA), PMA_sd = sd(pt$ScanPMA), PMA_min = min(pt
 # Minutes = volumes x TR / 60 (TR = 2 s preterm, 3 s fetal). Columns: fetal, all preterm, then preterm groups.
 TR_SEC  <- c(Fetal = 3, Preterm = 2)
 scan_min <- scanInfo$finalVol * TR_SEC[as.character(scanInfo$scanType)] / 60   # kept out of scanInfo so cache keys do not change
+# Motion: mean framewise displacement per scan (motionSummary.csv: project, fullID, shortID, scan, meanFD)
+motion <- read.csv("motionSummary.csv", stringsAsFactors = FALSE)
+stopifnot(!anyDuplicated(motion$fullID))
+scan_fd <- motion$meanFD[match(scanInfo$longID, motion$fullID)]                 # kept out of scanInfo so cache keys do not change
+if (anyNA(scan_fd)) message(sum(is.na(scan_fd)), " of ", length(scan_fd), " scans have no motion value (fetal: ",
+                            sum(is.na(scan_fd) & scanInfo$scanType == "Fetal"), ", preterm: ", sum(is.na(scan_fd) & scanInfo$scanType == "Preterm"), ")")
 scan_cols <- list(Fetal = scanInfo$scanType == "Fetal", `All preterm` = scanInfo$scanType == "Preterm",
                   EPT = scanInfo$BirthCat %in% "EPT", VPT = scanInfo$BirthCat %in% "VPT", MPT = scanInfo$BirthCat %in% "MPT")
 table1_scan <- rbind(
   `Scans, n`                          = sapply(scan_cols, sum),
   `Volumes per scan, mean (SD)`       = sapply(scan_cols, function(i) ms(scanInfo$finalVol[i])),
-  `Minutes of data per scan, mean (SD)` = sapply(scan_cols, function(i) sprintf("%.1f (%.1f)", mean(scan_min[i]), sd(scan_min[i]))))
+  `Minutes of data per scan, mean (SD)` = sapply(scan_cols, function(i) sprintf("%.1f (%.1f)", mean(scan_min[i]), sd(scan_min[i]))),
+  `Mean framewise displacement, mm, mean (SD)` = sapply(scan_cols, function(i) sprintf("%.2f (%.2f)", mean(scan_fd[i], na.rm = TRUE), sd(scan_fd[i], na.rm = TRUE))),
+  `Scans with motion data, n`         = sapply(scan_cols, function(i) sum(!is.na(scan_fd[i]))))
 table1_scan
 
 # Fetal vs. preterm sample comparison (PMA at scan; sex)
