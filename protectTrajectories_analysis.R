@@ -2177,6 +2177,62 @@ if (RUN_DISTANCE_CONTROL) {
   show_fig("SuppFig_distance_coupling", 3.4, 3.2, function() print(p_coup))
 }
 
+## ---- 9j. Motion (mean framewise displacement): collinearity with group, and motion vs. FC within each group ----
+# WHAT IT TESTS: two follow-ups to the motion control in 9e. (A) How collinear is meanFD with group in the fetal-vs-
+#   preterm model (variance inflation, and how much the group standard errors grow when meanFD is added: this is why
+#   the raw-meanFD run, D1 in 9e, cannot be interpreted). (B) Does motion relate to connectivity WITHIN each group,
+#   where motion does vary? Per edge: FCz ~ PMA (+ scanner for preterm) + meanFD with a random intercept per infant,
+#   fetal and preterm separately, FDR across the 3,003 edges. Then: do the edge-wise motion effects resemble the
+#   edge-wise fetal-vs-preterm differences? (If the group difference were a motion artifact, edges that motion
+#   changes most should also be the edges that differ most between groups, and in the matching direction.)
+# RESULT / INTERPRETATION / REPORT: to be added after the run.
+if (RUN_QC_COVARIATE_CONTROL) {
+  ## A. collinearity of meanFD with group
+  dv <- data.frame(group = as.numeric(si_fd$scanType == "Preterm"), PMA = si_fd$ScanPMA,
+                   scanner = as.numeric(si_fd$scanner == levels(si_fd$scanner)[2]), meanFD = si_fd$meanFD)
+  vif_of <- function(d, vars) sapply(setNames(vars, vars), function(v) 1 / (1 - summary(lm(reformulate(setdiff(vars, v), v), data = d))$r.squared))
+  vif_tab <- rbind(`without meanFD` = c(vif_of(dv, c("group", "PMA", "scanner")), meanFD = NA),
+                   `with meanFD`    = vif_of(dv, c("group", "PMA", "scanner", "meanFD")))
+  print(round(vif_tab, 2))                                                   # variance inflation factors (above ~5 = serious)
+  print(c(r_group_meanFD = round(cor(dv$group, dv$meanFD), 3), R2_group_on_meanFD = round(cor(dv$group, dv$meanFD)^2, 3)))
+  se_ratio <- res_fd_raw$scanTypese / fetalRes$scanTypese                    # group SE with meanFD / group SE without, per edge
+  print(c(median_SE_ratio = round(median(se_ratio, na.rm = TRUE), 2),
+          expected_from_VIF = round(sqrt(vif_tab["with meanFD", "group"] / vif_tab["without meanFD", "group"]), 2)))
+
+  ## B. motion vs. connectivity within each group
+  fd_edge <- function(cn, d, terms) {
+    d$FCz <- as.numeric(goodFCData[d$longID, cn])
+    tryCatch({
+      m  <- lme(reformulate(terms, "FCz"), random = ~ 1 | shortID, data = d, control = ctrl)
+      tt <- summary(m)$tTable["meanFD", ]
+      c(beta = unname(tt["Value"]), se = unname(tt["Std.Error"]), p = unname(tt["p-value"]))
+    }, error = function(e) c(beta = NA, se = NA, p = NA))
+  }
+  fd_scan <- function(d, label, terms) {
+    res <- cached(paste0("fdEdge_", label), key = paste(data_key, "fdEdge", label, paste(terms, collapse = "+"), table_key(d)),
+                  data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, fd_edge, d = d, terms = terms, export = c("goodFCData", "ctrl")))))
+    res$pAdj      <- p.adjust(res$p, "fdr")
+    res$beta_perSD <- res$beta * sd(d$meanFD)                                # FC change (Fisher z) per 1 SD of motion within this group
+    res
+  }
+  fd_summary <- function(res, d) c(scans = nrow(d), infants = nlevels(droplevels(d$shortID)), raw_p05 = sum(res$p < .05, na.rm = TRUE),
+                                   fdr05 = sum(res$pAdj < .05, na.rm = TRUE), median_beta_perSD = round(median(res$beta_perSD, na.rm = TRUE), 4),
+                                   pct_beta_negative = round(100 * mean(res$beta < 0, na.rm = TRUE), 1),
+                                   max_abs_beta_perSD = round(max(abs(res$beta_perSD), na.rm = TRUE), 3))
+  d_fet <- droplevels(si_fd[si_fd$scanType == "Fetal", ]);   d_pre <- droplevels(si_fd[si_fd$scanType == "Preterm", ])
+  res_fd_fet <- fd_scan(d_fet, "fetal",   c("ScanPMA", "meanFD"))                  # fetal scans are all 1.5T: no scanner term
+  res_fd_pre <- fd_scan(d_pre, "preterm", c("ScanPMA", "scanner", "meanFD"))
+  print(rbind(Fetal = fd_summary(res_fd_fet, d_fet), Preterm = fd_summary(res_fd_pre, d_pre)))
+
+  ## Do the edge-wise motion effects resemble the group differences? (Spearman correlations across the 3,003 edges;
+  ## group difference = preterm minus fetal, so an artifact driven by fetal motion would give a NEGATIVE correlation
+  ## with the fetal motion effect if motion lowers FC, and a positive one if it raises it.)
+  rho <- function(a, b) round(cor(a, b, method = "spearman", use = "complete.obs"), 3)
+  print(c(rho_fetal_vs_preterm_motion_effect  = rho(res_fd_fet$beta_perSD, res_fd_pre$beta_perSD),
+          rho_fetal_motion_vs_group_difference   = rho(res_fd_fet$beta_perSD, fetalRes$scanTypeb),
+          rho_preterm_motion_vs_group_difference = rho(res_fd_pre$beta_perSD, fetalRes$scanTypeb)))
+}
+
 ###############################################################################
 # 10. SAVE TABLES AND RECORD SESSION
 ###############################################################################
