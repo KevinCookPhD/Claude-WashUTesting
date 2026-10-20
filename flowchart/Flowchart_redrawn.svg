@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="518.4pt" height="282.6pt" viewBox="0 0 518.4 282.64">
-<rect width="518.4" height="282.64" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="518.4pt" height="208.5pt" viewBox="0 0 518.4 208.48">
+<rect width="518.4" height="208.48" fill="#ffffff"/>
 <g font-family="Arial, Helvetica, 'Liberation Sans', sans-serif" fill="#000000">
 <rect x="144.00" y="10.00" width="104.00" height="40.16" fill="#cadff5" stroke="#2a78d6" stroke-width="1.0"/>
 <text x="150.00" y="22.24" font-size="8.0" font-weight="bold">Preterm dataset</text>
@@ -7,39 +7,34 @@
 <text x="150.00" y="40.66" font-size="7.0" font-weight="normal">Scans: n = 551</text>
 <rect x="144.00" y="84.16" width="104.00" height="40.16" fill="#cadff5" stroke="#2a78d6" stroke-width="1.0"/>
 <text x="150.00" y="96.40" font-size="8.0" font-weight="bold">Usable preterm data</text>
-<text x="150.00" y="105.86" font-size="7.0" font-weight="normal">Participants: n = 190</text>
-<text x="150.00" y="114.82" font-size="7.0" font-weight="normal">Scans: n = 365</text>
+<text x="150.00" y="105.86" font-size="7.0" font-weight="normal">Participants: n = 188</text>
+<text x="150.00" y="114.82" font-size="7.0" font-weight="normal">Scans: n = 360</text>
 <rect x="144.00" y="158.32" width="104.00" height="40.16" fill="#cadff5" stroke="#2a78d6" stroke-width="1.0"/>
-<text x="150.00" y="170.56" font-size="8.0" font-weight="bold">No severe brain injury</text>
-<text x="150.00" y="180.02" font-size="7.0" font-weight="normal">Participants: n = 181</text>
-<text x="150.00" y="188.98" font-size="7.0" font-weight="normal">Scans: n = 351</text>
-<rect x="144.00" y="232.48" width="104.00" height="40.16" fill="#cadff5" stroke="#2a78d6" stroke-width="1.0"/>
-<text x="150.00" y="244.72" font-size="8.0" font-weight="bold">Final preterm sample</text>
-<text x="150.00" y="254.18" font-size="7.0" font-weight="normal">Participants: n = 179</text>
-<text x="150.00" y="263.14" font-size="7.0" font-weight="normal">Scans: n = 346</text>
+<text x="150.00" y="170.56" font-size="8.0" font-weight="bold">Final preterm sample</text>
+<text x="150.00" y="180.02" font-size="7.0" font-weight="normal">Participants: n = 179</text>
+<text x="150.00" y="188.98" font-size="7.0" font-weight="normal">Scans: n = 346</text>
 <rect x="270.40" y="10.00" width="104.00" height="40.16" fill="#f2c9cd" stroke="#cc2936" stroke-width="1.0"/>
 <text x="276.40" y="22.24" font-size="8.0" font-weight="bold">Fetal dataset</text>
 <text x="276.40" y="31.70" font-size="7.0" font-weight="normal">Participants: n = 385</text>
 <text x="276.40" y="40.66" font-size="7.0" font-weight="normal">Scans: n = 535</text>
-<rect x="270.40" y="232.48" width="104.00" height="40.16" fill="#f2c9cd" stroke="#cc2936" stroke-width="1.0"/>
-<text x="276.40" y="244.72" font-size="8.0" font-weight="bold">Final fetal sample</text>
-<text x="276.40" y="254.18" font-size="7.0" font-weight="normal">Participants: n = 161</text>
-<text x="276.40" y="263.14" font-size="7.0" font-weight="normal">Scans: n = 192</text>
+<rect x="270.40" y="158.32" width="104.00" height="40.16" fill="#f2c9cd" stroke="#cc2936" stroke-width="1.0"/>
+<text x="276.40" y="170.56" font-size="8.0" font-weight="bold">Final fetal sample</text>
+<text x="276.40" y="180.02" font-size="7.0" font-weight="normal">Participants: n = 161</text>
+<text x="276.40" y="188.98" font-size="7.0" font-weight="normal">Scans: n = 192</text>
 <line x1="196.00" y1="50.16" x2="196.00" y2="78.66" stroke="#2a78d6" stroke-width="1.0"/>
 <polygon points="196.00,84.16 193.70,78.66 198.30,78.66" fill="#2a78d6"/>
 <line x1="196.00" y1="124.32" x2="196.00" y2="152.82" stroke="#2a78d6" stroke-width="1.0"/>
 <polygon points="196.00,158.32 193.70,152.82 198.30,152.82" fill="#2a78d6"/>
-<line x1="196.00" y1="198.48" x2="196.00" y2="226.98" stroke="#2a78d6" stroke-width="1.0"/>
-<polygon points="196.00,232.48 193.70,226.98 198.30,226.98" fill="#2a78d6"/>
-<line x1="322.40" y1="50.16" x2="322.40" y2="226.98" stroke="#cc2936" stroke-width="1.0"/>
-<polygon points="322.40,232.48 320.10,226.98 324.70,226.98" fill="#cc2936"/>
-<rect x="10.00" y="33.64" width="118.00" height="67.04" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
-<text x="16.00" y="45.88" font-size="8.0" font-weight="bold">Excluded: data quality</text>
-<text x="16.00" y="55.34" font-size="7.0" font-weight="normal">Insufficient usable data after</text>
-<text x="16.00" y="64.30" font-size="7.0" font-weight="normal">preprocessing (&lt; 120 volumes,</text>
-<text x="16.00" y="73.26" font-size="7.0" font-weight="normal">&lt; 4 min at TR = 2 s)</text>
-<text x="16.00" y="82.22" font-size="7.0" font-weight="normal">Scans: n = 186</text>
-<text x="16.00" y="91.18" font-size="7.0" font-weight="normal">Participants excluded: n = 27</text>
+<line x1="322.40" y1="50.16" x2="322.40" y2="152.82" stroke="#cc2936" stroke-width="1.0"/>
+<polygon points="322.40,158.32 320.10,152.82 324.70,152.82" fill="#cc2936"/>
+<rect x="10.00" y="29.16" width="118.00" height="76.00" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
+<text x="16.00" y="41.40" font-size="8.0" font-weight="bold">Excluded: data quality</text>
+<text x="16.00" y="50.86" font-size="7.0" font-weight="normal">Insufficient usable data after</text>
+<text x="16.00" y="59.82" font-size="7.0" font-weight="normal">preprocessing (&lt; 120 volumes,</text>
+<text x="16.00" y="68.78" font-size="7.0" font-weight="normal">&lt; 4 min at TR = 2 s) or no</text>
+<text x="16.00" y="77.74" font-size="7.0" font-weight="normal">connectivity data</text>
+<text x="16.00" y="86.70" font-size="7.0" font-weight="normal">Scans: n = 191</text>
+<text x="16.00" y="95.66" font-size="7.0" font-weight="normal">Participants excluded: n = 29</text>
 <line x1="196.00" y1="67.16" x2="133.50" y2="67.16" stroke="#2a78d6" stroke-width="1.0"/>
 <polygon points="128.00,67.16 133.50,64.86 133.50,69.46" fill="#2a78d6"/>
 <rect x="10.00" y="121.24" width="118.00" height="40.16" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
@@ -48,15 +43,6 @@
 <text x="16.00" y="151.90" font-size="7.0" font-weight="normal">Participants: n = 9</text>
 <line x1="196.00" y1="141.32" x2="133.50" y2="141.32" stroke="#2a78d6" stroke-width="1.0"/>
 <polygon points="128.00,141.32 133.50,139.02 133.50,143.62" fill="#2a78d6"/>
-<rect x="10.00" y="181.96" width="118.00" height="67.04" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
-<text x="16.00" y="194.20" font-size="8.0" font-weight="bold">Excluded: other</text>
-<text x="16.00" y="203.66" font-size="7.0" font-weight="normal">No connectivity data after</text>
-<text x="16.00" y="212.62" font-size="7.0" font-weight="normal">preprocessing, or excluded at</text>
-<text x="16.00" y="221.58" font-size="7.0" font-weight="normal">review</text>
-<text x="16.00" y="230.54" font-size="7.0" font-weight="normal">Scans: n = 5</text>
-<text x="16.00" y="239.50" font-size="7.0" font-weight="normal">Participants excluded: n = 2</text>
-<line x1="196.00" y1="215.48" x2="133.50" y2="215.48" stroke="#2a78d6" stroke-width="1.0"/>
-<polygon points="128.00,215.48 133.50,213.18 133.50,217.78" fill="#2a78d6"/>
 <rect x="390.40" y="33.64" width="118.00" height="67.04" fill="#ffffff" stroke="#cc2936" stroke-width="1.0"/>
 <text x="396.40" y="45.88" font-size="8.0" font-weight="bold">Excluded: data quality</text>
 <text x="396.40" y="55.34" font-size="7.0" font-weight="normal">Insufficient usable data after</text>
