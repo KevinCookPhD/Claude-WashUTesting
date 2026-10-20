@@ -1752,7 +1752,8 @@ match_scans <- function(d, var, caliper) {
 # MOTION (mean framewise displacement, mm; D, E): fetal 0.753 (SD 0.219, range 0.265-1.405), preterm 0.076 (SD 0.032,
 #   range 0.023-0.225): the ranges do NOT overlap, and meanFD correlates -0.93 with group.
 #   D1 raw meanFD covariate ......... 355 significant; 310 still; 1,257 same direction; r = 0.749 (group and motion
-#                                      are nearly the same variable, so this model cannot separate them: do not interpret)
+#                                      are nearly the same variable, so this model cannot separate them: do not interpret;
+#                                      see 9j: VIF 7.2, group SEs inflated 2.32-fold)
 #   D2 meanFD centered in group ..... 1,402 significant; 1,391 still; 1,404 same direction; r = 1.000
 #   D3 shared range / 1:1 matching .. not possible (no overlap)
 #   E  finalVol + meanFD centered ... 1,431 significant; 1,389 still; 1,404 same direction; r = 0.999
@@ -2186,6 +2187,23 @@ if (RUN_DISTANCE_CONTROL) {
 #   fetal and preterm separately, FDR across the 3,003 edges. Then: do the edge-wise motion effects resemble the
 #   edge-wise fetal-vs-preterm differences? (If the group difference were a motion artifact, edges that motion
 #   changes most should also be the edges that differ most between groups, and in the matching direction.)
+# HOW TO READ THE NUMBERS (for later reference):
+#   * Variance inflation factor (VIF) = 1 / (1 - R2), where R2 is how well the other predictors explain this one. Above
+#     about 5 is serious: the model cannot tell the two variables apart. Standard errors grow by sqrt(VIF with / VIF
+#     without) = sqrt(7.16 / 1.33) = 2.32, which is what was observed, so the lost significance of the raw-meanFD run
+#     (D1 in 9e) is a precision problem, not a changed effect. Centering meanFD within group (D2 in 9e) removes the
+#     collinearity and leaves the group beta unchanged, so D2 only shows that motion variation WITHIN groups does not
+#     drive the result; it cannot say anything about the between-group motion difference.
+#   * "Raw p < .05" in the fetal scan is 203 of 3,003 edges; chance alone gives about 150 (5%), so there is a small
+#     excess but only 1 edge survives FDR.
+#   * "Per SD" effects are FC change (Fisher z) for a 1-SD higher motion within that group (fetal SD 0.219 mm, preterm
+#     SD 0.032 mm), which makes the two groups comparable despite their different motion scales; per-mm slopes are
+#     the same effects divided by the group's SD (preterm -0.38 z/mm, fetal -0.002 z/mm).
+#   * The extrapolation argument (see INTERPRETATION) is a plausibility check, not a test: the preterm slope is
+#     estimated over 0.02-0.22 mm and cannot be extended to the fetal range; the fetal data cover that range and show
+#     no slope.
+#   * LIMITATION to state: group and motion are confounded by design (every fetal scan has more motion than every
+#     preterm scan), so no model can separate them; fetal and infant FD may also not be measured on the same footing.
 # RESULT (A): meanFD is almost the same variable as group (r = -0.925, R2 = 0.86). Variance inflation of the group term
 #   rises from 1.33 to 7.16 when meanFD is added (meanFD itself 6.97; PMA 1.70 and scanner 1.86 unchanged). The group
 #   standard errors grow by a median factor of 2.32 across edges, exactly what the VIF predicts (sqrt(7.16/1.33)).
