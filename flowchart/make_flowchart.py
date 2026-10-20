@@ -18,11 +18,13 @@ from PIL import Image, ImageDraw, ImageFont
 # --------------------------------------------------------------------------------------------
 # DATA (edit here)
 # --------------------------------------------------------------------------------------------
-PRETERM = dict(
-    dataset=dict(participants=213, scans=546),
-    qa=dict(participants=25, scans=186),
-    usable=dict(participants=188, scans=360),
+PRETERM = dict(   # scans, and participants who lose ALL their scans at that step (from the raw scan QA table, run in R)
+    dataset=dict(participants=217, scans=551),
+    qa=dict(participants=27, scans=186),
+    usable=dict(participants=190, scans=365),
     injury=dict(participants=9, scans=14),
+    clean=dict(participants=181, scans=351),
+    other=dict(participants=2, scans=5),
     final=dict(participants=179, scans=346),
 )
 FETAL = dict(
@@ -32,6 +34,7 @@ FETAL = dict(
 )
 NB = "\u00a0"   # non-breaking space: keeps "< 120 volumes" and "n = 25" from splitting across lines
 QA_REASON_PT = f"Insufficient usable data after preprocessing (<{NB}120{NB}volumes, <{NB}4{NB}min at TR{NB}={NB}2{NB}s)"
+OTHER_REASON = "No connectivity data after preprocessing, or excluded at review"
 QA_REASON_FT = f"Insufficient usable data after preprocessing (<{NB}80{NB}volumes, <{NB}4{NB}min at TR{NB}={NB}3{NB}s)"
 
 # Palette (matches the figures)
@@ -83,7 +86,8 @@ def wrap(s, size_pt, width_pt, bold=False):
 # --------------------------------------------------------------------------------------------
 for k in ("participants", "scans"):
     assert PRETERM["dataset"][k] - PRETERM["qa"][k] == PRETERM["usable"][k], k
-    assert PRETERM["usable"][k] - PRETERM["injury"][k] == PRETERM["final"][k], k
+    assert PRETERM["usable"][k] - PRETERM["injury"][k] == PRETERM["clean"][k], k
+    assert PRETERM["clean"][k] - PRETERM["other"][k] == PRETERM["final"][k], k
     assert FETAL["dataset"][k] - FETAL["qa"][k] == FETAL["final"][k], k
 
 # --------------------------------------------------------------------------------------------
@@ -124,18 +128,21 @@ top = MARGIN
 # ---- main boxes (preterm) ----
 L1 = box_lines("Preterm dataset", n_lines(PRETERM["dataset"]), MAIN_W)
 L2 = box_lines("Usable preterm data", n_lines(PRETERM["usable"]), MAIN_W)
+L2b = box_lines("No severe brain injury", n_lines(PRETERM["clean"]), MAIN_W)
 L3 = box_lines("Final preterm sample", n_lines(PRETERM["final"]), MAIN_W)
 F1 = box_lines("Fetal dataset", n_lines(FETAL["dataset"]), MAIN_W)
 F3 = box_lines("Final fetal sample", n_lines(FETAL["final"]), MAIN_W)
 
-h1, h2, h3 = box_height(L1), box_height(L2), box_height(L3)
+h1, h2, h2b, h3 = box_height(L1), box_height(L2), box_height(L2b), box_height(L3)
 y1 = top
 y2 = y1 + h1 + V_GAP
-y3 = y2 + h2 + V_GAP
+y2b = y2 + h2 + V_GAP
+y3 = y2b + h2b + V_GAP
 hf1 = box_height(F1)
 
 add_box(x_pt_main, y1, MAIN_W, L1, BLUE_TINT, BLUE)
 add_box(x_pt_main, y2, MAIN_W, L2, BLUE_TINT, BLUE)
+add_box(x_pt_main, y2b, MAIN_W, L2b, BLUE_TINT, BLUE)
 add_box(x_pt_main, y3, MAIN_W, L3, BLUE_TINT, BLUE)
 add_box(x_f_main, y1, MAIN_W, F1, RED_TINT, RED)
 add_box(x_f_main, y3, MAIN_W, F3, RED_TINT, RED)
@@ -143,7 +150,8 @@ add_box(x_f_main, y3, MAIN_W, F3, RED_TINT, RED)
 # ---- main arrows ----
 cx_pt, cx_f = x_pt_main + MAIN_W / 2, x_f_main + MAIN_W / 2
 prims.append(("arrow", cx_pt, y1 + h1, cx_pt, y2, BLUE, LW_ARROW))
-prims.append(("arrow", cx_pt, y2 + h2, cx_pt, y3, BLUE, LW_ARROW))
+prims.append(("arrow", cx_pt, y2 + h2, cx_pt, y2b, BLUE, LW_ARROW))
+prims.append(("arrow", cx_pt, y2b + h2b, cx_pt, y3, BLUE, LW_ARROW))
 prims.append(("arrow", cx_f, y1 + hf1, cx_f, y3, RED, LW_ARROW))
 
 # ---- exclusion boxes: branch from the main arrow, into a box that states the reason and the counts ----
@@ -154,12 +162,15 @@ def excl(title, reason, d, who):
 E1 = excl("Excluded: data quality", QA_REASON_PT, PRETERM["qa"], "Participants excluded")
 E2 = excl("Excluded: brain injury", None, PRETERM["injury"], "Participants")   # no reason line: heading, scans, participants only
 E3 = excl("Excluded: data quality", QA_REASON_FT, FETAL["qa"], "Participants excluded")
+E4 = excl("Excluded: other", OTHER_REASON, PRETERM["other"], "Participants excluded")
 
 j1 = y1 + h1 + V_GAP / 2              # junction heights (middle of each arrow)
 j2 = y2 + h2 + V_GAP / 2
+j3 = y2b + h2b + V_GAP / 2
 for (lines, yj, xbox, xmain_c, color, side) in [
         (E1, j1, x_pt_excl, cx_pt, BLUE, "left"),
         (E2, j2, x_pt_excl, cx_pt, BLUE, "left"),
+        (E4, j3, x_pt_excl, cx_pt, BLUE, "left"),
         (E3, j1, x_f_excl, cx_f, RED, "right")]:
     hh = box_height(lines)
     add_box(xbox, yj - hh / 2, EXCL_W, lines, "#ffffff", color)
