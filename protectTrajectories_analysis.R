@@ -1616,6 +1616,13 @@ slopesMain_wide
 #    Each repeats the PMA x prematurity scan under a different specification and
 #    compares the FDR-significant set with the primary result (`sigEdges`).
 #
+#    SUPPLEMENTAL OUTPUTS: every control writes >= 1 table (SI<nn>_Table_*.csv, needs SAVE_TABLES) and >= 1 figure
+#    (SI<nn>_Fig_*, needs SAVE_FIGS) to figureDir. Numbers come from the SI_ID registry (defined just before 9a), so
+#    renumbering is one edit there; outputs of one control share a number and sort together:
+#      SI01 clinical cutoffs (9a)   SI02 continuous birth GA (9b)   SI03 scans > 32 wk (9c)   SI04 within/between (9d)
+#      SI05 usable volumes (9e A-C) SI06 motion as covariate (9e D-F)   SI07 age-matched (9f)   SI08 postnatal age (9g)
+#      SI09 unharmonized (9h)       SI10 distance (9i)   SI11 motion follow-up (9j)   SI12 equal volume (9k)
+#
 #    OVERVIEW (what each check tests and what it showed; details above each block)
 #      9a  clinical cutoffs ........ 9 of the edges FDR-significant; 8 of the 16 hold (cutoff-dependent set)
 #      9b  continuous birth GA ..... 0 significant (the effect is a step, not a linear gradient)
@@ -1648,6 +1655,62 @@ with_fc <- function(fc, code, tag = "alt") {
   force(code)
 }
 
+## ---- Supplemental (SI) outputs: numbering and helpers ----------------------------------------------------------
+# Every control writes at least one table (SI<nn>_Table_*.csv, if SAVE_TABLES) and one figure (SI<nn>_Fig_*, if SAVE_FIGS).
+# The numbers live only in this registry: renumber here (e.g. SI_ID[["gt32"]] <- "SI07") and every file name follows.
+SI_ID <- c(clinical = "SI01", continuous_GA = "SI02", gt32 = "SI03", within_between = "SI04",
+           volumes = "SI05", motion_covariate = "SI06", age_matched = "SI07", postnatal = "SI08",
+           unharmonized = "SI09", distance = "SI10", motion_followup = "SI11", equal_volume = "SI12")
+si_table <- function(df, key, name) {
+  df <- as.data.frame(df)
+  if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", name, ".csv")), row.names = FALSE)
+  invisible(df)
+}
+si_fig <- function(key, name, w, h, draw) show_fig(paste0(SI_ID[[key]], "_Fig_", name), w, h, draw)
+si_theme <- function() theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4),
+                                                            strip.background = element_blank(), legend.position = "bottom")
+facet_dims <- function(n, w = 2.5, h = 2.6) { nc <- min(n, 3); c(w = w * nc + 0.4, h = h * ceiling(n / nc) + 0.7) }
+si_group_fill <- scale_fill_manual(values = c(Fetal = col_fetal, Preterm = col_preterm))
+dist_plot <- function(d, var, xlab) {                       # distribution of a scan-level variable by group
+  ggplot(d, aes(.data[[var]], fill = scanType)) + geom_density(alpha = 0.5, linewidth = 0.3, color = NA) +
+    si_group_fill + labs(x = xlab, y = "Density", fill = NULL) + si_theme()
+}
+
+# PMA x prematurity reruns (wald_scan results). res_list and cmp_list are named lists (same names), one entry per control.
+intx_summary <- function(cmp_list) {
+  prim <- c(raw_p05 = sum(intxRes$p < .05, na.rm = TRUE), fdr05 = length(sigEdges), of_primary = length(sigEdges),
+            n_primary = length(sigEdges), newly_sig = 0)
+  rbind(data.frame(Analysis = "Primary", t(prim), check.names = FALSE),
+        do.call(rbind, lapply(names(cmp_list), function(n) data.frame(Analysis = n, t(cmp_list[[n]]$summary), check.names = FALSE))))
+}
+intx_edges <- function(res_list) {                         # chi-square, p and FDR p of the 16 primary edges in each analysis
+  all_res <- c(list(Primary = intxRes), res_list)
+  do.call(rbind, lapply(names(all_res), function(n) {
+    r <- all_res[[n]][match(sigEdges, all_res[[n]]$Connection), ]
+    data.frame(Analysis = n, Connection = sigEdges, chi = round(r$chi, 2), p = signif(r$p, 3), pAdj = signif(r$pAdj, 3))
+  }))
+}
+intx_scatter <- function(res_list) {                       # -log10 p of every edge: control vs. primary; the 16 primary edges are colored
+  d <- do.call(rbind, lapply(names(res_list), function(n) {
+    r <- res_list[[n]]; i <- match(r$Connection, intxRes$Connection)
+    data.frame(Analysis = n, x = -log10(intxRes$p[i]), y = -log10(r$p), primary = r$Connection %in% sigEdges, fdr = !is.na(r$pAdj) & r$pAdj < .05)
+  }))
+  d$Analysis <- factor(d$Analysis, names(res_list)); d$fdr <- factor(d$fdr, c(TRUE, FALSE), c("FDR p < .05 in control", "Not significant in control"))
+  ggplot(d, aes(x, y)) + geom_abline(linetype = "dashed", linewidth = 0.3) +
+    geom_point(data = d[!d$primary, ], color = "#8a8a8a", alpha = 0.25, size = 0.5, stroke = 0) +
+    geom_point(data = d[d$primary, ], aes(color = fdr), size = 1.5) +
+    scale_color_manual(values = c("FDR p < .05 in control" = col_preterm, "Not significant in control" = "#e08a1e"), name = NULL) +
+    facet_wrap(~Analysis, ncol = min(length(res_list), 3)) +
+    labs(x = "-log10 p, primary analysis", y = "-log10 p, control") + si_theme()
+}
+# Writes the three standard outputs for a PMA x prematurity control: summary table, table of the 16 primary edges, p-value scatter.
+si_intx <- function(key, name, res_list, cmp_list) {
+  si_table(intx_summary(cmp_list), key, paste0(name, "_summary"))
+  si_table(intx_edges(res_list),   key, paste0(name, "_primaryEdges"))
+  dm <- facet_dims(length(res_list))
+  si_fig(key, paste0(name, "_pvalues"), dm[["w"]], dm[["h"]], function() print(intx_scatter(res_list)))
+}
+
 if (RUN_SENSITIVITY) {
 
   ## ---- 9a. Clinical cutoff convention (EPT <28 | VPT 28-<32 | MPT >=32) -----
@@ -1666,6 +1729,7 @@ if (RUN_SENSITIVITY) {
   print(group_counts(pt_clin))
   res_clin <- wald_scan(pt_clin, fml_main, "ScanPMA:BirthCat")
   cmp_clin <- compare_sets(res_clin); print(cmp_clin)
+  si_intx("clinical", "clinicalCutoffs", list(`Clinical cutoffs` = res_clin), list(`Clinical cutoffs` = cmp_clin))
 
   ## ---- 9b. Birth GA as a continuous moderator (no cutoffs; 1 df) ------------
   # WHAT IT TESTS: the same question with no cutoffs at all, using birth GA as a continuous moderator
@@ -1677,6 +1741,7 @@ if (RUN_SENSITIVITY) {
   pt_cont <- pt; pt_cont$GA <- pt_cont$BirthPMA - mean(pt_cont$BirthPMA)
   res_cont <- wald_scan(pt_cont, FCz ~ scanner + ScanPMA * GA, "ScanPMA:GA")
   cmp_cont <- compare_sets(res_cont); print(cmp_cont)
+  si_intx("continuous_GA", "continuousBirthGA", list(`Birth GA, continuous (1 df)` = res_cont), list(`Birth GA, continuous (1 df)` = cmp_cont))
 
   ## ---- 9c. Scans after 32 weeks PMA only ------------------------------------
   # WHAT IT TESTS: whether the effect depends on the earliest scans (before 32 wk PMA), which exist only in
@@ -1693,10 +1758,12 @@ if (RUN_SENSITIVITY) {
   res_gt32 <- wald_scan(pt32, fml_main, "ScanPMA:BirthCat")
   cmp_gt32 <- compare_sets(res_gt32); print(cmp_gt32)
   slopes_gt32_wide <- slope_wide(slope_table(pt32, sigEdges, fml_main)); print(slopes_gt32_wide)
+  si_intx("gt32", "after32wk", list(`Scans after 32 wk PMA` = res_gt32), list(`Scans after 32 wk PMA` = cmp_gt32))
+  si_table(slopes_gt32_wide, "gt32", "after32wk_slopes")
   # Supplemental figure: the Fig. 3 B/C trajectories refit on these scans only (same connections, order and layout).
   pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
   pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
-  show_fig("SIFig_gt32_trajectories", panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
+  show_fig(paste0(SI_ID[["gt32"]], "_Fig_after32wk_trajectories"), panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
            function() { grid::grid.newpage(); draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B")) },
            save = TRUE)                                                   # always written to figureDir (the plot pane shows blank space above it: the pane is taller than the figure)
 
@@ -1728,6 +1795,10 @@ if (RUN_SENSITIVITY) {
   slopes_within_wide  <- slope_wide(slope_table(ptw, sigEdges, fml_w, pre = "pma_w"))
   slopes_between_wide <- slope_wide(slope_table(ptw, sigEdges, fml_w, pre = "pma_b"))
   print(slopes_within_wide); print(slopes_between_wide)
+  si_intx("within_between", "withinBetween", list(`Within-infant (pma_w x group)` = res_within, `Between-infant (pma_b x group)` = res_between),
+          list(`Within-infant (pma_w x group)` = cmp_within, `Between-infant (pma_b x group)` = cmp_between))
+  si_table(slopes_within_wide,  "within_between", "withinBetween_slopesWithin")
+  si_table(slopes_between_wide, "within_between", "withinBetween_slopesBetween")
 }
 
 ## ---- Shared helpers for 9e-9h (fetal vs. preterm reruns) -------------------------
@@ -1760,6 +1831,48 @@ match_scans <- function(d, var, caliper) {
     if (is.finite(dist[j]) && dist[j] <= caliper) { ki <- c(ki, i); kj <- c(kj, j); free[j] <- FALSE }
   }
   rbind(fet[ki, ], pre[kj, ])
+}
+# One table row for a fetal-vs-preterm rerun. beta ratio = median over the primary significant edges of
+# (beta in this analysis / primary beta); slope = regression slope of this analysis' betas on the primary betas.
+ctrl_row <- function(res, label, n_scans = nrow(scanInfo)) {
+  cf <- cmp_fetal(res, n_scans = n_scans)
+  data.frame(Analysis = label, Scans = n_scans, `FDR-significant edges` = cf[["fdr05"]],
+             `Preterm > fetal` = cf[["preterm_greater"]], `Fetal > preterm` = cf[["fetal_greater"]],
+             `Primary edges still significant` = sprintf("%d (%.1f%%)", cf[["still_sig_of_primary"]], 100 * cf[["still_sig_of_primary"]] / cf[["primary_n"]]),
+             `Primary edges, same direction` = sprintf("%d (%.1f%%)", cf[["same_direction_of_primary"]], 100 * cf[["same_direction_of_primary"]] / cf[["primary_n"]]),
+             `Pearson r with primary betas` = round(cf[["r_beta_with_primary"]], 3),
+             `Spearman rho with primary betas` = round(cor(fetalRes$scanTypeb, res$scanTypeb, method = "spearman", use = "complete.obs"), 3),
+             `Slope on primary betas` = round(unname(coef(lm(res$scanTypeb ~ fetalRes$scanTypeb))[2]), 3),
+             `Beta ratio (median, primary sig. edges)` = round(median(res$scanTypeb[sigFetal] / fetalRes$scanTypeb[sigFetal], na.rm = TRUE), 3),
+             check.names = FALSE)
+}
+# Table of fetal-vs-preterm reruns against the primary result. res_list: named list of run_fetal() results; n_list: scans per analysis.
+fetal_table <- function(res_list, n_list) {
+  rbind(ctrl_row(fetalRes, "Primary", nrow(scanInfo)),
+        do.call(rbind, lapply(names(res_list), function(n) ctrl_row(res_list[[n]], n, n_list[[n]]))))
+}
+# Group-difference betas of every edge: control vs. primary (the 1,404 primary significant edges are colored by direction)
+beta_scatter <- function(res_list) {
+  d <- do.call(rbind, lapply(names(res_list), function(n)
+    data.frame(Analysis = n, x = fetalRes$scanTypeb, y = res_list[[n]]$scanTypeb, sig = sigFetal)))
+  d$Analysis <- factor(d$Analysis, names(res_list))
+  ann <- do.call(rbind, lapply(split(d, d$Analysis), function(g)
+    data.frame(Analysis = g$Analysis[1], x = min(d$x, na.rm = TRUE), y = max(d$y, na.rm = TRUE),
+               lab = sprintf("r = %.3f\nslope = %.2f", cor(g$x, g$y, use = "complete.obs"), unname(coef(lm(y ~ x, g))[2])))))
+  ggplot(d, aes(x, y)) + geom_abline(linetype = "dashed", linewidth = 0.3) +
+    geom_point(data = d[!d$sig, ], color = "#8a8a8a", alpha = 0.2, size = 0.4, stroke = 0) +
+    geom_point(data = d[d$sig, ], color = col_preterm, alpha = 0.35, size = 0.5, stroke = 0) +
+    geom_text(data = ann, aes(label = lab), hjust = 0, vjust = 1, size = 2.6) +
+    facet_wrap(~Analysis, ncol = min(length(res_list), 3)) +
+    labs(x = "Primary group difference (beta, preterm - fetal)", y = "Control group difference (beta)") + si_theme()
+}
+# Standard outputs for a fetal-vs-preterm control: results table and beta scatter (optionally with a second panel `extra`, e.g. a distribution).
+si_fetal <- function(key, name, res_list, n_list, extra = NULL) {
+  si_table(fetal_table(res_list, n_list), key, paste0(name, "_results"))
+  dm <- facet_dims(length(res_list)); p <- beta_scatter(res_list)
+  if (is.null(extra)) si_fig(key, paste0(name, "_betas"), dm[["w"]], dm[["h"]], function() print(p))
+  else si_fig(key, paste0(name, "_betas"), dm[["w"]] + 3, dm[["h"]],
+              function() print(ggpubr::ggarrange(p, extra, nrow = 1, widths = c(dm[["w"]], 3), labels = c("A", "B"))))
 }
 
 ## ---- 9e. Fetal vs. preterm with data-quality covariates and similar data amounts -----
@@ -1858,6 +1971,16 @@ if (RUN_QC_COVARIATE_CONTROL) {
   print(tapply(si_vol_match$vol, si_vol_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))   # balance on volumes
   res_vol_match <- run_fetal(si_vol_match, "usableVolMatched")
   print(cmp_fetal(res_vol_match, n_scans = nrow(si_vol_match)))
+  si_table(do.call(rbind, lapply(split(si_vol, si_vol$scanType), function(g)
+    data.frame(Group = g$scanType[1], Scans = nrow(g), `Volumes, mean (SD)` = sprintf("%.1f (%.1f)", mean(g$vol), sd(g$vol)),
+               `Volumes, median` = median(g$vol), `Volumes, range` = paste(range(g$vol), collapse = "-"), check.names = FALSE))),
+    "volumes", "usableVolumes_descriptives")
+  si_fetal("volumes", "usableVolumes",
+           list(`Volumes as covariate` = res_qc_raw, `Volumes centered within group` = res_qc_cen,
+                `Shared volume range` = res_vol_range, `Matched on volumes` = res_vol_match),
+           list(`Volumes as covariate` = nrow(si_vol), `Volumes centered within group` = nrow(si_vol),
+                `Shared volume range` = nrow(si_vol_range), `Matched on volumes` = nrow(si_vol_match)),
+           extra = dist_plot(si_vol, "vol", "Usable volumes per scan"))
 
   ## D. motion (mean framewise displacement, from Table 1): as a covariate, and similar motion between groups.
   # Uses a copy of the scan table (si_fd) restricted to scans with a motion value, so scanInfo and the caches stay as they are.
@@ -1910,6 +2033,23 @@ if (RUN_QC_COVARIATE_CONTROL) {
   res_pt_fd <- wald_scan(pt_fd, fml_fd, "ScanPMA:BirthCat")
   cmp_pt_fd <- compare_sets(res_pt_fd); print(cmp_pt_fd)
   slopes_pt_fd_wide <- slope_wide(slope_table(pt_fd, sigEdges, fml_fd)); print(slopes_pt_fd_wide)
+
+  ## SI outputs for D-F: fetal vs. preterm with motion (table + beta scatter with the meanFD distribution), and the preterm-only PMA x group check
+  fd_res <- list(`meanFD as covariate` = res_fd_raw, `meanFD centered within group` = res_fd_cen)
+  fd_n   <- list(`meanFD as covariate` = nrow(si_fd), `meanFD centered within group` = nrow(si_fd))
+  if (fd_lo < fd_hi) {
+    fd_res[["Shared meanFD range"]] <- res_fd_range; fd_n[["Shared meanFD range"]] <- nrow(si_fd_range)
+    fd_res[["Matched on meanFD"]]   <- res_fd_match; fd_n[["Matched on meanFD"]]   <- nrow(si_fd_match)
+  }
+  fd_res[["Volumes + meanFD (centered)"]] <- res_qc_all; fd_n[["Volumes + meanFD (centered)"]] <- nrow(si_fd)
+  si_table(do.call(rbind, lapply(split(si_fd, si_fd$scanType), function(g)
+    data.frame(Group = g$scanType[1], Scans = nrow(g), `meanFD (mm), mean (SD)` = sprintf("%.3f (%.3f)", mean(g$meanFD), sd(g$meanFD)),
+               `meanFD, median` = round(median(g$meanFD), 3), `meanFD, range` = paste(round(range(g$meanFD), 3), collapse = "-"), check.names = FALSE))),
+    "motion_covariate", "meanFD_descriptives")
+  si_fetal("motion_covariate", "meanFD_fetalVsPreterm", fd_res, fd_n, extra = dist_plot(si_fd, "meanFD", "Mean framewise displacement (mm)"))
+  si_intx("motion_covariate", "meanFD_pmaByPrematurity", list(`Preterm: PMA x group, adjusted for meanFD` = res_pt_fd),
+          list(`Preterm: PMA x group, adjusted for meanFD` = cmp_pt_fd))
+  si_table(slopes_pt_fd_wide, "motion_covariate", "meanFD_pmaByPrematurity_slopes")
 }
 
 ## ---- 9f-9h. Controls that use only data already in this script -------------------
@@ -1945,6 +2085,15 @@ if (RUN_EXTRA_CONTROLS) {
   print(tapply(si_match$ScanPMA, si_match$scanType, function(x) c(mean = mean(x), sd = sd(x))))   # balance on PMA after matching
   res_am_match <- run_fetal(si_match, "ageMatched")
   print(cmp_fetal(res_am_match, n_scans = nrow(si_match)))
+  si_table(data.frame(Set = rownames(pma_tab), pma_tab, check.names = FALSE, row.names = NULL), "age_matched", "ageMatched_pmaRanges")
+  si_table(do.call(rbind, lapply(split(si_match, si_match$scanType), function(g)                      # balance on PMA after matching
+    data.frame(Group = g$scanType[1], Scans = nrow(g), Infants = nlevels(droplevels(g$shortID)),
+               `PMA, mean (SD)` = sprintf("%.2f (%.2f)", mean(g$ScanPMA), sd(g$ScanPMA)), check.names = FALSE))),
+    "age_matched", "ageMatched_balance")
+  si_fetal("age_matched", "ageMatched",
+           list(`Overlapping PMA range` = res_am_range, `Matched within 1 wk PMA` = res_am_match),
+           list(`Overlapping PMA range` = nrow(si_range), `Matched within 1 wk PMA` = nrow(si_match)),
+           extra = dist_plot(scanInfo, "ScanPMA", "PMA at scan (weeks)"))
 
   ## ---- 9g. Postnatal-age check for PMA x prematurity (control #5) -----------------
   # WHAT IT TESTS: whether the PMA x prematurity result could be a postnatal-age effect. PMA = birth GA +
@@ -2032,6 +2181,26 @@ if (RUN_EXTRA_CONTROLS) {
           primary16_postnatal_adds_to_PMA   = sum(p_post_adds_pma[sig_idx] < .05, na.rm = TRUE),
           primary16_PMA_adds_to_postnatal   = sum(p_pma_adds_post[sig_idx] < .05, na.rm = TRUE)))
 
+  ## SI outputs: (A, B) PMA x group with postnatal age as a covariate / as the time axis, slopes, and the model comparison of the two clocks
+  pna_res <- list(`PMA x group, adjusted for postnatal age` = res_pna, `Postnatal age x group (replaces PMA)` = res_pna_axis)
+  pna_cmp <- list(`PMA x group, adjusted for postnatal age` = cmp_pna, `Postnatal age x group (replaces PMA)` = cmp_pna_axis)
+  si_intx("postnatal", "postnatalAge", pna_res, pna_cmp)
+  si_table(slopes_pna_wide, "postnatal", "postnatalAge_slopes")
+  ic_tab <- rbind(data.frame(Edges = "All 3,003 edges", ic_summary(seq_along(allConn))), data.frame(Edges = "Primary 16 edges", ic_summary(sig_idx)))
+  si_table(ic_tab, "postnatal", "clocks_BICsummary")
+  si_table(data.frame(Comparison = c("Postnatal age adds to PMA", "PMA adds to postnatal age"), check.names = FALSE,
+                      `All edges, FDR p < .05` = c(sum(p_post_adds_pma < .05, na.rm = TRUE), sum(p_pma_adds_post < .05, na.rm = TRUE)),
+                      `Primary 16 edges, FDR p < .05` = c(sum(p_post_adds_pma[sig_idx] < .05, na.rm = TRUE), sum(p_pma_adds_post[sig_idx] < .05, na.rm = TRUE))),
+           "postnatal", "clocks_LRT")
+  p_ic <- ggplot(ic_tab, aes(model, median_dBIC_vs_pma, fill = Edges)) + geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+    geom_hline(yintercept = 0, linewidth = 0.3) +
+    scale_fill_manual(values = c("All 3,003 edges" = "#8a8a8a", "Primary 16 edges" = col_preterm)) +
+    labs(x = NULL, y = "Median BIC change vs. the PMA-only model\n(lower = better fit)", fill = NULL) + si_theme() +
+    theme(axis.text.x = element_text(angle = 35, hjust = 1))
+  p_pna_scatter <- intx_scatter(pna_res)
+  si_fig("postnatal", "clocks_and_pvalues", 7.5, 3.4,
+         function() print(ggpubr::ggarrange(p_pna_scatter, p_ic, nrow = 1, widths = c(2, 1), labels = c("A", "B"))))
+
   ## ---- 9h. Unharmonized data with scanner as a covariate (control #11) ------------
   # WHAT IT TESTS: whether the findings depend on LongComBat. All models include scanner as a fixed effect,
   #   so this repeats them on the connectivity values BEFORE harmonization. It also addresses the limitation
@@ -2050,6 +2219,14 @@ if (RUN_EXTRA_CONTROLS) {
   print(cmp_fetal(fetalRes_raw, n_scans = nrow(scanInfo)))
   res_raw <- with_fc(rawFC, wald_scan(pt, fml_main, "ScanPMA:BirthCat"), "unharmonized")
   cmp_raw <- compare_sets(res_raw); print(cmp_raw)
+
+  ## SI outputs: tables for both analyses; one figure with the fetal-vs-preterm betas (A) and the PMA x group p-values (B)
+  si_table(fetal_table(list(`Unharmonized` = fetalRes_raw), list(`Unharmonized` = nrow(scanInfo))), "unharmonized", "fetalVsPreterm_results")
+  si_table(intx_summary(list(`Unharmonized` = cmp_raw)), "unharmonized", "pmaByPrematurity_summary")
+  si_table(intx_edges(list(`Unharmonized` = res_raw)),   "unharmonized", "pmaByPrematurity_primaryEdges")
+  si_fig("unharmonized", "betas_and_pvalues", 5.6, 3.2,
+         function() print(ggpubr::ggarrange(beta_scatter(list(`Fetal vs. preterm` = fetalRes_raw)),
+                                            intx_scatter(list(`PMA x group` = res_raw)), nrow = 1, labels = c("A", "B"))))
 }
 
 ## ---- 9i. Do the fetal-vs-preterm differences depend on distance between ROIs? ----
@@ -2135,6 +2312,7 @@ if (RUN_DISTANCE_CONTROL) {
     data.frame(Outcome = o, Edges = g, t(mantel_rho(outcomes[[o]], subsets[[g]])), check.names = FALSE)))))
   dist_tab$rho <- round(dist_tab$rho, 3); dist_tab$p_perm <- round(dist_tab$p_perm, 4)
   print(dist_tab)
+  si_table(dist_tab, "distance", "distance_mantel")
 
   dir_sig <- ifelse(fetalRes$scanTypeb[sigFetal] > 0, "Preterm greater", "Fetal greater")      # distance of the significant edges, by direction
   print(tapply(edge_dist[sigFetal], dir_sig, function(x) round(c(n = length(x), median = median(x), q25 = quantile(x, .25, names = FALSE), q75 = quantile(x, .75, names = FALSE)), 1)))
@@ -2145,6 +2323,7 @@ if (RUN_DISTANCE_CONTROL) {
                           rho_beta = sapply(as.character(ga_avail), function(g) cor(Dedge[, g], fetalRes$scanTypeb, method = "spearman")))
   rho_by_ga$rho_beta <- round(rho_by_ga$rho_beta, 3); rownames(rho_by_ga) <- NULL
   print(rho_by_ga)
+  si_table(rho_by_ga, "distance", "distance_rhoByTemplate")
 
   ## ---- (3) scan level: how strongly does each scan's FC fall off with distance? ----
   FCm      <- as.matrix(goodFCData[scanInfo$longID, allConn])
@@ -2164,6 +2343,7 @@ if (RUN_DISTANCE_CONTROL) {
                b_preterm_minus_fetal = unname(tt["Value"]), se = unname(tt["Std.Error"]), p = unname(tt["p-value"]))
   }))
   coup_tab[-1] <- lapply(coup_tab[-1], function(x) signif(x, 3))
+  si_table(coup_tab, "distance", "distance_coupling_groupDifference")
   print(coup_tab)                       # negative rho = FC falls with distance; b > 0 means a weaker fall-off in preterm scans
 
   # Does the group difference depend on PMA? (the fetal and preterm lines can cross, so the single
@@ -2180,6 +2360,7 @@ if (RUN_DISTANCE_CONTROL) {
     c(PMA = a, diff = est, se = se, p = 2 * pt(-abs(est / se), dfi))
   }))
   print(round(diff_at_age, 4))
+  si_table(round(diff_at_age, 4), "distance", "distance_coupling_differenceByPMA")
 
   # Scanner effect on distance coupling within preterm scans: harmonization removes per-edge scanner
   # means and variances, but not necessarily a difference in the PATTERN of FC across edges.
@@ -2204,7 +2385,7 @@ if (RUN_DISTANCE_CONTROL) {
     geom_point(data = bin_df, aes(x = dist, y = mean), color = col_preterm, size = 1.6) +
     labs(x = paste0("Distance between ROIs (GA ", dist_ga, " template units)"), y = "Preterm - fetal difference (Fisher z)") +
     theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4))
-  show_fig("SuppFig_distance", 3.4, 3.0, function() print(p_dist))
+  si_fig("distance", "groupDifferenceByDistance", 3.4, 3.0, function() print(p_dist))
 
   dc <- scanInfo; dc$coupling <- coupling(subsets[["All edges"]])
   p_coup <- ggplot(dc, aes(ScanPMA, coupling, color = scanType)) +
@@ -2213,7 +2394,7 @@ if (RUN_DISTANCE_CONTROL) {
     scale_color_manual(values = c(Fetal = col_fetal, Preterm = col_preterm)) +
     labs(x = "PMA at scan (weeks)", y = "Distance dependence of FC (Spearman rho)", color = NULL) +
     theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4), legend.position = "bottom")
-  show_fig("SuppFig_distance_coupling", 3.4, 3.2, function() print(p_coup))
+  si_fig("distance", "distanceCouplingByPMA", 3.4, 3.2, function() print(p_coup))
 }
 
 ## ---- 9j. Motion (mean framewise displacement): collinearity with group, and motion vs. FC within each group ----
@@ -2307,6 +2488,28 @@ if (RUN_QC_COVARIATE_CONTROL) {
   print(c(rho_fetal_vs_preterm_motion_effect  = rho(res_fd_fet$beta_perSD, res_fd_pre$beta_perSD),
           rho_fetal_motion_vs_group_difference   = rho(res_fd_fet$beta_perSD, fetalRes$scanTypeb),
           rho_preterm_motion_vs_group_difference = rho(res_fd_pre$beta_perSD, fetalRes$scanTypeb)))
+
+  ## SI outputs: collinearity, within-group motion effects, and the edge-wise motion-vs-group-difference comparison
+  si_table(data.frame(Model = rownames(vif_tab), vif_tab, check.names = FALSE, row.names = NULL), "motion_followup", "meanFD_collinearity_VIF")
+  si_table(data.frame(Check = c("r (group, meanFD)", "R2 (group on meanFD)", "Median SE ratio, group term (with / without meanFD)", "Expected from VIF"),
+                      Value = c(round(cor(dv$group, dv$meanFD), 3), round(cor(dv$group, dv$meanFD)^2, 3),
+                                round(median(se_ratio, na.rm = TRUE), 2), round(sqrt(vif_tab["with meanFD", "group"] / vif_tab["without meanFD", "group"]), 2))),
+           "motion_followup", "meanFD_collinearity_summary")
+  si_table(data.frame(Group = c("Fetal", "Preterm"), rbind(fd_summary(res_fd_fet, d_fet), fd_summary(res_fd_pre, d_pre))), "motion_followup", "meanFD_withinGroup_effects")
+  si_table(data.frame(Comparison = c("Fetal vs. preterm motion effect", "Fetal motion effect vs. group difference", "Preterm motion effect vs. group difference"),
+                      `Spearman rho` = c(rho(res_fd_fet$beta_perSD, res_fd_pre$beta_perSD), rho(res_fd_fet$beta_perSD, fetalRes$scanTypeb),
+                                         rho(res_fd_pre$beta_perSD, fetalRes$scanTypeb)), check.names = FALSE),
+           "motion_followup", "meanFD_edgewise_correlations")
+  d_mot <- rbind(data.frame(Panel = "Fetal scans", x = res_fd_fet$beta_perSD, y = fetalRes$scanTypeb),
+                 data.frame(Panel = "Preterm scans", x = res_fd_pre$beta_perSD, y = fetalRes$scanTypeb))
+  ann_mot <- data.frame(Panel = c("Fetal scans", "Preterm scans"), x = -Inf, y = Inf,
+                        lab = paste0("rho = ", c(rho(res_fd_fet$beta_perSD, fetalRes$scanTypeb), rho(res_fd_pre$beta_perSD, fetalRes$scanTypeb))))
+  p_mot <- ggplot(d_mot, aes(x, y)) + geom_hline(yintercept = 0, linewidth = 0.3) + geom_vline(xintercept = 0, linewidth = 0.3) +
+    geom_point(color = "#8a8a8a", alpha = 0.2, size = 0.4, stroke = 0) +
+    geom_text(data = ann_mot, aes(label = lab), hjust = -0.1, vjust = 1.5, size = 2.8) +
+    facet_wrap(~Panel) +
+    labs(x = "Within-group effect of motion on FC (Fisher z per SD of meanFD)", y = "Group difference (beta, preterm - fetal)") + si_theme()
+  si_fig("motion_followup", "motionEffects_vs_groupDifference", 5.4, 3.0, function() print(p_mot))
 }
 
 ## ---- 9k. Strict equal-volume control: ROI time series cut to the same number of volumes ----------------------
@@ -2428,22 +2631,19 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
     # (2) Results: the primary analysis, the unharmonized full-data analysis (9h, if it was run) and the equal-volume
     #     analysis, each against the primary result. beta ratio = median over the primary significant edges of
     #     (beta in this analysis / primary beta); slope = regression slope of this analysis' betas on the primary betas.
-    eq_row <- function(res, label, n_scans = nrow(scanInfo)) {
-      cf <- cmp_fetal(res, n_scans = n_scans)
-      data.frame(Analysis = label, Scans = n_scans, `FDR-significant edges` = cf[["fdr05"]],
-                 `Preterm > fetal` = cf[["preterm_greater"]], `Fetal > preterm` = cf[["fetal_greater"]],
-                 `Primary edges still significant` = sprintf("%d (%.1f%%)", cf[["still_sig_of_primary"]], 100 * cf[["still_sig_of_primary"]] / cf[["primary_n"]]),
-                 `Primary edges, same direction` = sprintf("%d (%.1f%%)", cf[["same_direction_of_primary"]], 100 * cf[["same_direction_of_primary"]] / cf[["primary_n"]]),
-                 `Pearson r with primary betas` = round(cf[["r_beta_with_primary"]], 3),
-                 `Spearman rho with primary betas` = round(cor(fetalRes$scanTypeb, res$scanTypeb, method = "spearman", use = "complete.obs"), 3),
-                 `Slope on primary betas` = round(unname(coef(lm(res$scanTypeb ~ fetalRes$scanTypeb))[2]), 3),
-                 `Beta ratio (median, primary sig. edges)` = round(median(res$scanTypeb[sigFetal] / fetalRes$scanTypeb[sigFetal], na.rm = TRUE), 3),
-                 check.names = FALSE)
-    }
-    table_s_equal <- rbind(eq_row(fetalRes, "Primary: harmonized, all volumes"),
-                           if (exists("fetalRes_raw")) eq_row(fetalRes_raw, "Unharmonized, all volumes"),
-                           eq_row(res_eq_fp, paste0("Unharmonized, ", vol_equal_n, " volumes per scan")))
+    table_s_equal <- rbind(ctrl_row(fetalRes, "Primary: harmonized, all volumes"),
+                           if (exists("fetalRes_raw")) ctrl_row(fetalRes_raw, "Unharmonized, all volumes"),
+                           ctrl_row(res_eq_fp, paste0("Unharmonized, ", vol_equal_n, " volumes per scan")))
     print(t(table_s_equal), quote = FALSE)                                    # transposed for reading in the console
+    si_table(table_s_equal,      "equal_volume", "equalVolume_results")
+    si_table(table_s_equal_desc, "equal_volume", "equalVolume_descriptives")
+    eq_list <- c(list(`Unharmonized, all volumes` = if (exists("fetalRes_raw")) fetalRes_raw), setNames(list(res_eq_fp), paste0("Unharmonized, ", vol_equal_n, " volumes")))
+    eq_list <- eq_list[!vapply(eq_list, is.null, NA)]
+    d_fid <- data.frame(scanType = scanInfo$scanType, fidelity = tr$fidelity)
+    dm <- facet_dims(length(eq_list))
+    si_fig("equal_volume", "betas_and_fidelity", dm[["w"]] + 3, dm[["h"]],
+           function() print(ggpubr::ggarrange(beta_scatter(eq_list), dist_plot(d_fid, "fidelity", "Correlation of truncated with full-data connectivity"),
+                                              nrow = 1, widths = c(dm[["w"]], 3), labels = c("A", "B"))))
   }
 }
 
@@ -2452,8 +2652,6 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
 ###############################################################################
 
 if (SAVE_TABLES) {
-  if (exists("table_s_equal"))      write.csv(table_s_equal,      file.path(figureDir, "SuppTable_equalVolume_results.csv"),      row.names = FALSE)
-  if (exists("table_s_equal_desc")) write.csv(table_s_equal_desc, file.path(figureDir, "SuppTable_equalVolume_descriptives.csv"), row.names = FALSE)
   write.csv(fetalRes,        file.path(figureDir, "fetalVsPreterm_allEdges.csv"),        row.names = FALSE)
   write.csv(table2,          file.path(figureDir, "Table2_homotopic.csv"),               row.names = FALSE)
   write.csv(intxRes,         file.path(figureDir, "pmaByPrematurity_allEdges.csv"),      row.names = FALSE)
