@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 # --------------------------------------------------------------------------------------------
 PRETERM = dict(   # scans, and participants who lose ALL their scans at that step (from the raw scan QA table, run in R)
     dataset=dict(participants=217, scans=551),
-    qa=dict(participants=29, scans=191),        # insufficient usable data, or no connectivity data (incl. 1 manual exclusion)
+    qa=dict(participants=29, scans=191),        # insufficient usable data, including scans that failed processing or were excluded for high motion
     usable=dict(participants=188, scans=360),
     injury=dict(participants=9, scans=14),
     final=dict(participants=179, scans=346),
@@ -31,7 +31,7 @@ FETAL = dict(
     final=dict(participants=161, scans=192),
 )
 NB = "\u00a0"   # non-breaking space: keeps "< 120 volumes" and "n = 25" from splitting across lines
-QA_REASON_PT = f"Insufficient usable data after preprocessing (<{NB}120{NB}volumes, <{NB}4{NB}min at TR{NB}={NB}2{NB}s) or no connectivity data"
+QA_REASON_PT = f"Insufficient usable data after preprocessing (<{NB}120{NB}volumes, <{NB}4{NB}min at TR{NB}={NB}2{NB}s)"
 QA_REASON_FT = f"Insufficient usable data after preprocessing (<{NB}80{NB}volumes, <{NB}4{NB}min at TR{NB}={NB}3{NB}s)"
 
 # Palette (matches the figures)

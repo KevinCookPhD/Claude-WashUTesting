@@ -27,14 +27,13 @@
 <polygon points="196.00,158.32 193.70,152.82 198.30,152.82" fill="#2a78d6"/>
 <line x1="322.40" y1="50.16" x2="322.40" y2="152.82" stroke="#cc2936" stroke-width="1.0"/>
 <polygon points="322.40,158.32 320.10,152.82 324.70,152.82" fill="#cc2936"/>
-<rect x="10.00" y="29.16" width="118.00" height="76.00" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
-<text x="16.00" y="41.40" font-size="8.0" font-weight="bold">Excluded: data quality</text>
-<text x="16.00" y="50.86" font-size="7.0" font-weight="normal">Insufficient usable data after</text>
-<text x="16.00" y="59.82" font-size="7.0" font-weight="normal">preprocessing (&lt; 120 volumes,</text>
-<text x="16.00" y="68.78" font-size="7.0" font-weight="normal">&lt; 4 min at TR = 2 s) or no</text>
-<text x="16.00" y="77.74" font-size="7.0" font-weight="normal">connectivity data</text>
-<text x="16.00" y="86.70" font-size="7.0" font-weight="normal">Scans: n = 191</text>
-<text x="16.00" y="95.66" font-size="7.0" font-weight="normal">Participants excluded: n = 29</text>
+<rect x="10.00" y="33.64" width="118.00" height="67.04" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
+<text x="16.00" y="45.88" font-size="8.0" font-weight="bold">Excluded: data quality</text>
+<text x="16.00" y="55.34" font-size="7.0" font-weight="normal">Insufficient usable data after</text>
+<text x="16.00" y="64.30" font-size="7.0" font-weight="normal">preprocessing (&lt; 120 volumes,</text>
+<text x="16.00" y="73.26" font-size="7.0" font-weight="normal">&lt; 4 min at TR = 2 s)</text>
+<text x="16.00" y="82.22" font-size="7.0" font-weight="normal">Scans: n = 191</text>
+<text x="16.00" y="91.18" font-size="7.0" font-weight="normal">Participants excluded: n = 29</text>
 <line x1="196.00" y1="67.16" x2="133.50" y2="67.16" stroke="#2a78d6" stroke-width="1.0"/>
 <polygon points="128.00,67.16 133.50,64.86 133.50,69.46" fill="#2a78d6"/>
 <rect x="10.00" y="121.24" width="118.00" height="40.16" fill="#ffffff" stroke="#2a78d6" stroke-width="1.0"/>
