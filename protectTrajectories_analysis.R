@@ -2294,14 +2294,26 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   3 s) while preterm scans (>= 120 volumes at TR 2 s) are cut to 80 volumes = 2.7 min; duration and volume count
 #   cannot both be equated.
 # CHECKS (run): the full time series reproduce the stored connectivity (r = 1.000 for 6 test scans, so the column order
-#   is right). 112 of 538 scans have fewer usable (non-zero) volumes than finalVol says (e.g. 161 vs. 169); every scan
-#   has >= 80 usable volumes. Fidelity of the 80-volume connectivity to the full-data connectivity (per-scan correlation
-#   across edges): fetal mean 0.93 (min 0.67), preterm mean 0.84 (min 0.65); preterm scans are cut from more volumes.
-# RESULT: fetal vs. preterm at 80 volumes per scan: 1,248 edges significant (1,002 preterm greater, 246 fetal greater);
-#   1,206 of the 1,404 primary edges still significant; all 1,404 in the same direction; beta correlation 0.990 with the
-#   primary result and 0.990 with the unharmonized full-data result.
-# INTERPRETATION: the fetal-vs-preterm difference does not depend on the number of volumes: with every scan at 80
-#   volumes the direction is preserved for all 1,404 edges and the betas correlate 0.99.
+#   is right). Every scan has >= 80 usable (non-zero) volumes. finalVol differs from the usable count in 112 of 538 scans
+#   (finalVol minus usable volumes: fetal, 6 scans, -1 to +100; preterm, 106 scans, -87 to +109; median 0). The stored
+#   connectivity matches the usable volumes, so the usable count is the number of volumes the connectivity is based on.
+# DESCRIPTIVES (Table S, equal-volume control), usable volumes before truncation, mean (SD) [range]:
+#   fetal 192 scans / 161 infants, TR 3 s: 129.9 (47.8) [80-281] volumes = 6.5 (2.4) min; preterm 346 scans / 179
+#   infants, TR 2 s: 216.7 (53.7) [120-296] volumes = 7.2 (1.8) min. After truncation: 80 volumes = 4.00 min (fetal),
+#   2.67 min (preterm). Fidelity of the 80-volume connectivity to the full-data connectivity (per-scan correlation
+#   across the 3,003 edges): fetal 0.93 (SD 0.07, min 0.67); preterm 0.84 (SD 0.08, min 0.65).
+# RESULT (fetal vs. preterm; each row vs. the primary result):
+#   primary (harmonized, all volumes) ...... 1,404 significant (1,118 preterm > fetal, 286 fetal > preterm)
+#   unharmonized, all volumes (9h) ......... 1,439 (1,141 / 298); 1,404 (100%) primary edges still significant, same
+#                                           direction 100%; r = 1.00, rho = 1.000, slope 1.000, beta ratio 1.001
+#   unharmonized, 80 volumes per scan ...... 1,248 (1,002 / 246); 1,206 (85.9%) primary edges still significant;
+#                                           same direction 1,404 (100%); r = 0.99, rho = 0.984, slope 1.000,
+#                                           median beta ratio 0.996
+# INTERPRETATION: the fetal-vs-preterm difference does not depend on the number of volumes. With every scan cut to 80
+#   volumes the direction is preserved for all 1,404 primary edges, the betas keep their rank order (rho = 0.984) and
+#   their size (regression slope 1.00, median ratio 0.996), so effects are not attenuated by using less data. The 14% of
+#   primary edges that lose significance reflect larger standard errors (noisier connectivity from 80 volumes,
+#   especially in preterm scans, fidelity 0.84), not smaller effects.
 # OUTPUT FOR THE SUPPLEMENT (printed, and kept as objects): table_s_equal_desc = descriptives by group (scans, infants,
 #   TR, usable volumes and minutes before truncation, volumes and minutes after, fidelity of the truncated connectivity
 #   to the full-data connectivity); table_s_equal = results for the primary analysis, the unharmonized full-data
@@ -2309,11 +2321,12 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   stay significant / keep their direction, Pearson and Spearman correlation of the betas with the primary betas,
 #   the regression slope of the betas on the primary betas, and the median ratio of the betas on the primary
 #   significant edges, which shows whether effect sizes shrink when scans are shortened). Both are written to csv when
-#   SAVE_TABLES is TRUE (section 10). Fill the numbers into the supplement from these tables; the values recorded above
-#   (1,248 / 1,206 / 1,404 / r = 0.990) are from the first run.
+#   SAVE_TABLES is TRUE (section 10).
 # REPORT: "When every scan was reduced to the same number of volumes (80; 4.0 min for fetal scans at TR 3 s, 2.7 min for
-#   preterm scans at TR 2 s), the fetal-preterm differences were unchanged (1,248 significant edges; 1,206 of the 1,404
-#   primary edges still significant and all 1,404 in the same direction; r = 0.99 with the primary betas). The
+#   preterm scans at TR 2 s), the fetal-preterm differences were unchanged: 1,248 edges were significant, 1,206 of the
+#   1,404 primary edges (85.9%) remained significant, and all 1,404 had the same direction. Effect sizes were
+#   preserved (Pearson r = 0.99 and Spearman rho = 0.98 with the primary betas; regression slope 1.00; median beta ratio
+#   0.996). Before truncation, fetal scans had 129.9 (SD 47.8) usable volumes and preterm scans 216.7 (SD 53.7). The
 #   truncated connectivity correlated 0.93 (fetal) and 0.84 (preterm) with the full-data connectivity within scans."
 vol_equal_n    <- 80          # volumes per scan after truncation (the fetal minimum)
 vol_equal_mode <- "first"     # "first": the first n usable volumes; "random": a random set of n usable volumes (seeded)
