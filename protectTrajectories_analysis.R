@@ -2338,6 +2338,8 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
     truncFC <- tr$fc
     ## check 2 and fidelity
     print(c(scans_where_usable_ne_finalVol = sum(tr$usable != scanInfo$finalVol)))
+    print(do.call(rbind, tapply(scanInfo$finalVol - tr$usable, scanInfo$scanType,                    # finalVol minus the all-zero (censored) rows
+                                function(x) c(scans_differing = sum(x != 0), min = min(x), median = median(x), max = max(x)))))
     print(do.call(rbind, tapply(tr$fidelity, scanInfo$scanType, function(x) c(mean = mean(x), min = min(x), sd = sd(x)))))
 
     ## A. fetal vs. preterm on the truncated connectivity (scanner is a covariate; values are not harmonized)
