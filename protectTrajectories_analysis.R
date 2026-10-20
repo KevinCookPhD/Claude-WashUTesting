@@ -1846,7 +1846,7 @@ if (RUN_QC_COVARIATE_CONTROL) {
   pt_fd <- pt; pt_fd$meanFD <- scan_fd[match(pt$longID, scanInfo$longID)]
   pt_fd <- droplevels(pt_fd[!is.na(pt_fd$meanFD), ])
   print(c(scans = nrow(pt_fd), dropped_no_motion = nrow(pt) - nrow(pt_fd)))
-  print(round(tapply(pt_fd$meanFD, pt_fd$BirthCat, function(x) c(mean = mean(x), sd = sd(x))) |> do.call(what = rbind), 3))   # motion by birth group
+  print(round(do.call(rbind, tapply(pt_fd$meanFD, pt_fd$BirthCat, function(x) c(mean = mean(x), sd = sd(x)))), 3))          # motion by birth group
   print(c(r_meanFD_PMA = round(cor(pt_fd$meanFD, pt_fd$ScanPMA), 3),                                                       # motion vs. age at scan
           sapply(split(pt_fd, pt_fd$BirthCat), function(d) c(round(cor(d$meanFD, d$ScanPMA), 3)))))
   fml_fd <- FCz ~ scanner + ScanPMA * BirthCat + meanFD
