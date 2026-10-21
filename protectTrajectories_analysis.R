@@ -656,7 +656,7 @@ if (anyDuplicated(unique(scan_df[c("shortID", "grp")])$shortID)) message("Some i
 inf_t <- do.call(rbind, lapply(split(scan_df, scan_df$shortID), function(d) data.frame(
   shortID = d$shortID[1], grp = d$grp[1], n_scans = nrow(d), pma = mean(d$pma), birthPMA = d$birthPMA[1], male = d$male[1],
   vol = mean(d$vol), mins = mean(d$mins), fd = if (all(is.na(d$fd))) NA_real_ else mean(d$fd, na.rm = TRUE), stringsAsFactors = FALSE)))
-clin_file <- "clinicalData.xlsx"      # EDIT: path to the clinical workbook (relative to the working directory, or full path)
+clin_file <- "demoDataWithComments_FullSample.xlsx"      # clinical workbook (sheets PRETERM and FETAL); relative to the working directory (the data folder), or a full path
 if (!file.exists(clin_file)) stop("Clinical workbook not found: ", clin_file, ". Set clin_file (sheets PRETERM and FETAL).")
 if (!requireNamespace("readxl", quietly = TRUE)) stop("Install the readxl package: install.packages('readxl')")
 read_clin <- function(sheet) { d <- as.data.frame(readxl::read_excel(clin_file, sheet = sheet)); names(d) <- trimws(gsub("\\s+", " ", names(d))); d }
