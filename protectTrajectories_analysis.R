@@ -701,8 +701,8 @@ for (k in setdiff(clin_items, c("Days on ventilation", "APGAR 1 minute", "APGAR 
 # Coverage check: infants with a value for each item, by group (and how many infants the group has), so low coverage is visible.
 clin_cov <- do.call(rbind, lapply(clin_items, function(k) {
   v <- clin_inf[[k]][match(inf_t$shortID, clin_inf$shortID)]
-  data.frame(Item = k, sapply(grp_sel_cov <- list(EPT = inf_t$grp == "EPT", VPT = inf_t$grp == "VPT", MPT = inf_t$grp == "MPT", Fetal = inf_t$grp == "Fetal"),
-                              function(i) sprintf("%d of %d", sum(!is.na(v[i])), sum(i))), check.names = FALSE) }))
+  cov_grp <- list(EPT = inf_t$grp == "EPT", VPT = inf_t$grp == "VPT", MPT = inf_t$grp == "MPT", Fetal = inf_t$grp == "Fetal")
+  data.frame(Item = k, t(sapply(cov_grp, function(i) sprintf("%d of %d", sum(!is.na(v[i])), sum(i)))), check.names = FALSE) }))
 rownames(clin_cov) <- NULL
 cat("\nInfants with a value, by item and group:\n"); print(clin_cov, row.names = FALSE)
 if (SAVE_TABLES) write.csv(clin_cov, file.path(figureDir, "Table1_ClinicalCoverage.csv"), row.names = FALSE)
