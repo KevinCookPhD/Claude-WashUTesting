@@ -965,6 +965,7 @@ show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 # Rounded frames around the panels (Figs. 2 and 3). Set fig2_boxes / fig3_boxes to FALSE for no frames.
 fig2_boxes   <- TRUE
 fig3_boxes   <- TRUE
+fig3_pad_in  <- 0.15        # Fig. 3: space inside each frame above, below and beside the panels, inches
 fig_box_col  <- "#808080"   # frame color
 fig_box_lwd  <- 0.7         # frame line width
 fig_box_r_in <- 0.12        # corner radius, inches
@@ -1392,17 +1393,21 @@ draw_pt_legend <- function(w_in, h_in, x0_in = 0, y0_in = 0, first_col = 3, ncol
 }
 
 # Draws Panel B above Panel C (and the group legend beside C) in the current device. letters: labels for the two panels.
-draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel_left_in, y0_in = 0) {
-  b_h <- panelB_row_h_in * pB$nrow; c_h <- panelB_row_h_in * pC$nrow; bw <- w_in - x0_in
-  vp  <- function(y, h) grid::viewport(x = grid::unit(x0_in, "in"), y = grid::unit(y0_in + y, "in"), width = grid::unit(bw, "in"),
+# pad_in > 0 (used with the rounded frames of Fig. 3): each of B and C gets pad_in of space above and below inside its own
+# frame (B and C stay stacked, C below B) and the plots are shifted right by pad_in; the legend then sits inside B's frame,
+# centered in the empty block to the right of the last row of plots. With pad_in = 0 the layout is as before (legend centered
+# on the boundary between B's last row and C).
+draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel_left_in, y0_in = 0, pad_in = 0) {
+  b_h <- panelB_row_h_in * pB$nrow; c_h <- panelB_row_h_in * pC$nrow; bw <- w_in - x0_in; p <- pad_in
+  yc <- y0_in + p; yb <- y0_in + c_h + 3 * p                       # bottoms of the plot areas of C and B
+  vp  <- function(y, h) grid::viewport(x = grid::unit(x0_in + p, "in"), y = grid::unit(y, "in"), width = grid::unit(bw, "in"),
                                        height = grid::unit(h, "in"), just = c("left", "bottom"))
-  print(pB$fig, vp = vp(c_h, b_h)); print(pC$fig, vp = vp(0, c_h))
-  # Legend: centered in the empty block to the right of the plots, which spans Panel C's row and the last (partly empty)
-  # row of Panel B above it, so it is centered on the boundary between them.
-  draw_pt_legend(bw, 2 * panelB_row_h_in, x0_in = x0_in, y0_in = y0_in + c_h - panelB_row_h_in)
-  lab <- function(txt, y_top) grid::grid.text(txt, x = grid::unit(bn_letter_in, "in"), y = grid::unit(y0_in + y_top, "in") - grid::unit(0.02, "in"),
+  print(pB$fig, vp = vp(yb, b_h)); print(pC$fig, vp = vp(yc, c_h))
+  if (p > 0) draw_pt_legend(bw, panelB_row_h_in, x0_in = x0_in + p, y0_in = yb)
+  else       draw_pt_legend(bw, 2 * panelB_row_h_in, x0_in = x0_in, y0_in = y0_in + c_h - panelB_row_h_in)
+  lab <- function(txt, y_top) grid::grid.text(txt, x = grid::unit(bn_letter_in + 0.6 * p, "in"), y = grid::unit(y_top - 0.4 * p, "in") - grid::unit(0.02, "in"),
                                               just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
-  lab(letters[1], c_h + b_h); lab(letters[2], c_h)
+  lab(letters[1], y0_in + c_h + b_h + 4 * p); lab(letters[2], y0_in + c_h + 2 * p)      # tops of the B and C frames
 }
 
 # Panel B = the connections where MPT differs from VPT and EPT (which look alike); Panel C = the three oddballs (listed
@@ -1602,17 +1607,19 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     a_h_in  <- Hfig * sc_a
     b_h_in  <- panelB_row_h_in * panelB$nrow                                                                # Panel B
     c_h_in  <- panelB_row_h_in * panelC$nrow                                                                # Panel C (its legend sits beside the plots)
-    fig3_h  <- a_h_in + bn_key_h_in + bn_gap_ab_in + b_h_in + c_h_in
+    p3      <- if (fig3_boxes) fig3_pad_in else 0                                                           # space inside each frame
+    fig3_w  <- panelB_w_in + 2 * p3
+    fig3_h  <- a_h_in + bn_key_h_in + b_h_in + c_h_in + 6 * p3 + (if (fig3_boxes) 0 else bn_gap_ab_in)
     draw_fig3 <- function() {
       grid::grid.newpage()
-      grid::pushViewport(grid::viewport(x = 0, y = grid::unit(fig3_h, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(a_h_in, "in"), just = c("left", "top")))
+      grid::pushViewport(grid::viewport(x = grid::unit(p3, "in"), y = grid::unit(fig3_h - p3, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(a_h_in, "in"), just = c("left", "top")))
       draw_strip(sc_a, lwd = 1)                                                                   # Panel A (same drawing, scaled)
       grid::popViewport()
       # Lobe color key under Panel A: a dot per lobe, same colors as the nodes
-      key_y  <- fig3_h - a_h_in - bn_key_h_in / 2
+      key_y  <- fig3_h - p3 - a_h_in - bn_key_h_in / 2
       key_w  <- c(0.62, 0.7, 0.62, 0.55)                                                          # width of each dot + label (inches); the last is the label's own width
-      key_x0 <- (panelB_w_in - sum(key_w)) / 2
-      grid::grid.rect(x = grid::unit(panelB_w_in / 2, "in"), y = grid::unit(key_y, "in"), width = grid::unit(sum(key_w) + 0.2, "in"),
+      key_x0 <- p3 + (panelB_w_in - sum(key_w)) / 2
+      grid::grid.rect(x = grid::unit(p3 + panelB_w_in / 2, "in"), y = grid::unit(key_y, "in"), width = grid::unit(sum(key_w) + 0.2, "in"),
                       height = grid::unit(bn_key_h_in - 0.04, "in"), gp = grid::gpar(col = "#000000", fill = NA, lwd = 0.85))   # box around the lobe key (same weight as the group legend box)
       for (k in seq_along(lobe_pal)) {
         xk <- key_x0 + sum(key_w[seq_len(k - 1)])
@@ -1621,16 +1628,16 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
         grid::grid.text(names(lobe_pal)[k], x = grid::unit(xk + 0.17, "in"), y = grid::unit(key_y, "in"), just = "left",
                         gp = grid::gpar(fontsize = bn_key_pt))
       }
-      draw_panels_bc(panelB, panelC, panelB_w_in)                                                 # Panels B and C below, indented so the letters fit
-      if (fig3_boxes) {                                                                           # rounded frames: A (strip + lobe key), B, C
-        round_box(0, fig3_h - a_h_in - bn_key_h_in, panelB_w_in, a_h_in + bn_key_h_in)
-        round_box(0, c_h_in, panelB_w_in, b_h_in)
-        round_box(0, 0, panelB_w_in, c_h_in)
-      }
-      grid::grid.text("A", x = grid::unit(bn_letter_in, "in"), y = grid::unit(fig3_h, "in") - grid::unit(0.02, "in"), just = c("left", "top"),
+      draw_panels_bc(panelB, panelC, panelB_w_in, pad_in = p3)                                    # Panels B and C below, indented so the letters fit
+      grid::grid.text("A", x = grid::unit(bn_letter_in + 0.6 * p3, "in"), y = grid::unit(fig3_h - 0.4 * p3, "in") - grid::unit(0.02, "in"), just = c("left", "top"),
                       gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
+      if (fig3_boxes) {                                                                           # rounded frames: A (strip + lobe key), B, C
+        round_box(0, c_h_in + b_h_in + 4 * p3, fig3_w, a_h_in + bn_key_h_in + 2 * p3)
+        round_box(0, c_h_in + 2 * p3, fig3_w, b_h_in + 2 * p3)
+        round_box(0, 0, fig3_w, c_h_in + 2 * p3)
+      }
     }
-    show_fig("Fig3_PanelsAB", panelB_w_in, fig3_h, draw_fig3)
+    show_fig("Fig3_PanelsAB", fig3_w, fig3_h, draw_fig3)
   }
   # The rgl window stays open: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
 }
