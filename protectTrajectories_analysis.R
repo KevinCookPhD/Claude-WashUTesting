@@ -37,7 +37,8 @@
 #   7  Fig. 3 Panel A (BrainNet Viewer edge file; 7b: the same picture in R with rgl, and the combined Fig. 3 A-C)
 #   8  Group slopes and pairwise contrasts for the significant edges
 #   9  Sensitivity analyses and controls
-#  10  Save tables, session info
+#  10  Save tables
+#  11  Sex differences (exploratory), session info
 #
 # NOTES FROM THE ORIGINAL SCRIPT
 #   * onesie_1z065_03 is removed from the connectivity data (extreme outlier).
@@ -73,6 +74,7 @@ RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges 
 RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
 RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns
+RUN_SEX_ANALYSES          <- TRUE   # section 11: sex differences (fetal vs. preterm and within preterm; exploratory)
 RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: fetal vs. preterm with every scan cut to the same number of volumes (needs data/rawTS or data/rawRS)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
@@ -1660,7 +1662,8 @@ with_fc <- function(fc, code, tag = "alt") {
 # The numbers live only in this registry: renumber here (e.g. SI_ID[["gt32"]] <- "SI07") and every file name follows.
 SI_ID <- c(clinical = "SI01", continuous_GA = "SI02", gt32 = "SI03", within_between = "SI04",
            volumes = "SI05", motion_covariate = "SI06", age_matched = "SI07", postnatal = "SI08",
-           unharmonized = "SI09", distance = "SI10", motion_followup = "SI11", equal_volume = "SI12")
+           unharmonized = "SI09", distance = "SI10", motion_followup = "SI11", equal_volume = "SI12",
+           sex_fetal_preterm = "SI13", sex_preterm = "SI14")
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
   if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", name, ".csv")), row.names = FALSE)
@@ -2658,4 +2661,226 @@ if (SAVE_TABLES) {
   write.csv(tab3_display,    file.path(figureDir, "Table3.csv"),                         row.names = FALSE)
   write.csv(slopesMain_wide, file.path(figureDir, "slopesAndContrasts_sigEdges.csv"),    row.names = FALSE)
 }
+
+###############################################################################
+# 11. SEX DIFFERENCES (exploratory)
+#     Repeats the two main comparisons with sex in the model, emphasizing sex effects:
+#       11a  descriptives: sex by group, birth group and scanner
+#       11b  fetal vs. preterm:  FC ~ PMA + scanner + group * sex   (sex main effect, group x sex), plus the
+#            fetal-vs-preterm scan run separately in females and males
+#       11c  within preterm:     FC ~ scanner + PMA * birth group + sex + PMA:sex + birth group:sex
+#            (sex main effect, PMA x sex, birth group x sex; the PMA x birth group test is carried along),
+#            the three-way PMA x birth group x sex test, and the primary PMA x birth group scan adjusted for sex
+#            and within each sex
+#     All edge-wise tests are corrected across the 3,003 edges (BH-FDR) separately for each term. These are
+#     exploratory: the sample is small for interactions (especially the three-way test), so each summary table
+#     also gives the raw-p count against the 5% expected by chance. Sex is coded from goodData$sex (0 = female,
+#     1 = male, as in Table 1; character codes beginning F / M are also accepted); check the printed coding table.
+#     PMA is centered in the preterm models so the sex coefficient is the male - female difference at the mean PMA.
+#     Output numbers: SI13 (fetal vs. preterm) and SI14 (preterm); see SI_ID.
+###############################################################################
+
+if (RUN_SEX_ANALYSES) {
+  sex_cols <- c(Female = "#cc79a7", Male = "#009e73")
+  snm <- function(x) gsub("[^A-Za-z0-9]+", "_", x)                       # term / coefficient name -> column name stem
+
+  ## ---- coding and scan tables ------------------------------------------------------------------------------
+  sex_raw <- scanInfo$sex
+  sexM <- if (is.numeric(sex_raw)) ifelse(sex_raw %in% c(0, 1), sex_raw, NA) else {
+    s1 <- toupper(substr(trimws(as.character(sex_raw)), 1, 1)); ifelse(s1 == "M", 1, ifelse(s1 == "F", 0, NA)) }
+  print(table(raw = sex_raw, coded_male = sexM, useNA = "ifany"))        # check: 0 = female, 1 = male
+  si_sex <- scanInfo; si_sex$sexF <- factor(ifelse(sexM == 1, "Male", "Female"), c("Female", "Male"))
+  message("Scans without a sex value (dropped): ", sum(is.na(si_sex$sexF)))
+  si_sex <- droplevels(si_sex[!is.na(si_sex$sexF), ])
+  stopifnot(all(tapply(as.character(si_sex$sexF), si_sex$shortID, function(x) length(unique(x))) == 1))   # one sex per infant
+  si_sex$grp <- factor(ifelse(si_sex$scanType == "Fetal", "Fetal", as.character(si_sex$BirthCat)), c("Fetal", "EPT", "VPT", "MPT"))
+  print(table(si_sex$scanType, si_sex$sexF))
+  stopifnot(all(table(si_sex$scanType, si_sex$sexF) > 0))
+  pt_sex <- droplevels(si_sex[si_sex$scanType == "Preterm", ])
+  pt_sex$ScanPMAc <- pt_sex$ScanPMA - mean(pt_sex$ScanPMA)
+  pt_f <- droplevels(pt_sex[pt_sex$sexF == "Female", ]); pt_m <- droplevels(pt_sex[pt_sex$sexF == "Male", ])
+
+  ## ---- helpers -----------------------------------------------------------------------------------------------
+  # One lmer per edge: Type II Wald chi-square for each of `terms` and the estimate / SE of each of `coefs`
+  # (coefficient names as in summary(lmer)); FDR-adjusted p per term. Cached; parallel over edges.
+  sex_scan <- function(d0, fml, terms, coefs = character(0), tag) {
+    fml_re <- update(fml, . ~ . + (1 | shortID))
+    nm <- c(unlist(lapply(terms, function(t) paste0(snm(t), c("_chi", "_df", "_p")))),
+            unlist(lapply(coefs, function(k) paste0(snm(k), c("_b", "_se")))))
+    chk <- local({ d <- d0; d$FCz <- as.numeric(goodFCData[d$longID, allConn[1]])        # the names must exist, or every edge would silently be NA
+      m <- suppressMessages(suppressWarnings(lmer(fml_re, data = d)))
+      list(an = rownames(car::Anova(m, type = "II", test = "Chisq")), co = rownames(summary(m)$coefficients)) })
+    stopifnot(all(terms %in% chk$an), all(coefs %in% chk$co))
+    key <- paste(data_key, "sexScan", tag, paste(deparse(fml), collapse = ""), paste(terms, collapse = "|"), paste(coefs, collapse = "|"), table_key(d0))
+    cached(paste0("sexScan_", tag), key = key, {
+      out <- par_lapply(allConn, function(cn) {
+        d <- d0; d$FCz <- as.numeric(goodFCData[d$longID, cn])
+        tryCatch({
+          m  <- suppressMessages(suppressWarnings(lmer(fml_re, data = d)))
+          an <- car::Anova(m, type = "II", test = "Chisq"); sm <- summary(m)$coefficients
+          setNames(c(unlist(lapply(terms, function(t) c(an[t, "Chisq"], an[t, "Df"], an[t, "Pr(>Chisq)"]))),
+                     unlist(lapply(coefs, function(k) c(sm[k, "Estimate"], sm[k, "Std. Error"])))), nm)
+        }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
+      })
+      res <- data.frame(Connection = allConn, do.call(rbind, out), row.names = NULL)
+      for (t in terms) res[[paste0(snm(t), "_pAdj")]] <- p.adjust(res[[paste0(snm(t), "_p")]], "fdr")
+      res
+    })
+  }
+  sex_term_summary <- function(res, terms, labels = terms) do.call(rbind, lapply(seq_along(terms), function(i) {
+    p <- res[[paste0(snm(terms[i]), "_p")]]; pa <- res[[paste0(snm(terms[i]), "_pAdj")]]
+    data.frame(Term = labels[i], `Edges tested` = sum(!is.na(p)), `Raw p < .05` = sum(p < .05, na.rm = TRUE),
+               `Expected by chance` = round(0.05 * sum(!is.na(p))), `FDR p < .05` = sum(pa < .05, na.rm = TRUE),
+               `Smallest FDR p` = signif(suppressWarnings(min(pa, na.rm = TRUE)), 3), check.names = FALSE)
+  }))
+  sex_top <- function(res, term, coef = NULL, n = 20) {                  # the n edges with the smallest p for one term
+    s <- snm(term); o <- order(res[[paste0(s, "_p")]])[seq_len(n)]
+    out <- data.frame(Connection = res$Connection[o], chi = round(res[[paste0(s, "_chi")]][o], 2),
+                      p = signif(res[[paste0(s, "_p")]][o], 3), pAdj = signif(res[[paste0(s, "_pAdj")]][o], 3))
+    if (!is.null(coef)) { k <- snm(coef); out$beta <- round(res[[paste0(k, "_b")]][o], 4); out$se <- round(res[[paste0(k, "_se")]][o], 4) }
+    out
+  }
+  sex_volcano <- function(res, term, coef, xlab) {
+    s <- snm(term); k <- snm(coef)
+    d <- data.frame(b = res[[paste0(k, "_b")]], y = -log10(res[[paste0(s, "_p")]]),
+                    sig = factor(!is.na(res[[paste0(s, "_pAdj")]]) & res[[paste0(s, "_pAdj")]] < .05, c(TRUE, FALSE), c("FDR p < .05", "Not significant")))
+    ggplot(d, aes(b, y, color = sig)) + geom_vline(xintercept = 0, linewidth = 0.3) +
+      geom_point(size = 0.5, alpha = 0.5, stroke = 0) +
+      scale_color_manual(values = c("FDR p < .05" = "#d55e00", "Not significant" = "#8a8a8a"), name = NULL, drop = FALSE) +
+      labs(x = xlab, y = "-log10 p") + si_theme()
+  }
+  sex_qq <- function(res, terms, labels) {                              # observed vs. expected -log10 p (a bend above the line = more small p than chance)
+    d <- do.call(rbind, lapply(seq_along(terms), function(i) {
+      p <- sort(res[[paste0(snm(terms[i]), "_p")]]); p <- p[!is.na(p)]
+      data.frame(Term = labels[i], exp = -log10(ppoints(length(p))), obs = -log10(p)) }))
+    d$Term <- factor(d$Term, labels)
+    ggplot(d, aes(exp, obs)) + geom_abline(linetype = "dashed", linewidth = 0.3) + geom_point(size = 0.5, stroke = 0) +
+      facet_wrap(~Term, ncol = min(length(labels), 2)) + labs(x = "Expected -log10 p", y = "Observed -log10 p") + si_theme()
+  }
+  sex_edge_plot <- function(d, edges, by_type = FALSE) {                # FC vs. PMA by sex for chosen edges
+    long <- do.call(rbind, lapply(edges, function(cn) data.frame(d[c("ScanPMA", "sexF", "scanType")], Edge = cn, FC = as.numeric(goodFCData[d$longID, cn]))))
+    long$Edge <- factor(long$Edge, edges)
+    ggplot(long, aes(ScanPMA, FC, color = sexF)) + geom_point(alpha = 0.35, size = 0.6, stroke = 0) +
+      geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.7) +
+      scale_color_manual(values = sex_cols, name = NULL) +
+      (if (by_type) facet_grid(scanType ~ Edge, scales = "free") else facet_wrap(~Edge, scales = "free_y", ncol = 3)) +
+      labs(x = "PMA at scan (weeks)", y = "Connectivity (Fisher z)") + si_theme()
+  }
+
+  ## ---- 11a. Descriptives -------------------------------------------------------------------------------------
+  sex_desc <- do.call(rbind, lapply(levels(si_sex$grp), function(g) {
+    d <- si_sex[si_sex$grp == g, ]; inf <- d[!duplicated(d$shortID), ]
+    data.frame(Group = g, Infants = nrow(inf), `Female infants` = sum(inf$sexF == "Female"), `Male infants` = sum(inf$sexF == "Male"),
+               `Male, %` = round(100 * mean(inf$sexF == "Male"), 1), Scans = nrow(d), `Female scans` = sum(d$sexF == "Female"), `Male scans` = sum(d$sexF == "Male"),
+               `PMA at scan, female, mean (SD)` = sprintf("%.1f (%.1f)", mean(d$ScanPMA[d$sexF == "Female"]), sd(d$ScanPMA[d$sexF == "Female"])),
+               `PMA at scan, male, mean (SD)`   = sprintf("%.1f (%.1f)", mean(d$ScanPMA[d$sexF == "Male"]),   sd(d$ScanPMA[d$sexF == "Male"])),
+               `3T scans, female, %` = if (g == "Fetal") NA else round(100 * mean(d$scanner[d$sexF == "Female"] == levels(si_sex$scanner)[2]), 1),
+               `3T scans, male, %`   = if (g == "Fetal") NA else round(100 * mean(d$scanner[d$sexF == "Male"]   == levels(si_sex$scanner)[2]), 1),
+               check.names = FALSE)
+  }))
+  print(sex_desc, row.names = FALSE)
+  inf_sex <- si_sex[!duplicated(si_sex$shortID), ]
+  tryCatch(print(chisq.test(table(inf_sex$scanType, inf_sex$sexF))), error = function(e) message("Sex by group test skipped: ", e$message))
+  tryCatch(print(chisq.test(table(inf_sex$BirthCat[inf_sex$scanType == "Preterm"], inf_sex$sexF[inf_sex$scanType == "Preterm"]))), error = function(e) message("Sex by birth group test skipped: ", e$message))
+  tryCatch(print(t.test(ScanPMA ~ sexF, data = pt_sex)), error = function(e) message("PMA by sex test skipped: ", e$message))
+  si_table(sex_desc, "sex_fetal_preterm", "sex_descriptives")
+
+  ## ---- 11b. Fetal vs. preterm ----------------------------------------------------------------------------------
+  # Model: FC ~ PMA + scanner + group * sex. Male - female difference within the fetal group = sexFMale; the change of that
+  # difference in preterm scans = scanTypePreterm:sexFMale (the interaction tested by scanType:sexF).
+  sexfp_terms <- c("sexF", "scanType:sexF"); sexfp_labels <- c("Sex (male vs. female)", "Group x sex")
+  res_sex_fp <- sex_scan(si_sex, FCz ~ ScanPMA + scanner + scanType * sexF, sexfp_terms,
+                         coefs = c("sexFMale", "scanTypePreterm:sexFMale"), tag = "fetalPreterm")
+  sexfp_sum <- sex_term_summary(res_sex_fp, sexfp_terms, sexfp_labels); print(sexfp_sum, row.names = FALSE)
+  sexfp_top_main <- sex_top(res_sex_fp, "sexF", "sexFMale");                         print(head(sexfp_top_main, 10))
+  sexfp_top_intx <- sex_top(res_sex_fp, "scanType:sexF", "scanTypePreterm:sexFMale"); print(head(sexfp_top_intx, 10))
+  # Direction of the FDR-significant edges (sexFMale > 0 = higher FC in males)
+  for (k in c("sexF", "scanType:sexF")) {
+    sg <- res_sex_fp[[paste0(snm(k), "_pAdj")]] < .05 & !is.na(res_sex_fp[[paste0(snm(k), "_pAdj")]])
+    bk <- res_sex_fp[[paste0(snm(if (k == "sexF") "sexFMale" else "scanTypePreterm:sexFMale"), "_b")]]
+    message(k, ": ", sum(sg), " FDR-significant edges (", sum(sg & bk > 0), " with a positive coefficient, ", sum(sg & bk < 0), " negative)")
+  }
+  # Fetal-vs-preterm scan run separately in each sex (the primary scan model); compared with the primary result and with each other
+  sex_f <- droplevels(si_sex[si_sex$sexF == "Female", ]); sex_m <- droplevels(si_sex[si_sex$sexF == "Male", ])
+  res_sex_f <- run_fetal(sex_f, "sexFemale"); res_sex_m <- run_fetal(sex_m, "sexMale")
+  print(cmp_fetal(res_sex_f, n_scans = nrow(sex_f))); print(cmp_fetal(res_sex_m, n_scans = nrow(sex_m)))
+  sex_beta_r <- c(r_female_vs_male_betas = round(cor(res_sex_f$scanTypeb, res_sex_m$scanTypeb, use = "complete.obs"), 3),
+                  rho_female_vs_male_betas = round(cor(res_sex_f$scanTypeb, res_sex_m$scanTypeb, method = "spearman", use = "complete.obs"), 3),
+                  both_FDR_sig = sum(res_sex_f$scanTypep.Adj < .05 & res_sex_m$scanTypep.Adj < .05, na.rm = TRUE),
+                  female_only_FDR_sig = sum(res_sex_f$scanTypep.Adj < .05 & !(res_sex_m$scanTypep.Adj < .05), na.rm = TRUE),
+                  male_only_FDR_sig = sum(res_sex_m$scanTypep.Adj < .05 & !(res_sex_f$scanTypep.Adj < .05), na.rm = TRUE),
+                  same_direction_of_primary_sig_edges = sum(sigFetal & sign(res_sex_f$scanTypeb) == sign(res_sex_m$scanTypeb), na.rm = TRUE))
+  print(sex_beta_r)
+
+  si_table(sexfp_sum,      "sex_fetal_preterm", "sexTests_summary")
+  si_table(sexfp_top_main, "sex_fetal_preterm", "sexMainEffect_topEdges")
+  si_table(sexfp_top_intx, "sex_fetal_preterm", "groupBySex_topEdges")
+  si_table(data.frame(Measure = names(sex_beta_r), Value = unname(sex_beta_r)), "sex_fetal_preterm", "bySex_femaleVsMale_agreement")
+  si_fetal("sex_fetal_preterm", "bySex", list(`Females only` = res_sex_f, `Males only` = res_sex_m),
+           list(`Females only` = nrow(sex_f), `Males only` = nrow(sex_m)))                              # results table + betas vs. primary
+  d_fm <- data.frame(f = res_sex_f$scanTypeb, m = res_sex_m$scanTypeb, sig = sigFetal)
+  p_fm <- ggplot(d_fm, aes(f, m)) + geom_abline(linetype = "dashed", linewidth = 0.3) +
+    geom_point(data = d_fm[!d_fm$sig, ], color = "#8a8a8a", alpha = 0.2, size = 0.4, stroke = 0) +
+    geom_point(data = d_fm[d_fm$sig, ], color = col_preterm, alpha = 0.35, size = 0.5, stroke = 0) +
+    labs(x = "Females: group difference (beta)", y = "Males: group difference (beta)") + si_theme()
+  top_fp <- head(sexfp_top_intx$Connection, 4)
+  si_fig("sex_fetal_preterm", "sexEffects", 8.2, 6.6, function()
+    print(ggpubr::ggarrange(
+      ggpubr::ggarrange(sex_volcano(res_sex_fp, "sexF", "sexFMale", "Male - female (beta, fetal group)"),
+                        sex_volcano(res_sex_fp, "scanType:sexF", "scanTypePreterm:sexFMale", "Group x sex (beta)"),
+                        p_fm, nrow = 1, labels = c("A", "B", "C"), common.legend = TRUE, legend = "bottom"),
+      sex_edge_plot(si_sex, top_fp, by_type = TRUE), ncol = 1, heights = c(1, 1.15), labels = c("", "D"))))
+  si_fig("sex_fetal_preterm", "qq", 4.6, 2.9, function() print(sex_qq(res_sex_fp, sexfp_terms, sexfp_labels)))
+
+  ## ---- 11c. Within preterm ---------------------------------------------------------------------------------------
+  print(group_counts(pt_f)); print(group_counts(pt_m))
+  pts_terms  <- c("sexF", "ScanPMAc:sexF", "BirthCat:sexF", "ScanPMAc:BirthCat")
+  pts_labels <- c("Sex (male vs. female)", "PMA x sex", "Birth group x sex", "PMA x birth group")
+  res_sex_pt <- sex_scan(pt_sex, FCz ~ scanner + ScanPMAc * BirthCat + sexF + ScanPMAc:sexF + BirthCat:sexF, pts_terms,
+                         coefs = c("sexFMale", "ScanPMAc:sexFMale"), tag = "preterm")
+  pts_sum <- sex_term_summary(res_sex_pt, pts_terms, pts_labels); print(pts_sum, row.names = FALSE)
+  pts_top_main <- sex_top(res_sex_pt, "sexF", "sexFMale");              print(head(pts_top_main, 10))
+  pts_top_pma  <- sex_top(res_sex_pt, "ScanPMAc:sexF", "ScanPMAc:sexFMale"); print(head(pts_top_pma, 10))
+  pts_top_bc   <- sex_top(res_sex_pt, "BirthCat:sexF");                 print(head(pts_top_bc, 10))
+  # Three-way PMA x birth group x sex (does the Fig. 3 slope pattern differ by sex?)  Exploratory: small cells.
+  res_sex_pt3 <- sex_scan(pt_sex, FCz ~ scanner + ScanPMAc * BirthCat * sexF, "ScanPMAc:BirthCat:sexF", tag = "preterm3way")
+  pts3_sum <- sex_term_summary(res_sex_pt3, "ScanPMAc:BirthCat:sexF", "PMA x birth group x sex"); print(pts3_sum, row.names = FALSE)
+  pts3_top <- sex_top(res_sex_pt3, "ScanPMAc:BirthCat:sexF"); print(head(pts3_top, 10))
+  # The 16 primary PMA x prematurity edges: do any of the sex terms reach nominal significance there?
+  prim_sex <- data.frame(Connection = sigEdges,
+                         `Sex, p` = signif(res_sex_pt$sexF_p[match(sigEdges, allConn)], 3),
+                         `PMA x sex, p` = signif(res_sex_pt$ScanPMAc_sexF_p[match(sigEdges, allConn)], 3),
+                         `Birth group x sex, p` = signif(res_sex_pt$BirthCat_sexF_p[match(sigEdges, allConn)], 3),
+                         `PMA x birth group x sex, p` = signif(res_sex_pt3$ScanPMAc_BirthCat_sexF_p[match(sigEdges, allConn)], 3), check.names = FALSE)
+  print(prim_sex, row.names = FALSE)
+  # The primary scan adjusted for sex, and run within each sex
+  res_pt_sexadj <- wald_scan(pt_sex, FCz ~ scanner + sexF + ScanPMA * BirthCat, "ScanPMA:BirthCat")
+  res_pt_f      <- wald_scan(pt_f, fml_main, "ScanPMA:BirthCat")
+  res_pt_m      <- wald_scan(pt_m, fml_main, "ScanPMA:BirthCat")
+  cmp_pt_sexadj <- compare_sets(res_pt_sexadj); cmp_pt_f <- compare_sets(res_pt_f); cmp_pt_m <- compare_sets(res_pt_m)
+  print(rbind(`Adjusted for sex` = cmp_pt_sexadj$summary, Female = cmp_pt_f$summary, Male = cmp_pt_m$summary))
+  slopes_f <- tryCatch(slope_wide(slope_table(pt_f, sigEdges, fml_main)), error = function(e) { message("Female slopes skipped: ", e$message); NULL })
+  slopes_m <- tryCatch(slope_wide(slope_table(pt_m, sigEdges, fml_main)), error = function(e) { message("Male slopes skipped: ", e$message); NULL })
+
+  si_table(rbind(pts_sum, pts3_sum), "sex_preterm", "sexTests_summary")
+  si_table(pts_top_main, "sex_preterm", "sexMainEffect_topEdges")
+  si_table(pts_top_pma,  "sex_preterm", "pmaBySex_topEdges")
+  si_table(pts_top_bc,   "sex_preterm", "birthGroupBySex_topEdges")
+  si_table(pts3_top,     "sex_preterm", "threeWay_topEdges")
+  si_table(prim_sex,     "sex_preterm", "sexTerms_on16PrimaryEdges")
+  si_intx("sex_preterm", "pmaByPrematurity_bySex",
+          list(`Adjusted for sex` = res_pt_sexadj, `Females only` = res_pt_f, `Males only` = res_pt_m),
+          list(`Adjusted for sex` = cmp_pt_sexadj, `Females only` = cmp_pt_f, `Males only` = cmp_pt_m))
+  if (!is.null(slopes_f)) si_table(slopes_f, "sex_preterm", "pmaByPrematurity_slopesFemales")
+  if (!is.null(slopes_m)) si_table(slopes_m, "sex_preterm", "pmaByPrematurity_slopesMales")
+  top_pt <- head(pts_top_pma$Connection, 6)
+  si_fig("sex_preterm", "sexEffects", 8.2, 7.4, function()
+    print(ggpubr::ggarrange(
+      ggpubr::ggarrange(sex_volcano(res_sex_pt, "sexF", "sexFMale", "Male - female (beta, at mean PMA)"),
+                        sex_volcano(res_sex_pt, "ScanPMAc:sexF", "ScanPMAc:sexFMale", "PMA x sex (beta per week)"),
+                        nrow = 1, labels = c("A", "B"), common.legend = TRUE, legend = "bottom"),
+      sex_edge_plot(pt_sex, top_pt), ncol = 1, heights = c(1, 1.7), labels = c("", "C"))))
+  si_fig("sex_preterm", "qq", 6.2, 5.0, function() print(sex_qq(res_sex_pt, pts_terms, pts_labels)))
+}
+
 sessionInfo()
