@@ -614,11 +614,15 @@ table1_scan <- rbind(
   `Scans with motion data, n`         = sapply(scan_cols, function(i) sum(!is.na(scan_fd[i]))))
 table1_scan
 
-# Table 1 by participant: the same rows and layout as the scan-level Table 1 (columns EPT, VPT, MPT, Total preterm, Fetal),
-# but each infant contributes one value. Scan-based variables (volumes, minutes, motion, PMA at scan) are first averaged
-# over the infant's scans; birth, sex, APGAR and clinical rows are infant-level already. Fetal infants have no APGAR or
-# clinical data ("-"). Clinical columns are looked up in demoData by name pattern (printed below: check them, and override
-# `clin_col` if a pattern picked the wrong column or none); binary items are counted as 1/yes.
+# Table 1 in two versions with identical rows and columns (EPT, VPT, MPT, Total preterm, Fetal):
+#   Table1_ByScan        every scan is a row: scan-based and infant-level variables are summarized over scans, so an
+#                        infant with three scans is counted three times (as in the original Table 1). n = infants.
+#   Table1_ByParticipant every infant is one row: scan-based variables (volumes, minutes, motion, PMA at scan) are first
+#                        averaged over the infant's scans, and birth, sex, APGAR and clinical items are counted once.
+# Clinical items (BPD, PDA, ROP, infection, NEC, days on ventilation) are infant-level facts. They are looked up by name
+# pattern in demoData (one row per infant) and in goodData (one row per scan); for each item the candidate column with the
+# fewest missing infants is used. The candidates are printed with their % missing: check them, and set `clin_choice`
+# below if a different column is right. Fetal infants have no APGAR or clinical data ("-").
 male_scan <- if (is.numeric(scanInfo$sex)) ifelse(scanInfo$sex %in% c(0, 1), scanInfo$sex, NA) else {
   s1 <- toupper(substr(trimws(as.character(scanInfo$sex)), 1, 1)); ifelse(s1 == "M", 1, ifelse(s1 == "F", 0, NA)) }     # 0 = female, 1 = male
 scan_df <- data.frame(shortID = as.character(scanInfo$shortID),
@@ -629,39 +633,61 @@ if (anyDuplicated(unique(scan_df[c("shortID", "grp")])$shortID)) message("Some i
 inf_t <- do.call(rbind, lapply(split(scan_df, scan_df$shortID), function(d) data.frame(
   shortID = d$shortID[1], grp = d$grp[1], n_scans = nrow(d), pma = mean(d$pma), birthPMA = d$birthPMA[1], male = d$male[1],
   vol = mean(d$vol), mins = mean(d$mins), fd = if (all(is.na(d$fd))) NA_real_ else mean(d$fd, na.rm = TRUE), stringsAsFactors = FALSE)))
-find_col <- function(pat) { h <- grep(pat, names(demoData), ignore.case = TRUE, value = TRUE); if (length(h)) h[1] else NA_character_ }
-clin_col <- sapply(c(`Bronchopulmonary dysplasia` = "bronch|bpd", `Patent ductus arteriosus` = "ductus|pda", `Retinopathy of prematurity` = "retinopath|rop",
-                     `Clinical infection` = "infect", `Necrotizing enterocolitis` = "necrotiz|nec", `Days on ventilation` = "ventil"), find_col)
-# clin_col["Days on ventilation"] <- "<column name in demoData>"     # override here if needed
-print(clin_col)                                                       # NA = no column matched: that row is skipped
+pt_ids <- as.character(inf_t$shortID[inf_t$grp != "Fetal"])
+first_ok <- function(z) if (all(is.na(z))) NA else z[!is.na(z)][1]
+clin_vals <- function(src, col) {                                    # one value per preterm infant
+  if (src == "demo") demoData[[col]][match(pt_ids, as.character(demoData$Subject))]
+  else unname(sapply(split(goodData[[col]], as.character(goodData$shortID)), first_ok)[pt_ids])
+}
+clin_pat <- c(`APGAR 1 minute` = "apgar.?1(\\D|$)", `APGAR 5 minute` = "apgar.?5(\\D|$)",
+              `Bronchopulmonary dysplasia` = "bronch|bpd", `Patent ductus arteriosus` = "ductus|pda", `Retinopathy of prematurity` = "retinopath|rop",
+              `Clinical infection` = "infect", `Necrotizing enterocolitis` = "necrotiz|nec", `Days on ventilation` = "ventil")
+clin_cand <- do.call(rbind, lapply(names(clin_pat), function(k) {
+  cs <- rbind(if (length(grep(clin_pat[[k]], names(demoData), ignore.case = TRUE))) data.frame(src = "demo", col = grep(clin_pat[[k]], names(demoData), ignore.case = TRUE, value = TRUE)),
+              if (length(grep(clin_pat[[k]], names(goodData), ignore.case = TRUE))) data.frame(src = "scan", col = grep(clin_pat[[k]], names(goodData), ignore.case = TRUE, value = TRUE)))
+  if (is.null(cs)) return(NULL)
+  cs$item <- k; cs$pct_missing <- sapply(seq_len(nrow(cs)), function(r) round(100 * mean(is.na(clin_vals(cs$src[r], cs$col[r]))), 1)); cs }))
+print(clin_cand[, c("item", "src", "col", "pct_missing")], row.names = FALSE)             # src: demo = demoData, scan = goodData
+# clin_choice <- list(`Bronchopulmonary dysplasia` = c("demo", "<column name>"))        # override a pick here (src, column)
+clin_choice <- lapply(split(clin_cand, clin_cand$item), function(cs) { cs <- cs[order(cs$pct_missing, cs$src != "demo"), ]; c(cs$src[1], cs$col[1]) })
+if (exists("clin_choice_override")) clin_choice[names(clin_choice_override)] <- clin_choice_override
+clin_items <- intersect(names(clin_pat), names(clin_choice))
+message("Clinical columns used: ", paste(sapply(clin_items, function(k) paste0(k, " <- ", clin_choice[[k]][2], " (", clin_choice[[k]][1], ")")), collapse = "; "))
+clin_inf <- data.frame(shortID = pt_ids, stringsAsFactors = FALSE)
+for (k in clin_items) clin_inf[[k]] <- clin_vals(clin_choice[[k]][1], clin_choice[[k]][2])
+for (k in clin_items) { m <- mean(is.na(clin_inf[[k]])); if (m > 0.1) warning(k, ": ", round(100 * m), "% of preterm infants have no value in the chosen column. Check clin_cand above.") }
 as_yes <- function(x) if (is.logical(x)) x else if (is.numeric(x)) ifelse(is.na(x), NA, x > 0) else {
   v <- tolower(trimws(as.character(x))); ifelse(v %in% c("1", "yes", "y", "true"), TRUE, ifelse(v %in% c("0", "no", "n", "false"), FALSE, NA)) }
-dm_inf <- data.frame(shortID = as.character(inf$shortID), apgar1 = inf[["APGAR.1min"]], apgar5 = inf[["APGAR.5min"]], stringsAsFactors = FALSE)
-for (k in names(clin_col)[!is.na(clin_col)]) dm_inf[[k]] <- inf[[clin_col[[k]]]]
-inf_t <- merge(inf_t, dm_inf, by = "shortID", all.x = TRUE)            # fetal infants get NA for the preterm-only items
-for (k in setdiff(names(clin_col)[!is.na(clin_col)], "Days on ventilation")) print(table(inf_t[[k]][inf_t$grp != "Fetal"], useNA = "ifany"))   # check the coding
-inf_cols <- list(EPT = inf_t$grp == "EPT", VPT = inf_t$grp == "VPT", MPT = inf_t$grp == "MPT", Total = inf_t$grp != "Fetal", Fetal = inf_t$grp == "Fetal")
-ic  <- function(f) sapply(inf_cols, function(i) f(inf_t[i, ]))
+for (k in setdiff(clin_items, c("Days on ventilation", "APGAR 1 minute", "APGAR 5 minute"))) { cat("\n", k, ":\n"); print(table(clin_inf[[k]], useNA = "ifany")) }   # check the coding
+inf_t   <- merge(inf_t,   clin_inf, by = "shortID", all.x = TRUE)       # infant-level items; fetal infants get NA
+scan_df <- merge(scan_df, clin_inf, by = "shortID", all.x = TRUE)       # each scan carries its infant's values
+
 msd <- function(x, d = 1) sprintf(paste0("%.", d, "f (%.", d, "f)"), mean(x, na.rm = TRUE), sd(x, na.rm = TRUE))
 npc <- function(x) sprintf("%d (%.0f%%)", sum(x, na.rm = TRUE), 100 * mean(x, na.rm = TRUE))
-preterm_only <- function(f) ic(function(d) if (all(d$grp == "Fetal")) "-" else f(d))
-table1_participant <- rbind(
-  `n`                                  = ic(nrow),
-  `Total scans`                        = ic(function(d) sum(d$n_scans)),
-  `Mean number of scans`               = ic(function(d) sprintf("%.1f", mean(d$n_scans))),
-  `Mean Volumes`                       = ic(function(d) msd(d$vol)),
-  `Mean Scan Time (min)`               = ic(function(d) msd(d$mins)),
-  `Mean Framewise Displacement`        = ic(function(d) msd(d$fd, 2)),
-  `PMA at scan (Weeks)`                = ic(function(d) msd(d$pma, 2)),
-  `PMA at birth (Weeks)`               = ic(function(d) msd(d$birthPMA, 2)),
-  `Sex (Male)`                         = ic(function(d) npc(d$male == 1)),
-  `APGAR 1 minute`                     = preterm_only(function(d) msd(d$apgar1, 2)),
-  `APGAR 5 minute`                     = preterm_only(function(d) msd(d$apgar5, 2)),
-  do.call(rbind, lapply(names(clin_col)[!is.na(clin_col)], function(k) {
-    r <- if (k == "Days on ventilation") preterm_only(function(d) msd(d[[k]], 2)) else preterm_only(function(d) npc(as_yes(d[[k]])))
-    matrix(r, nrow = 1, dimnames = list(k, names(r))) })))
-stopifnot(all(as.numeric(table1_participant["n", c("EPT", "VPT", "MPT")]) == c(nlevels(droplevels(pt$shortID[pt$BirthCat == "EPT"])), nlevels(droplevels(pt$shortID[pt$BirthCat == "VPT"])), nlevels(droplevels(pt$shortID[pt$BirthCat == "MPT"])))))
-table1_participant
+grp_sel <- function(g) list(EPT = g == "EPT", VPT = g == "VPT", MPT = g == "MPT", Total = g != "Fetal", Fetal = g == "Fetal")
+make_table1 <- function(d) {                                           # d = scan_df (by scan) or inf_t (by participant)
+  sel  <- grp_sel(d$grp)
+  ic   <- function(f) sapply(sel, function(i) f(d[i, ]))
+  pre  <- function(f) ic(function(x) if (all(x$grp == "Fetal")) "-" else f(x))
+  rows <- list(
+    `n`                           = sapply(sel, function(i) length(unique(d$shortID[i]))),
+    `Total scans`                 = sapply(grp_sel(scan_df$grp), function(i) sum(i)),
+    `Mean number of scans`        = sapply(grp_sel(inf_t$grp), function(i) sprintf("%.1f", mean(inf_t$n_scans[i]))),
+    `Mean Volumes`                = ic(function(x) msd(x$vol)),
+    `Mean Scan Time (min)`        = ic(function(x) msd(x$mins)),
+    `Mean Framewise Displacement` = ic(function(x) msd(x$fd, 2)),
+    `PMA at scan (Weeks)`         = ic(function(x) msd(x$pma, 2)),
+    `PMA at birth (Weeks)`        = ic(function(x) msd(x$birthPMA, 2)),
+    `Sex (Male)`                  = ic(function(x) npc(x$male == 1)))
+  for (k in clin_items)                                                # APGAR and clinical items: mean (SD) for APGAR and ventilation days, n (%) for yes/no items
+    rows[[k]] <- if (grepl("^APGAR|ventilation", k)) pre(function(x) msd(x[[k]], 2)) else pre(function(x) npc(as_yes(x[[k]])))
+  m <- do.call(rbind, lapply(rows, as.character)); dimnames(m) <- list(names(rows), names(sel)); m
+}
+Table1_ByScan        <- make_table1(scan_df)
+Table1_ByParticipant <- make_table1(inf_t)
+stopifnot(all(as.numeric(Table1_ByParticipant["n", c("EPT", "VPT", "MPT")]) == c(nlevels(droplevels(pt$shortID[pt$BirthCat == "EPT"])), nlevels(droplevels(pt$shortID[pt$BirthCat == "VPT"])), nlevels(droplevels(pt$shortID[pt$BirthCat == "MPT"])))))
+cat("\nTable 1, by scan (n = infants; other rows over scans):\n");  print(Table1_ByScan, quote = FALSE)
+cat("\nTable 1, by participant (each infant once):\n");             print(Table1_ByParticipant, quote = FALSE)
 
 # Fetal vs. preterm sample comparison (PMA at scan; sex)
 inf_all <- scanInfo[!duplicated(scanInfo$shortID), ]
@@ -2753,8 +2779,8 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
 ###############################################################################
 
 if (SAVE_TABLES) {
-  write.csv(cbind(Row = rownames(table1_participant), table1_participant), file.path(figureDir, "Table1_byParticipant.csv"), row.names = FALSE)
-  write.csv(cbind(Row = rownames(table1_scan),   table1_scan),   file.path(figureDir, "Table1_scanLevelRows.csv"), row.names = FALSE)
+  write.csv(cbind(Row = rownames(Table1_ByScan),        Table1_ByScan),        file.path(figureDir, "Table1_ByScan.csv"),        row.names = FALSE)
+  write.csv(cbind(Row = rownames(Table1_ByParticipant), Table1_ByParticipant), file.path(figureDir, "Table1_ByParticipant.csv"), row.names = FALSE)
   write.csv(fetalRes,        file.path(figureDir, "fetalVsPreterm_allEdges.csv"),        row.names = FALSE)
   write.csv(table2,          file.path(figureDir, "Table2_homotopic.csv"),               row.names = FALSE)
   write.csv(intxRes,         file.path(figureDir, "pmaByPrematurity_allEdges.csv"),      row.names = FALSE)
