@@ -962,6 +962,18 @@ show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
 # (the sizes used for the separate files above), trimmed, and placed in one figure, so the proportions of the text
 # stay as in the separate pieces. The chords are placed as pictures; the
 # separate Fig2_chord_* files remain available as vectors for editing. Whole-figure size is set by fig2_box_h_in.
+# Rounded frames around the panels (Figs. 2 and 3). Set fig2_boxes / fig3_boxes to FALSE for no frames.
+fig2_boxes   <- TRUE
+fig3_boxes   <- TRUE
+fig_box_col  <- "#808080"   # frame color
+fig_box_lwd  <- 0.7         # frame line width
+fig_box_r_in <- 0.12        # corner radius, inches
+fig_box_inset_in <- 0.03    # frames are drawn this far inside the stated rectangle so the line is not clipped and neighbouring frames do not touch
+round_box <- function(x, y, w, h) {                  # x, y = lower-left corner, inches; draws in the current viewport
+  d <- fig_box_inset_in
+  grid::grid.roundrect(x = grid::unit(x + d, "in"), y = grid::unit(y + d, "in"), width = grid::unit(w - 2 * d, "in"), height = grid::unit(h - 2 * d, "in"),
+                       just = c("left", "bottom"), r = grid::unit(fig_box_r_in, "in"), gp = grid::gpar(col = fig_box_col, fill = NA, lwd = fig_box_lwd))
+}
 RUN_FIG2_ASSEMBLY <- TRUE
 fig2_box_h_in   <- 4.2    # base height of a box, inches: sets the size of the matrices (and the first guess for the chords)
 fig2_matrix_scale <- 1.1  # matrix height relative to the base height (content_h); larger = bigger matrix next to the chord (the chord is 1.15 on the same scale)
@@ -1002,12 +1014,14 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
     x0 <- 0.05
     for (k in 1:2) {                                              # k = 1: preterm (top), 2: fetal (bottom)
       y_bot <- 0.05 + (2 - k) * (box_h + fig2_gap_in)
+      if (fig2_boxes) round_box(x0, y_bot, left_w, box_h)
       img(ch[[k]], x0 + fig2_pad_in, y_bot + fig2_pad_in * 0.5, ch_w, chord_h)
       img(mx[[k]], x0 + fig2_pad_in + ch_w + 0.1, y_bot + fig2_pad_in * 0.5 + (chord_h - mx_h) / 2, mx_w, mx_h)
       txt(c("Preterm", "Fetal")[k], x0 + left_w / 2, y_bot + box_h - fig2_title_h_in / 2, fig2_title_pt)
       txt(c("A", "B")[k], x0 + 0.1, y_bot + box_h - 0.08, fig2_letter_pt, just = c("left", "top"))
     }
     xc <- x0 + left_w + fig2_gap_in
+    if (fig2_boxes) round_box(xc, 0.05, right_w, 2 * box_h + fig2_gap_in)
     img(hm, xc + fig2_pad_in, 0.05 + fig2_pad_in, homo_w, homo_h)
     txt("C", xc + 0.1, 0.05 + 2 * box_h + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
   }
@@ -1608,6 +1622,11 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
                         gp = grid::gpar(fontsize = bn_key_pt))
       }
       draw_panels_bc(panelB, panelC, panelB_w_in)                                                 # Panels B and C below, indented so the letters fit
+      if (fig3_boxes) {                                                                           # rounded frames: A (strip + lobe key), B, C
+        round_box(0, fig3_h - a_h_in - bn_key_h_in, panelB_w_in, a_h_in + bn_key_h_in)
+        round_box(0, c_h_in, panelB_w_in, b_h_in)
+        round_box(0, 0, panelB_w_in, c_h_in)
+      }
       grid::grid.text("A", x = grid::unit(bn_letter_in, "in"), y = grid::unit(fig3_h, "in") - grid::unit(0.02, "in"), just = c("left", "top"),
                       gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
     }
