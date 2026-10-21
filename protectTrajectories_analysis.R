@@ -1614,6 +1614,24 @@ slopesMain_wide <- slope_wide(slopesMain)
 slopesMain_wide
 # Uncorrected contrast p-values: these are follow-ups to the FDR-significant omnibus interaction.
 
+# Supplemental table of the post hoc results: group slopes and pairwise slope contrasts on the 16 edges, with full region
+# names, the Fig. 3 panel, uncorrected p and BH-FDR p (across the 16 edges, per contrast). Written as SI16 (see SI_ID).
+si_posthoc <- local({
+  tl <- slopesMain; g <- function(k) tl[tl$term == k, ]
+  cell <- function(r) sprintf("%s [%s, %s]", fmt3(r$est), fmt3(r$lo), fmt3(r$hi))
+  ctr  <- function(k, lab) { r <- g(k); setNames(data.frame(cell(r), fmt_p(r$p), fmt_p(p.adjust(r$p, "fdr")), stringsAsFactors = FALSE),
+                                                 paste0(lab, c("", ", p", ", FDR p"))) }
+  e <- g("slope_EPT")$Connection
+  cbind(`Region 1` = sapply(strsplit(e, "_", fixed = TRUE), function(p) full_name(p[1])),
+        `Region 2` = sapply(strsplit(e, "_", fixed = TRUE), function(p) full_name(p[2])),
+        `Fig. 3 panel` = ifelse(e %in% panelC_edges, "C", "B"),
+        `EPT slope` = cell(g("slope_EPT")), `VPT slope` = cell(g("slope_VPT")), `MPT slope` = cell(g("slope_MPT")),
+        ctr("MPT_vs_EPT", "MPT - EPT"), ctr("MPT_vs_VPT", "MPT - VPT"), ctr("VPT_vs_EPT", "VPT - EPT"))
+})
+si_posthoc_counts <- sapply(c(`MPT - EPT` = "MPT_vs_EPT", `MPT - VPT` = "MPT_vs_VPT", `VPT - EPT` = "VPT_vs_EPT"), function(k) {
+  p <- slopesMain$p[slopesMain$term == k]; c(`p < .05` = sum(p < .05), `FDR p < .05 (across 16)` = sum(p.adjust(p, "fdr") < .05), Edges = length(p)) })
+si_posthoc_counts
+
 
 ###############################################################################
 # 9. SENSITIVITY ANALYSES AND CONTROLS
@@ -1665,7 +1683,7 @@ with_fc <- function(fc, code, tag = "alt") {
 SI_ID <- c(clinical = "SI01", continuous_GA = "SI02", gt32 = "SI03", within_between = "SI04",
            volumes = "SI05", motion_covariate = "SI06", age_matched = "SI07", postnatal = "SI08",
            unharmonized = "SI09", distance = "SI10", motion_followup = "SI11", equal_volume = "SI12",
-           sex_fetal_preterm = "SI13", sex_preterm = "SI14", four_group = "SI15")
+           sex_fetal_preterm = "SI13", sex_preterm = "SI14", four_group = "SI15", posthoc = "SI16")
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
   if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", name, ".csv")), row.names = FALSE)
@@ -1715,6 +1733,9 @@ si_intx <- function(key, name, res_list, cmp_list) {
   dm <- facet_dims(length(res_list))
   si_fig(key, paste0(name, "_pvalues"), dm[["w"]], dm[["h"]], function() print(intx_scatter(res_list)))
 }
+
+si_table(si_posthoc, "posthoc", "pmaByPrematurity_posthocSlopeContrasts")
+si_table(data.frame(Contrast = colnames(si_posthoc_counts), t(si_posthoc_counts), check.names = FALSE), "posthoc", "pmaByPrematurity_posthocCounts")
 
 if (RUN_SENSITIVITY) {
 
