@@ -38,7 +38,8 @@
 #   8  Group slopes and pairwise contrasts for the significant edges
 #   9  Sensitivity analyses and controls
 #  10  Save tables
-#  11  Sex differences (exploratory), session info
+#  11  Sex differences (exploratory)
+#  12  Four-group model (Fetal, EPT, VPT, MPT), session info
 #
 # NOTES FROM THE ORIGINAL SCRIPT
 #   * onesie_1z065_03 is removed from the connectivity data (extreme outlier).
@@ -75,6 +76,7 @@ RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. pret
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
 RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns
 RUN_SEX_ANALYSES          <- TRUE   # section 11: sex differences (fetal vs. preterm and within preterm; exploratory)
+RUN_FOUR_GROUP            <- TRUE   # section 12: four-group model (Fetal, EPT, VPT, MPT)
 RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: fetal vs. preterm with every scan cut to the same number of volumes (needs data/rawTS or data/rawRS)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
@@ -1663,7 +1665,7 @@ with_fc <- function(fc, code, tag = "alt") {
 SI_ID <- c(clinical = "SI01", continuous_GA = "SI02", gt32 = "SI03", within_between = "SI04",
            volumes = "SI05", motion_covariate = "SI06", age_matched = "SI07", postnatal = "SI08",
            unharmonized = "SI09", distance = "SI10", motion_followup = "SI11", equal_volume = "SI12",
-           sex_fetal_preterm = "SI13", sex_preterm = "SI14")
+           sex_fetal_preterm = "SI13", sex_preterm = "SI14", four_group = "SI15")
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
   if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", name, ".csv")), row.names = FALSE)
@@ -2952,6 +2954,101 @@ if (RUN_SEX_ANALYSES) {
     theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank())
   si_fig("sex_preterm", "focused16_MPTvsEPT", 7.0, 4.4, function()
     print(ggpubr::ggarrange(p_fa, p_fb, nrow = 1, widths = c(1.55, 1), labels = c("A", "B"))))
+}
+
+###############################################################################
+# 12. FOUR-GROUP MODEL: Fetal, EPT, VPT, MPT
+#     FC ~ PMA at scan + scanner + group (4 levels, Fetal = reference), random intercept per infant, all 3,003 edges.
+#     Reported per edge: the omnibus group effect (3-df Wald chi-square) and six pairwise contrasts (each preterm
+#     group vs. fetal, and EPT / VPT / MPT against each other; Wald t on the model coefficients). FDR is applied across
+#     the 3,003 edges separately for the omnibus test and for each contrast. A second model adds PMA x group (3 df) to
+#     ask whether the PMA slope differs among the four groups.
+#     CAUTION: group, PMA range and scanner overlap heavily (fetal scans are all 1.5T and span younger ages than most
+#     preterm scans), so the fetal contrasts rest on the PMA and scanner adjustment, as in the two-group model of
+#     section 4. The preterm-only contrasts are not affected by this.
+#     Output number: SI15 (see SI_ID).
+###############################################################################
+
+if (RUN_FOUR_GROUP) {
+  si_4 <- scanInfo
+  si_4$grp <- factor(ifelse(si_4$scanType == "Fetal", "Fetal", as.character(si_4$BirthCat)), c("Fetal", "EPT", "VPT", "MPT"))
+  stopifnot(!anyNA(si_4$grp))
+  print(rbind(scans = table(si_4$grp), infants = tapply(as.character(si_4$shortID), si_4$grp, function(x) length(unique(x)))))
+
+  four_group_edge <- function(cn, data) {
+    cts <- c("EPT_vs_Fetal", "VPT_vs_Fetal", "MPT_vs_Fetal", "VPT_vs_EPT", "MPT_vs_EPT", "MPT_vs_VPT")
+    nm  <- c(unlist(lapply(cts, function(k) paste0(k, c("_b", "_se", "_p")))), "omni_chi", "omni_p", "pmaXgrp_chi", "pmaXgrp_p")
+    d <- data; d$FC <- as.numeric(goodFCData[d$longID, cn])
+    tryCatch({
+      m <- lme(FC ~ ScanPMA + scanner + grp, random = ~ 1 | shortID, data = d, control = ctrl)
+      b <- nlme::fixef(m); V <- vcov(m); cf <- c("grpEPT", "grpVPT", "grpMPT"); stopifnot(all(cf %in% names(b)))
+      w <- function(a) { x <- setNames(numeric(length(b)), names(b)); x[names(a)] <- a; x }
+      Lc <- list(EPT_vs_Fetal = w(c(grpEPT = 1)), VPT_vs_Fetal = w(c(grpVPT = 1)), MPT_vs_Fetal = w(c(grpMPT = 1)),
+                 VPT_vs_EPT = w(c(grpVPT = 1, grpEPT = -1)), MPT_vs_EPT = w(c(grpMPT = 1, grpEPT = -1)), MPT_vs_VPT = w(c(grpMPT = 1, grpVPT = -1)))
+      dfd <- min(m$fixDF$X[cf])
+      ct <- unlist(lapply(cts, function(k) { x <- Lc[[k]]; est <- sum(x * b); se <- sqrt(drop(t(x) %*% V %*% x)); c(est, se, 2 * pt(-abs(est / se), dfd)) }))
+      wald3 <- function(b, V, coefs) { L <- matrix(0, 3, length(b), dimnames = list(NULL, names(b))); for (i in 1:3) L[i, coefs[i]] <- 1
+        lb <- L %*% b; chi <- drop(t(lb) %*% solve(L %*% V %*% t(L)) %*% lb); c(chi, pchisq(chi, 3, lower.tail = FALSE)) }
+      omni <- wald3(b, V, cf)
+      m2 <- lme(FC ~ scanner + ScanPMA * grp, random = ~ 1 | shortID, data = d, control = ctrl)
+      ix <- wald3(nlme::fixef(m2), vcov(m2), paste0("ScanPMA:grp", c("EPT", "VPT", "MPT")))
+      setNames(c(ct, omni, ix), nm)
+    }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
+  }
+  res4 <- cached("fourGroup", key = paste(data_key, "fourGroup", table_key(si_4)),
+                 data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, four_group_edge, data = si_4)), row.names = NULL))
+  cts4 <- c("EPT_vs_Fetal", "VPT_vs_Fetal", "MPT_vs_Fetal", "VPT_vs_EPT", "MPT_vs_EPT", "MPT_vs_VPT")
+  for (k in c(cts4, "omni", "pmaXgrp")) res4[[paste0(k, "_pAdj")]] <- p.adjust(res4[[paste0(k, "_p")]], "fdr")
+
+  lab4 <- c(omni = "Omnibus group effect (3 df)", EPT_vs_Fetal = "EPT vs. fetal", VPT_vs_Fetal = "VPT vs. fetal", MPT_vs_Fetal = "MPT vs. fetal",
+            VPT_vs_EPT = "VPT vs. EPT", MPT_vs_EPT = "MPT vs. EPT", MPT_vs_VPT = "MPT vs. VPT", pmaXgrp = "PMA x group (3 df)")
+  sum4 <- do.call(rbind, lapply(names(lab4), function(k) {
+    p <- res4[[paste0(k, "_p")]]; pa <- res4[[paste0(k, "_pAdj")]]; sg <- !is.na(pa) & pa < .05
+    bb <- if (k %in% cts4) res4[[paste0(k, "_b")]] else NULL
+    data.frame(Test = lab4[[k]], `Raw p < .05` = sum(p < .05, na.rm = TRUE), `FDR p < .05` = sum(sg),
+               `First group higher` = if (is.null(bb)) NA else sum(sg & bb > 0), `Second group higher` = if (is.null(bb)) NA else sum(sg & bb < 0),
+               `Overlap with the 1,404 fetal-vs-preterm edges` = sum(sg & sigFetal),
+               `Smallest FDR p` = signif(suppressWarnings(min(pa, na.rm = TRUE)), 3), check.names = FALSE)
+  }))
+  print(sum4, row.names = FALSE)   # contrasts are "A vs. B" = A - B: "First group higher" counts FDR-significant edges with A > B
+
+  # Size of the difference from fetal in each preterm group, on the 1,404 primary fetal-vs-preterm edges
+  # (graded by birth group? a larger median beta for a group = a larger departure from fetal)
+  gr4 <- do.call(rbind, lapply(c("EPT_vs_Fetal", "VPT_vs_Fetal", "MPT_vs_Fetal"), function(k) {
+    bb <- res4[[paste0(k, "_b")]][sigFetal]
+    data.frame(Contrast = lab4[[k]], `Median beta, primary edges` = round(median(bb, na.rm = TRUE), 4),
+               `Edges with same sign as primary` = sum(sign(bb) == sign(fetalRes$scanTypeb[sigFetal]), na.rm = TRUE),
+               `Correlation of beta with primary beta` = round(cor(res4[[paste0(k, "_b")]], fetalRes$scanTypeb, use = "complete.obs"), 3), check.names = FALSE)
+  }))
+  print(gr4, row.names = FALSE)
+  # Fig. 3 edges: the preterm group contrasts on the 16 primary PMA x prematurity edges (adjusted for PMA, not group x PMA)
+  e16 <- res4[match(sigEdges, res4$Connection), c("Connection", paste0(rep(c("MPT_vs_EPT", "MPT_vs_VPT", "VPT_vs_EPT"), each = 2), c("_b", "_p")), "pmaXgrp_p")]
+  e16[-1] <- lapply(e16[-1], signif, 3); print(e16, row.names = FALSE)
+
+  si_table(sum4, "four_group", "fourGroup_summary")
+  si_table(gr4,  "four_group", "fourGroup_departureFromFetal")
+  si_table(e16,  "four_group", "fourGroup_on16PrimaryEdges")
+  si_table(res4, "four_group", "fourGroup_allEdges")
+
+  # Figure: A. FDR-significant edges per test, split by direction; B. each preterm group's beta vs. fetal against the primary beta
+  d_cnt <- do.call(rbind, lapply(cts4, function(k) { sg <- !is.na(res4[[paste0(k, "_pAdj")]]) & res4[[paste0(k, "_pAdj")]] < .05; bb <- res4[[paste0(k, "_b")]]
+    parts <- strsplit(lab4[[k]], " vs. ", fixed = TRUE)[[1]]
+    data.frame(Contrast = lab4[[k]], Higher = c(parts[1], parts[2]), n = c(sum(sg & bb > 0), -sum(sg & bb < 0))) }))
+  d_cnt$Contrast <- factor(d_cnt$Contrast, rev(lab4[cts4]))
+  p4a <- ggplot(d_cnt, aes(n, Contrast, fill = n > 0)) + geom_col(width = 0.65) + geom_vline(xintercept = 0, linewidth = 0.3) +
+    geom_text(aes(label = abs(n), hjust = ifelse(n > 0, -0.2, 1.2)), size = 2.6) +
+    scale_fill_manual(values = c(`TRUE` = col_preterm, `FALSE` = col_fetal), guide = "none") +
+    scale_x_continuous(expand = expansion(mult = 0.18), labels = abs) +
+    labs(x = "FDR-significant edges (left: second group higher; right: first group higher)", y = NULL) + si_theme()
+  d_b4 <- do.call(rbind, lapply(c("EPT_vs_Fetal", "VPT_vs_Fetal", "MPT_vs_Fetal"), function(k)
+    data.frame(Contrast = lab4[[k]], x = fetalRes$scanTypeb, y = res4[[paste0(k, "_b")]], sig = sigFetal)))
+  d_b4$Contrast <- factor(d_b4$Contrast, lab4[c("EPT_vs_Fetal", "VPT_vs_Fetal", "MPT_vs_Fetal")])
+  p4b <- ggplot(d_b4, aes(x, y)) + geom_abline(linetype = "dashed", linewidth = 0.3) +
+    geom_point(data = d_b4[!d_b4$sig, ], color = "#8a8a8a", alpha = 0.2, size = 0.4, stroke = 0) +
+    geom_point(data = d_b4[d_b4$sig, ], color = col_preterm, alpha = 0.35, size = 0.5, stroke = 0) +
+    facet_wrap(~Contrast, nrow = 1) + labs(x = "Primary group difference (beta, preterm - fetal)", y = "Beta vs. fetal, by birth group") + si_theme()
+  si_fig("four_group", "fourGroup", 8.2, 3.4, function()
+    print(ggpubr::ggarrange(p4a, p4b, nrow = 1, widths = c(1, 1.5), labels = c("A", "B"))))
 }
 
 sessionInfo()
