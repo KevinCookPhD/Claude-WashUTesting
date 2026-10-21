@@ -662,9 +662,9 @@ if (!requireNamespace("readxl", quietly = TRUE)) stop("Install the readxl packag
 read_clin <- function(sheet) { d <- as.data.frame(readxl::read_excel(clin_file, sheet = sheet)); names(d) <- trimws(gsub("\\s+", " ", names(d))); d }
 clin_pick <- function(d, pat) { h <- grep(pat, names(d), ignore.case = TRUE, value = TRUE); if (length(h)) h[1] else NA_character_ }
 clin_pt <- read_clin("PRETERM"); clin_ft <- read_clin("FETAL")
-pt_cols <- c(`APGAR 1 minute` = "apgar.*1", `APGAR 5 minute` = "apgar.*5", `Bronchopulmonary dysplasia` = "bronch", `Patent ductus arteriosus` = "ductus",
+pt_cols <- c(`Birth weight (g)` = "birth.?weight", `APGAR 1 minute` = "apgar.*1", `APGAR 5 minute` = "apgar.*5", `Bronchopulmonary dysplasia` = "bronch", `Patent ductus arteriosus` = "ductus",
              `Retinopathy of prematurity` = "retinopath", `Clinical infection` = "infect", `Necrotizing enterocolitis` = "necrotiz|^nec", `Days on ventilation` = "ventil")
-ft_cols <- c(`APGAR 1 minute` = "apgar.*1", `APGAR 5 minute` = "apgar.*5")
+ft_cols <- c(`Birth weight (g)` = "birth.?weight", `APGAR 1 minute` = "apgar.*1", `APGAR 5 minute` = "apgar.*5")
 clin_map <- function(d, cols) { m <- sapply(cols, function(p) clin_pick(d, p)); m }
 pt_map <- clin_map(clin_pt, pt_cols); ft_map <- clin_map(clin_ft, ft_cols)
 print(data.frame(item = names(pt_map), `PRETERM column` = unname(pt_map), check.names = FALSE), row.names = FALSE)   # check: each item should name the right column
@@ -684,7 +684,7 @@ code_cell <- function(x, kind) {
   v <- tolower(x)
   ifelse(is.na(v), NA_real_, ifelse(grepl("^(1|y|yes|true)\\b", v), 1, ifelse(grepl("^(0|n|no|false)\\b", v), 0, NA_real_)))
 }
-item_kind <- function(k) if (grepl("^APGAR|ventilation", k)) "num" else "yn"
+item_kind <- function(k) if (grepl("^APGAR|ventilation|weight", k)) "num" else "yn"
 unread <- list()
 by_id <- function(d, col, ids, kind, item) {                           # first non-empty value per infant (the sheet may have several rows per infant)
   raw <- trimws(as.character(d[[col]])); x <- code_cell(raw, kind)
@@ -727,7 +727,9 @@ make_table1 <- function(d) {                                           # d = sca
     `PMA at birth (Weeks)`        = ic(function(x) msd(x$birthPMA, 2)),
     `Sex (Male)`                  = ic(function(x) npc(x$male == 1)))
   for (k in clin_items)                                                # APGAR and clinical items: mean (SD) for APGAR and ventilation days, n (%) for yes/no items
-    rows[[k]] <- if (grepl("^APGAR", k)) ic(function(x) msd(x[[k]], 2)) else if (grepl("ventilation", k)) pre(function(x) msd(x[[k]], 2)) else pre(function(x) npc(as_yes(x[[k]])))
+    rows[[k]] <- if (grepl("weight", k)) ic(function(x) msd(x[[k]], 0)) else if (grepl("^APGAR", k)) ic(function(x) msd(x[[k]], 2)) else if (grepl("ventilation", k)) pre(function(x) msd(x[[k]], 2)) else pre(function(x) npc(as_yes(x[[k]])))
+  nm <- setdiff(names(rows), "Birth weight (g)")                      # birth weight goes right after PMA at birth
+  rows <- rows[append(nm, "Birth weight (g)", after = match("PMA at birth (Weeks)", nm))]
   m <- do.call(rbind, lapply(rows, as.character)); dimnames(m) <- list(names(rows), names(sel)); m
 }
 Table1_ByScan        <- make_table1(scan_df)
