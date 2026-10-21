@@ -639,10 +639,13 @@ table1_scan
 #                        infant with three scans is counted three times (as in the original Table 1). n = infants.
 #   Table1_ByParticipant every infant is one row: scan-based variables (volumes, minutes, motion, PMA at scan) are first
 #                        averaged over the infant's scans, and birth, sex, APGAR and clinical items are counted once.
-# Clinical items (BPD, PDA, ROP, infection, NEC, days on ventilation) are infant-level facts. They are looked up by name
-# pattern in demoData (one row per infant) and in goodData (one row per scan); for each item the candidate column with the
-# fewest missing infants is used. The candidates are printed with their % missing: check them, and set `clin_choice`
-# below if a different column is right. Fetal infants have no APGAR or clinical data ("-").
+# Birth and clinical items come from the clinical workbook (`clin_file`, edit the name below), which has two sheets:
+#   PRETERM: ID, BirthWeight, APGAR 1min, APGAR 5min, Clinical Infection, Bronchopulmonary dysplasia, Patent ductus arteriosus,
+#            Retinopathy of prematurity, NEC, Days of mechanical ventilation (yes/no items coded 1/0)
+#   FETAL:   ID, BirthWeight, Apgar1, Apgar5
+# Columns are found by name pattern, and ID must equal the infant ID used in the connectivity tables (shortID); the number of
+# infants matched is printed and the script stops if too few match. These are infant-level facts: the by-scan table counts an
+# infant once per scan, the by-participant table once. Fetal infants have APGAR but no clinical items ("-").
 male_scan <- if (is.numeric(scanInfo$sex)) ifelse(scanInfo$sex %in% c(0, 1), scanInfo$sex, NA) else {
   s1 <- toupper(substr(trimws(as.character(scanInfo$sex)), 1, 1)); ifelse(s1 == "M", 1, ifelse(s1 == "F", 0, NA)) }     # 0 = female, 1 = male
 scan_df <- data.frame(shortID = as.character(scanInfo$shortID),
@@ -653,32 +656,31 @@ if (anyDuplicated(unique(scan_df[c("shortID", "grp")])$shortID)) message("Some i
 inf_t <- do.call(rbind, lapply(split(scan_df, scan_df$shortID), function(d) data.frame(
   shortID = d$shortID[1], grp = d$grp[1], n_scans = nrow(d), pma = mean(d$pma), birthPMA = d$birthPMA[1], male = d$male[1],
   vol = mean(d$vol), mins = mean(d$mins), fd = if (all(is.na(d$fd))) NA_real_ else mean(d$fd, na.rm = TRUE), stringsAsFactors = FALSE)))
-pt_ids <- as.character(inf_t$shortID[inf_t$grp != "Fetal"])
-first_ok <- function(z) if (all(is.na(z))) NA else z[!is.na(z)][1]
-clin_vals <- function(src, col) {                                    # one value per preterm infant
-  if (src == "demo") demoData[[col]][match(pt_ids, as.character(demoData$Subject))]
-  else unname(sapply(split(goodData[[col]], as.character(goodData$shortID)), first_ok)[pt_ids])
-}
-clin_pat <- c(`APGAR 1 minute` = "apgar.?1(\\D|$)", `APGAR 5 minute` = "apgar.?5(\\D|$)",
-              `Bronchopulmonary dysplasia` = "bronch|bpd", `Patent ductus arteriosus` = "ductus|pda", `Retinopathy of prematurity` = "retinopath|rop",
-              `Clinical infection` = "infect", `Necrotizing enterocolitis` = "necrotiz|nec", `Days on ventilation` = "ventil")
-clin_cand <- do.call(rbind, lapply(names(clin_pat), function(k) {
-  cs <- rbind(if (length(grep(clin_pat[[k]], names(demoData), ignore.case = TRUE))) data.frame(src = "demo", col = grep(clin_pat[[k]], names(demoData), ignore.case = TRUE, value = TRUE)),
-              if (length(grep(clin_pat[[k]], names(goodData), ignore.case = TRUE))) data.frame(src = "scan", col = grep(clin_pat[[k]], names(goodData), ignore.case = TRUE, value = TRUE)))
-  if (is.null(cs)) return(NULL)
-  cs$item <- k; cs$pct_missing <- sapply(seq_len(nrow(cs)), function(r) round(100 * mean(is.na(clin_vals(cs$src[r], cs$col[r]))), 1)); cs }))
-print(clin_cand[, c("item", "src", "col", "pct_missing")], row.names = FALSE)             # src: demo = demoData, scan = goodData
-# clin_choice <- list(`Bronchopulmonary dysplasia` = c("demo", "<column name>"))        # override a pick here (src, column)
-clin_choice <- lapply(split(clin_cand, clin_cand$item), function(cs) { cs <- cs[order(cs$pct_missing, cs$src != "demo"), ]; c(cs$src[1], cs$col[1]) })
-if (exists("clin_choice_override")) clin_choice[names(clin_choice_override)] <- clin_choice_override
-clin_items <- intersect(names(clin_pat), names(clin_choice))
-message("Clinical columns used: ", paste(sapply(clin_items, function(k) paste0(k, " <- ", clin_choice[[k]][2], " (", clin_choice[[k]][1], ")")), collapse = "; "))
-clin_inf <- data.frame(shortID = pt_ids, stringsAsFactors = FALSE)
-for (k in clin_items) clin_inf[[k]] <- clin_vals(clin_choice[[k]][1], clin_choice[[k]][2])
-for (k in clin_items) { m <- mean(is.na(clin_inf[[k]])); if (m > 0.1) warning(k, ": ", round(100 * m), "% of preterm infants have no value in the chosen column. Check clin_cand above.") }
-as_yes <- function(x) if (is.logical(x)) x else if (is.numeric(x)) ifelse(is.na(x), NA, x > 0) else {
-  v <- tolower(trimws(as.character(x))); ifelse(v %in% c("1", "yes", "y", "true"), TRUE, ifelse(v %in% c("0", "no", "n", "false"), FALSE, NA)) }
-for (k in setdiff(clin_items, c("Days on ventilation", "APGAR 1 minute", "APGAR 5 minute"))) { cat("\n", k, ":\n"); print(table(clin_inf[[k]], useNA = "ifany")) }   # check the coding
+clin_file <- "clinicalData.xlsx"      # EDIT: path to the clinical workbook (relative to the working directory, or full path)
+if (!file.exists(clin_file)) stop("Clinical workbook not found: ", clin_file, ". Set clin_file (sheets PRETERM and FETAL).")
+if (!requireNamespace("readxl", quietly = TRUE)) stop("Install the readxl package: install.packages('readxl')")
+read_clin <- function(sheet) { d <- as.data.frame(readxl::read_excel(clin_file, sheet = sheet)); names(d) <- trimws(gsub("\\s+", " ", names(d))); d }
+clin_pick <- function(d, pat) { h <- grep(pat, names(d), ignore.case = TRUE, value = TRUE); if (length(h)) h[1] else NA_character_ }
+clin_pt <- read_clin("PRETERM"); clin_ft <- read_clin("FETAL")
+pt_cols <- c(`APGAR 1 minute` = "apgar.*1", `APGAR 5 minute` = "apgar.*5", `Bronchopulmonary dysplasia` = "bronch", `Patent ductus arteriosus` = "ductus",
+             `Retinopathy of prematurity` = "retinopath", `Clinical infection` = "infect", `Necrotizing enterocolitis` = "necrotiz|^nec", `Days on ventilation` = "ventil")
+ft_cols <- c(`APGAR 1 minute` = "apgar.*1", `APGAR 5 minute` = "apgar.*5")
+clin_map <- function(d, cols) { m <- sapply(cols, function(p) clin_pick(d, p)); m }
+pt_map <- clin_map(clin_pt, pt_cols); ft_map <- clin_map(clin_ft, ft_cols)
+print(data.frame(item = names(pt_map), `PRETERM column` = unname(pt_map), check.names = FALSE), row.names = FALSE)   # check: each item should name the right column
+stopifnot(!anyNA(pt_map), !anyNA(ft_map))
+id_pt <- as.character(inf_t$shortID[inf_t$grp != "Fetal"]); id_ft <- as.character(inf_t$shortID[inf_t$grp == "Fetal"])
+sheet_id <- function(d) trimws(as.character(d[[clin_pick(d, "^id$")]]))
+m_pt <- match(id_pt, sheet_id(clin_pt)); m_ft <- match(id_ft, sheet_id(clin_ft))
+message("Clinical workbook match: PRETERM ", sum(!is.na(m_pt)), " of ", length(id_pt), " infants; FETAL ", sum(!is.na(m_ft)), " of ", length(id_ft), " infants")
+if (mean(!is.na(m_pt)) < 0.8) stop("Fewer than 80% of preterm infants match the PRETERM sheet's ID column: the IDs probably need reformatting (compare head(sheet_id(clin_pt)) with head(id_pt)).")
+clin_items <- names(pt_cols)
+clin_inf <- data.frame(shortID = c(id_pt, id_ft), stringsAsFactors = FALSE)
+for (k in clin_items) clin_inf[[k]] <- c(clin_pt[[pt_map[[k]]]][m_pt], if (k %in% names(ft_map)) clin_ft[[ft_map[[k]]]][m_ft] else rep(NA, length(id_ft)))
+for (k in clin_items) clin_inf[[k]] <- suppressWarnings(as.numeric(clin_inf[[k]]))
+print(round(100 * sapply(clin_inf[clin_items], function(x) mean(is.na(x[seq_along(id_pt)]))), 1))        # % of preterm infants with no value, per item
+as_yes <- function(x) ifelse(is.na(x), NA, x > 0)
+for (k in setdiff(clin_items, c("Days on ventilation", "APGAR 1 minute", "APGAR 5 minute"))) { cat("\n", k, ":\n"); print(table(clin_inf[[k]][seq_along(id_pt)], useNA = "ifany")) }   # check the coding
 inf_t   <- merge(inf_t,   clin_inf, by = "shortID", all.x = TRUE)       # infant-level items; fetal infants get NA
 scan_df <- merge(scan_df, clin_inf, by = "shortID", all.x = TRUE)       # each scan carries its infant's values
 
@@ -700,7 +702,7 @@ make_table1 <- function(d) {                                           # d = sca
     `PMA at birth (Weeks)`        = ic(function(x) msd(x$birthPMA, 2)),
     `Sex (Male)`                  = ic(function(x) npc(x$male == 1)))
   for (k in clin_items)                                                # APGAR and clinical items: mean (SD) for APGAR and ventilation days, n (%) for yes/no items
-    rows[[k]] <- if (grepl("^APGAR|ventilation", k)) pre(function(x) msd(x[[k]], 2)) else pre(function(x) npc(as_yes(x[[k]])))
+    rows[[k]] <- if (grepl("^APGAR", k)) ic(function(x) msd(x[[k]], 2)) else if (grepl("ventilation", k)) pre(function(x) msd(x[[k]], 2)) else pre(function(x) npc(as_yes(x[[k]])))
   m <- do.call(rbind, lapply(rows, as.character)); dimnames(m) <- list(names(rows), names(sel)); m
 }
 Table1_ByScan        <- make_table1(scan_df)
