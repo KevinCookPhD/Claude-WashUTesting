@@ -3230,6 +3230,23 @@ if (RUN_FOUR_GROUP) {
 #     exist only for preterm infants, so they appear in (B) only. PMA at birth defines the preterm groups, so its (B)
 #     test is shown for completeness and is not informative. All p-values are exploratory descriptors of the sample.
 #     Output number: "table1_tests" in SI_ID.
+#
+#     FINDINGS (first run: 179 preterm infants / 346 scans; 161 fetal infants / 192 scans)
+#       (A) Preterm vs. fetal: no sex difference (50% vs 52% male, p = .74). As expected from the design, fetuses were
+#           older at birth and heavier (39.3 vs 29.1 wk; 3,365 vs 1,260 g) and had higher APGAR scores. Preterm scans were
+#           3.8 wk older at scan (36.6 vs 32.8 wk; the reason PMA is adjusted in every model), contained more usable volumes
+#           (217 vs 130; partly a protocol difference: 120 volumes at TR 2 s vs. 80 at TR 3 s) and slightly more minutes (7.2
+#           vs 6.5), and had far lower motion (mean FD 0.08 vs 0.75 mm; see 9e, 9j). Preterm infants had more scans (1.9 vs 1.2).
+#           APGAR p-values print as 0 (below display precision): report as p < .001.
+#       (B) EPT vs. VPT vs. MPT: no differences in sex (p = .89) or scans per infant (p = .26). Birth GA and weight differ by
+#           definition. Clinical severity falls steeply from EPT to MPT (BPD 79/40/6%, PDA 47/24/3%, ROP 75/15/3%,
+#           infection 85/40/15%, NEC 38/16/3%, ventilation 21.8/3.4/1.0 days; all FDR p < 1e-4). EPT differs from both other
+#           groups on every item; VPT vs. MPT is not significant for ROP and NEC. MPT has higher APGAR than EPT and VPT, and
+#           MPT scans are later (38.2 vs 36.1/36.4 wk), have somewhat more usable volumes (235 vs 207 in EPT) and slightly
+#           lower FD (0.067 vs 0.082 mm), small differences consistent with 9e F (motion does not drive the PMA x prematurity
+#           result). Minutes of data repeats volumes in (B) (same test: minutes = volumes x 2 s / 60), so it is left out of the figure.
+#     Figures: Table1_Balance (A: standardized differences preterm - fetal; B: pairwise standardized differences among the
+#     preterm groups) and Table1_Distributions (PMA at scan, birth weight, volumes, motion by group).
 ###############################################################################
 
 if (RUN_TABLE1_TESTS) {
@@ -3315,6 +3332,46 @@ if (RUN_TABLE1_TESTS) {
 
   si_table(tabA, "table1_tests", "PretermVsFetal")
   si_table(tabB, "table1_tests", "BirthGroups")
+
+  ## ---- Figures: standardized differences (balance) and distributions -------------------------------------------------
+  # Standardized difference = (mean1 - mean2) / sqrt((var1 + var2) / 2) for continuous variables (scan-level variables use the
+  # scans, so it is descriptive) and (p1 - p2) / sqrt((p1(1-p1) + p2(1-p2)) / 2) for yes/no items; |value| < 0.1 is the usual
+  # "balanced" rule of thumb (dotted lines). Not a test: it shows how large a difference is, whatever the sample size.
+  smd_val <- function(sp, ga, gb) {
+    d <- if (sp[[3]] == "scan") scan_df else inf_t; x <- d[[sp[[2]]]]; a <- x[ga(d) & !is.na(x)]; b <- x[gb(d) & !is.na(x)]
+    if (sp[[3]] == "yn") { pa <- mean(a); pb <- mean(b); (pa - pb) / sqrt((pa * (1 - pa) + pb * (1 - pb)) / 2) } else (mean(a) - mean(b)) / sqrt((var(a) + var(b)) / 2)
+  }
+  lab13 <- function(x) sub(" \\(defines the preterm groups\\)", "*", x)
+  specA <- Filter(function(sp) !sp[[5]], specs)
+  dA <- data.frame(Variable = sapply(specA, `[[`, 1), smd = sapply(specA, smd_val, ga = function(d) d$cohort == "Preterm", gb = function(d) d$cohort == "Fetal"))
+  prs <- list(`VPT - EPT` = c("VPT", "EPT"), `MPT - EPT` = c("MPT", "EPT"), `MPT - VPT` = c("MPT", "VPT"))
+  specB <- Filter(function(sp) sp[[2]] != "mins", specs)                 # minutes = volumes x 2 s / 60 within preterm: same result as volumes
+  dB <- do.call(rbind, lapply(names(prs), function(n) data.frame(Variable = sapply(specB, `[[`, 1), Contrast = n,
+          smd = sapply(specB, smd_val, ga = function(d) d$grp == prs[[n]][1], gb = function(d) d$grp == prs[[n]][2]))))
+  dA$Variable <- factor(lab13(dA$Variable), rev(lab13(dA$Variable))); dB$Variable <- factor(lab13(dB$Variable), rev(lab13(unique(dB$Variable)))); dB$Contrast <- factor(dB$Contrast, names(prs))
+  bal_theme <- function() si_theme() + theme(panel.grid.major.y = element_line(color = "#e6e6e6", linewidth = 0.3))
+  p13a <- ggplot(dA, aes(smd, Variable)) + geom_vline(xintercept = 0, linewidth = 0.4) + geom_vline(xintercept = c(-0.1, 0.1), linetype = "dotted", linewidth = 0.4) +
+    geom_point(color = col_preterm, size = 2) + labs(x = "Standardized difference, preterm - fetal", y = NULL) + bal_theme()
+  p13b <- ggplot(dB, aes(smd, Variable, color = Contrast)) + geom_vline(xintercept = 0, linewidth = 0.4) + geom_vline(xintercept = c(-0.1, 0.1), linetype = "dotted", linewidth = 0.4) +
+    geom_point(size = 2, position = position_dodge(width = 0.55)) +
+    scale_color_manual(values = c(`VPT - EPT` = cols_pt[["VPT"]], `MPT - EPT` = cols_pt[["MPT"]], `MPT - VPT` = "#e08a1e"), name = NULL) +
+    labs(x = "Standardized difference (later - earlier group)", y = NULL, caption = "* defines the preterm groups") + bal_theme() +
+    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank())
+  si_fig("table1_tests", "Table1_Balance", 9.0, 4.8, function()
+    print(ggpubr::ggarrange(p13a, p13b, nrow = 1, widths = c(1.55, 1), labels = c("A", "B"))))
+
+  grp_fill <- c(Fetal = col_fetal, EPT = cols_pt[["EPT"]], VPT = cols_pt[["VPT"]], MPT = cols_pt[["MPT"]])
+  dist_long <- rbind(
+    data.frame(Variable = "PMA at scan (weeks)",     grp = scan_df$grp, v = scan_df$pma),
+    data.frame(Variable = "Birth weight (g)",         grp = inf_t$grp,   v = inf_t[["Birth weight (g)"]]),
+    data.frame(Variable = "Usable volumes per scan",  grp = scan_df$grp, v = scan_df$vol),
+    data.frame(Variable = "Mean framewise displacement (mm)", grp = scan_df$grp, v = scan_df$fd))
+  dist_long$Variable <- factor(dist_long$Variable, unique(dist_long$Variable)); dist_long <- dist_long[!is.na(dist_long$v), ]
+  p13c <- ggplot(dist_long, aes(grp, v, fill = grp)) + geom_boxplot(outlier.shape = NA, width = 0.6, linewidth = 0.4, alpha = 0.55) +
+    geom_jitter(aes(color = grp), width = 0.15, size = 0.5, alpha = 0.35, stroke = 0) +
+    scale_fill_manual(values = grp_fill, guide = "none") + scale_color_manual(values = grp_fill, guide = "none") +
+    facet_wrap(~Variable, scales = "free_y", ncol = 2) + labs(x = NULL, y = NULL) + si_theme()
+  si_fig("table1_tests", "Table1_Distributions", 6.4, 5.6, function() print(p13c))
 }
 
 sessionInfo()
