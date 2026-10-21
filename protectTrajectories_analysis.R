@@ -39,7 +39,8 @@
 #   9  Sensitivity analyses and controls
 #  10  Save tables
 #  11  Sex differences (exploratory)
-#  12  Four-group model (Fetal, EPT, VPT, MPT), session info
+#  12  Four-group model (Fetal, EPT, VPT, MPT)
+#  13  Group comparisons for the Table 1 variables, session info
 #
 # NOTES FROM THE ORIGINAL SCRIPT
 #   * onesie_1z065_03 is removed from the connectivity data (extreme outlier).
@@ -76,6 +77,7 @@ RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. pret
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
 RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns
 RUN_SEX_ANALYSES          <- TRUE   # section 11: sex differences (fetal vs. preterm and within preterm; exploratory)
+RUN_TABLE1_TESTS          <- TRUE   # section 13: group comparisons for the Table 1 variables (preterm vs. fetal; EPT / VPT / MPT)
 RUN_FOUR_GROUP            <- TRUE   # section 12: four-group model (Fetal, EPT, VPT, MPT)
 RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: fetal vs. preterm with every scan cut to the same number of volumes (needs data/rawTS or data/rawRS)
 N_CORES                   <- 8      # cores for the edge-wise loops (this machine: 8 physical, 16 logical); 1 = serial
@@ -228,7 +230,7 @@ SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03"
            clinical = "SI05", continuous_GA = "SI06", gt32 = "SI07", within_between = "SI08",
            volumes = "SI09", motion_covariate = "SI10", age_matched = "SI11", postnatal = "SI12",
            unharmonized = "SI13", distance = "SI14", motion_followup = "SI15", equal_volume = "SI16",
-           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19")
+           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20")
 si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
@@ -1795,7 +1797,7 @@ si_posthoc_counts
 #      SI05 clinical cutoffs (9a)   SI06 continuous birth GA (9b)     SI07 scans > 32 wk (9c)    SI08 within/between (9d)
 #      SI09 usable volumes (9e A-C) SI10 motion as covariate (9e D-F) SI11 age-matched (9f)      SI12 postnatal age (9g)
 #      SI13 unharmonized (9h)       SI14 distance (9i)                SI15 motion follow-up (9j) SI16 equal volume (9k)
-#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)
+#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)
 #
 #    OVERVIEW (what each check tests and what it showed; details above each block)
 #      9a  clinical cutoffs ........ 9 of the edges FDR-significant; 8 of the 16 hold (cutoff-dependent set)
@@ -3212,6 +3214,107 @@ if (RUN_FOUR_GROUP) {
     facet_wrap(~Contrast, nrow = 1) + labs(x = "Primary group difference (beta, preterm - fetal)", y = "Beta vs. fetal, by birth group") + si_theme()
   si_fig("four_group", "fourGroup", 8.2, 3.4, function()
     print(ggpubr::ggarrange(p4a, p4b, nrow = 1, widths = c(1, 1.5), labels = c("A", "B"))))
+}
+
+###############################################################################
+# 13. TABLE 1 GROUP COMPARISONS
+#     (A) Preterm (all) vs. fetal and (B) EPT vs. VPT vs. MPT, for the variables in Table 1.
+#     Infant-level variables (scans per infant, birth PMA and weight, sex, APGAR, clinical items, ventilation days) are
+#     tested with one value per infant. Scan-level variables (PMA at scan, volumes, minutes, mean FD) use a linear mixed
+#     model with a random intercept per infant, so infants with several scans are not counted as independent.
+#       continuous         Welch t-test (A) / Welch ANOVA with Games-Howell-style pairwise Welch t-tests, Holm (B)
+#       skewed or ordinal  Wilcoxon rank-sum (A) / Kruskal-Wallis with pairwise Wilcoxon, Holm (B)   [scans per infant, APGAR, ventilation days]
+#       yes/no             Fisher exact test; pairwise Fisher tests, Holm (B)
+#       scan level         lme(): Wald t for the group difference (A) / F test, then pairwise contrasts, Holm (B)
+#     FDR (Benjamini-Hochberg) is applied across the variables within each table. Clinical items and ventilation days
+#     exist only for preterm infants, so they appear in (B) only. PMA at birth defines the preterm groups, so its (B)
+#     test is shown for completeness and is not informative. All p-values are exploratory descriptors of the sample.
+#     Output number: "table1_tests" in SI_ID.
+###############################################################################
+
+if (RUN_TABLE1_TESTS) {
+  inf_t$cohort   <- factor(ifelse(inf_t$grp == "Fetal", "Fetal", "Preterm"), c("Fetal", "Preterm"))
+  scan_df$cohort <- factor(ifelse(scan_df$grp == "Fetal", "Fetal", "Preterm"), c("Fetal", "Preterm"))
+  inf_t$male_yes <- ifelse(is.na(inf_t$male), NA, inf_t$male == 1)
+  yn_items <- setdiff(clin_items, c("Birth weight (g)", "APGAR 1 minute", "APGAR 5 minute", "Days on ventilation"))
+  for (k in yn_items) inf_t[[paste0(k, "_yes")]] <- as_yes(inf_t[[k]])
+  pre_inf  <- droplevels(inf_t[inf_t$grp != "Fetal", ]);   pre_scan <- droplevels(scan_df[scan_df$grp != "Fetal", ])
+  pre_inf$grp <- factor(as.character(pre_inf$grp), c("EPT", "VPT", "MPT")); pre_scan$grp <- factor(as.character(pre_scan$grp), c("EPT", "VPT", "MPT"))
+  ci_txt <- function(est, lo, hi, d = 2) sprintf(paste0("%.", d, "f [%.", d, "f, %.", d, "f]"), est, lo, hi)
+  sg     <- function(p) signif(p, 3)
+
+  # variable specs: label, data column, kind (cont / nonpar / yn / scan), digits for summaries, preterm-only flag
+  specs <- list(
+    list("Scans per infant",              "n_scans",            "nonpar", 1, FALSE),
+    list("PMA at birth, wk (defines the preterm groups)", "birthPMA", "cont", 2, FALSE),
+    list("Birth weight, g",               "Birth weight (g)",   "cont",   0, FALSE),
+    list("Male sex",                      "male_yes",           "yn",     0, FALSE),
+    list("APGAR, 1 minute",               "APGAR 1 minute",     "nonpar", 2, FALSE),
+    list("APGAR, 5 minute",               "APGAR 5 minute",     "nonpar", 2, FALSE),
+    lapply(yn_items, function(k) list(k, paste0(k, "_yes"), "yn", 0, TRUE)),
+    list(list("Days on ventilation",      "Days on ventilation", "nonpar", 2, TRUE)),
+    list(list("PMA at scan, wk",          "pma",                "scan",   2, FALSE)),
+    list(list("Usable volumes per scan",  "vol",                "scan",   1, FALSE)),
+    list(list("Minutes of data per scan", "mins",               "scan",   1, FALSE)),
+    list(list("Mean framewise displacement, mm", "fd",          "scan",   3, FALSE)))
+  specs <- c(specs[1:6], specs[[7]], specs[8:length(specs)])            # flatten the clinical items
+  specs <- lapply(specs, function(x) if (is.list(x[[1]])) x[[1]] else x)
+
+  summ <- function(x, kind, d) if (kind == "yn") npc(x) else msd(x, d)
+  adj  <- function(df) { df$`FDR p` <- NA_real_; i <- !is.na(df$p); df$`FDR p`[i] <- sg(p.adjust(df$p[i], "fdr")); df }
+
+  ## ---- (A) preterm (all) vs. fetal ---------------------------------------------------------------------------
+  rowA <- function(sp) {
+    lab <- sp[[1]]; col <- sp[[2]]; kind <- sp[[3]]; dg <- sp[[4]]
+    base <- data.frame(Variable = lab, Level = if (kind == "scan") "Scan (mixed model)" else "Infant", check.names = FALSE, stringsAsFactors = FALSE)
+    if (sp[[5]]) return(cbind(base, Test = "preterm only", Fetal = "-", Preterm = "-", `Preterm - fetal [95% CI]` = "-", Statistic = "-", p = NA_real_, check.names = FALSE))
+    d <- if (kind == "scan") scan_df else inf_t; x <- d[[col]]; g <- d$cohort; ok <- !is.na(x); x <- x[ok]; g <- droplevels(g[ok]); d <- d[ok, ]
+    cells <- c(Fetal = summ(x[g == "Fetal"], kind, dg), Preterm = summ(x[g == "Preterm"], kind, dg))
+    out <- tryCatch(switch(kind,
+      cont = { tt <- t.test(x ~ g); list("Welch t-test", ci_txt(mean(x[g == "Preterm"]) - mean(x[g == "Fetal"]), -tt$conf.int[2], -tt$conf.int[1], dg),
+                                         sprintf("t(%.1f) = %.2f", tt$parameter, -tt$statistic), tt$p.value) },
+      nonpar = { wt <- suppressWarnings(wilcox.test(x ~ g, conf.int = TRUE)); list("Wilcoxon rank-sum", ci_txt(-wt$estimate, -wt$conf.int[2], -wt$conf.int[1], dg + 1),
+                                         sprintf("W = %.0f", wt$statistic), wt$p.value) },
+      yn = { tb <- table(g, factor(x, c(FALSE, TRUE))); ft <- fisher.test(tb); list("Fisher exact", sprintf("OR %.2f [%.2f, %.2f]", ft$estimate, ft$conf.int[1], ft$conf.int[2]), "-", ft$p.value) },
+      scan = { m <- lme(x ~ cohort, random = ~ 1 | shortID, data = transform(d, x = x), control = ctrl); tt <- summary(m)$tTable["cohortPreterm", ]
+               q <- qt(.975, tt["DF"]); list("Mixed model (random intercept per infant)", ci_txt(tt["Value"], tt["Value"] - q * tt["Std.Error"], tt["Value"] + q * tt["Std.Error"], dg + 1),
+                                             sprintf("t(%d) = %.2f", tt["DF"], tt["t-value"]), tt["p-value"]) }),
+      error = function(e) list("failed", "-", "-", NA_real_))
+    cbind(base, Test = out[[1]], Fetal = cells[["Fetal"]], Preterm = cells[["Preterm"]], `Preterm - fetal [95% CI]` = out[[2]], Statistic = out[[3]], p = sg(unname(out[[4]])), check.names = FALSE)
+  }
+  tabA <- adj(do.call(rbind, lapply(specs, rowA)))
+  print(tabA, row.names = FALSE)
+
+  ## ---- (B) EPT vs. VPT vs. MPT ---------------------------------------------------------------------------------
+  pair_fisher <- function(x, g) { pr <- list(c("EPT", "VPT"), c("EPT", "MPT"), c("VPT", "MPT"))
+    p <- sapply(pr, function(z) { i <- g %in% z; fisher.test(table(droplevels(g[i]), factor(x[i], c(FALSE, TRUE))))$p.value }); p.adjust(p, "holm") }
+  rowB <- function(sp) {
+    lab <- sp[[1]]; col <- sp[[2]]; kind <- sp[[3]]; dg <- sp[[4]]
+    d <- if (kind == "scan") pre_scan else pre_inf; x <- d[[col]]; g <- d$grp; ok <- !is.na(x); x <- x[ok]; g <- droplevels(g[ok]); d <- d[ok, ]
+    base <- data.frame(Variable = lab, Level = if (kind == "scan") "Scan (mixed model)" else "Infant", check.names = FALSE, stringsAsFactors = FALSE)
+    cells <- sapply(levels(pre_inf$grp), function(l) summ(x[g == l], kind, dg))
+    out <- tryCatch(switch(kind,
+      cont = { ao <- oneway.test(x ~ g); pm <- pairwise.t.test(x, g, pool.sd = FALSE, p.adjust.method = "holm")$p.value
+               list("Welch ANOVA", sprintf("F(%.0f, %.1f) = %.2f", ao$parameter[1], ao$parameter[2], ao$statistic), ao$p.value, c(pm["VPT", "EPT"], pm["MPT", "EPT"], pm["MPT", "VPT"])) },
+      nonpar = { kw <- kruskal.test(x ~ g); pm <- suppressWarnings(pairwise.wilcox.test(x, g, p.adjust.method = "holm", exact = FALSE))$p.value
+               list("Kruskal-Wallis", sprintf("H(2) = %.2f", kw$statistic), kw$p.value, c(pm["VPT", "EPT"], pm["MPT", "EPT"], pm["MPT", "VPT"])) },
+      yn = { ft <- fisher.test(table(g, factor(x, c(FALSE, TRUE)))); list("Fisher exact", "-", ft$p.value, pair_fisher(x, g)) },
+      scan = { m <- lme(x ~ grp, random = ~ 1 | shortID, data = transform(d, x = x), control = ctrl); an <- anova(m)["grp", ]
+               b <- nlme::fixef(m); V <- vcov(m); df2 <- m$fixDF$X[c("grpVPT", "grpMPT")]
+               cp <- function(w, dfx) { est <- sum(w * b); se <- sqrt(drop(t(w) %*% V %*% w)); 2 * pt(-abs(est / se), dfx) }
+               w0 <- setNames(numeric(length(b)), names(b)); wv <- w0; wv["grpVPT"] <- 1; wm <- w0; wm["grpMPT"] <- 1; wvm <- w0; wvm["grpMPT"] <- 1; wvm["grpVPT"] <- -1
+               pp <- p.adjust(c(cp(wv, df2[1]), cp(wm, df2[2]), cp(wvm, min(df2))), "holm")
+               list("Mixed model (random intercept per infant)", sprintf("F(%d, %d) = %.2f", an[["numDF"]], an[["denDF"]], an[["F-value"]]), an[["p-value"]], pp) }),
+      error = function(e) list("failed", "-", NA_real_, rep(NA_real_, 3)))
+    data.frame(base, Test = out[[1]], EPT = cells[["EPT"]], VPT = cells[["VPT"]], MPT = cells[["MPT"]], Statistic = out[[2]], p = sg(unname(out[[3]])),
+               `EPT vs VPT (Holm p)` = sg(unname(out[[4]][1])), `EPT vs MPT (Holm p)` = sg(unname(out[[4]][2])), `VPT vs MPT (Holm p)` = sg(unname(out[[4]][3])),
+               check.names = FALSE, stringsAsFactors = FALSE)
+  }
+  tabB <- adj(do.call(rbind, lapply(specs, rowB)))
+  print(tabB, row.names = FALSE)
+
+  si_table(tabA, "table1_tests", "PretermVsFetal")
+  si_table(tabB, "table1_tests", "BirthGroups")
 }
 
 sessionInfo()
