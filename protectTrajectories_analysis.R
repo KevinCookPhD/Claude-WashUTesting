@@ -676,13 +676,25 @@ message("Clinical workbook match: PRETERM ", sum(!is.na(m_pt)), " of ", length(i
         "; repeated IDs: PRETERM ", sum(duplicated(sheet_id(clin_pt))), ", FETAL ", sum(duplicated(sheet_id(clin_ft))), " (the first non-empty value per infant is used)")
 if (mean(!is.na(m_pt)) < 0.8) stop("Fewer than 80% of preterm infants match the PRETERM sheet's ID column: the IDs probably need reformatting (compare head(sheet_id(clin_pt)) with head(id_pt)).")
 clin_items <- names(pt_cols)
-by_id <- function(d, col, ids) {                                       # first non-empty value per infant (the sheet may have several rows per infant)
-  x <- suppressWarnings(as.numeric(d[[col]]))
+# Cell coding: yes/no items may be typed as 1/0, Y/N or yes/no (blank = missing); ventilation days may carry text ("22 days").
+# Entries that cannot be read are set to missing and listed below, so nothing is lost silently.
+code_cell <- function(x, kind) {
+  x <- trimws(as.character(x)); x[x %in% c("", "NA", "N/A", "na", "n/a", ".")] <- NA
+  if (kind == "num") return(suppressWarnings(as.numeric(sub("^[^0-9.-]*(-?[0-9]*\\.?[0-9]+).*$", "\\1", x))))
+  v <- tolower(x)
+  ifelse(is.na(v), NA_real_, ifelse(grepl("^(1|y|yes|true)\\b", v), 1, ifelse(grepl("^(0|n|no|false)\\b", v), 0, NA_real_)))
+}
+item_kind <- function(k) if (grepl("^APGAR|ventilation", k)) "num" else "yn"
+unread <- list()
+by_id <- function(d, col, ids, kind, item) {                           # first non-empty value per infant (the sheet may have several rows per infant)
+  raw <- trimws(as.character(d[[col]])); x <- code_cell(raw, kind)
+  bad <- unique(raw[!is.na(raw) & raw != "" & is.na(x)]); if (length(bad)) unread[[paste(item, nrow(d))]] <<- bad
   v <- sapply(split(x, sheet_id(d)), function(z) if (all(is.na(z))) NA_real_ else z[!is.na(z)][1])
   unname(v[ids])
 }
 clin_inf <- data.frame(shortID = c(id_pt, id_ft), stringsAsFactors = FALSE)
-for (k in clin_items) clin_inf[[k]] <- c(by_id(clin_pt, pt_map[[k]], id_pt), if (k %in% names(ft_map)) by_id(clin_ft, ft_map[[k]], id_ft) else rep(NA_real_, length(id_ft)))
+for (k in clin_items) clin_inf[[k]] <- c(by_id(clin_pt, pt_map[[k]], id_pt, item_kind(k), k), if (k %in% names(ft_map)) by_id(clin_ft, ft_map[[k]], id_ft, item_kind(k), k) else rep(NA_real_, length(id_ft)))
+if (length(unread)) { cat("\nEntries that could not be read as 1/0 or a number (set to missing); check them:\n"); print(unread) }
 print(round(100 * sapply(clin_inf[clin_items], function(x) mean(is.na(x[seq_along(id_pt)]))), 1))        # % of preterm infants with no value, per item
 as_yes <- function(x) ifelse(is.na(x), NA, x > 0)
 for (k in setdiff(clin_items, c("Days on ventilation", "APGAR 1 minute", "APGAR 5 minute"))) { cat("\n", k, ":\n"); print(table(clin_inf[[k]][seq_along(id_pt)], useNA = "ifany")) }   # check the coding
