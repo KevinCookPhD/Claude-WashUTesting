@@ -683,7 +683,7 @@ inf_t   <- merge(inf_t,   clin_inf, by = "shortID", all.x = TRUE)       # infant
 scan_df <- merge(scan_df, clin_inf, by = "shortID", all.x = TRUE)       # each scan carries its infant's values
 
 msd <- function(x, d = 1) sprintf(paste0("%.", d, "f (%.", d, "f)"), mean(x, na.rm = TRUE), sd(x, na.rm = TRUE))
-npc <- function(x) sprintf("%d (%.0f%%)", sum(x, na.rm = TRUE), 100 * mean(x, na.rm = TRUE))
+npc <- function(x) if (all(is.na(x))) "no data" else sprintf("%d (%.0f%%)", sum(x, na.rm = TRUE), 100 * mean(x, na.rm = TRUE))
 grp_sel <- function(g) list(EPT = g == "EPT", VPT = g == "VPT", MPT = g == "MPT", Total = g != "Fetal", Fetal = g == "Fetal")
 make_table1 <- function(d) {                                           # d = scan_df (by scan) or inf_t (by participant)
   sel  <- grp_sel(d$grp)
