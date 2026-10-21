@@ -1012,8 +1012,8 @@ show_fig("Fig2_part_HomotopicBars", 6.2, 10, function() print(p_homo_h))
 fig2_boxes   <- TRUE
 fig3_boxes   <- TRUE
 fig3_pad_in  <- 0.15        # Fig. 3: space inside each frame above, below and beside the panels, inches
-fig_box_col  <- "#808080"   # frame color
-fig_box_lwd  <- 0.7         # frame line width
+fig_box_col  <- "#2b2b2b"   # frame color (dark gray; "#808080" was the lighter version)
+fig_box_lwd  <- 1.0         # frame line width
 fig_box_r_in <- 0.12        # corner radius, inches
 fig_box_inset_in <- 0.03    # frames are drawn this far inside the stated rectangle so the line is not clipped and neighbouring frames do not touch
 round_box <- function(x, y, w, h) {                  # x, y = lower-left corner, inches; draws in the current viewport
