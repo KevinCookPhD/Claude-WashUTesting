@@ -67,7 +67,7 @@ library(ggpubr)     # ggarrange() for the multi-panel Fig. 3B
 
 ## ---- Switches --------------------------------------------------------------
 SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
-FIG_FORMATS               <- c("tiff", "svg", "pdf")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf"
+FIG_FORMATS               <- c("tiff", "svg")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf"
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
@@ -175,7 +175,7 @@ theme_paper <- function(grid_y = TRUE, grid_x = FALSE, legend = "none") {
 #              device leaves a notch at the top-left corner of bar outlines, so avoid it.
 #   svg      : editable vector for Inkscape / Illustrator (svglite, or svg() without it).
 #              Text stays live text; install the fonts or convert text to outlines on opening.
-#   pdf      : vector via cairo_pdf.
+#   pdf      : vector via cairo_pdf (not written by default; add "pdf" to FIG_FORMATS).
 # install.packages(c("ragg", "svglite")) once for the best output.
 show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS) {
   if (!save) { draw(); return(invisible(NULL)) }
@@ -216,6 +216,26 @@ trim_white <- function(im, m = 6, thr = .99) {
 fmt_p <- function(p) ifelse(p < .001, "<.001", sub("^0", "", sprintf("%.3f", p)))
 # 3-decimal formatting that never prints a negative zero ("-0.000" -> "0.000")
 fmt3 <- function(x) sub("^-(0\\.000)$", "\\1", sprintf("%.3f", x))
+
+## ---- Output naming ------------------------------------------------------------------------------------------------
+# Every saved file follows one pattern, so related items sort together in figureDir:
+#   main text      Fig<n>_<Name>.tiff/.svg           Table<n>_<Name>.csv        (Fig2_part_<Name> = pieces of Fig. 2)
+#   full results   Data_<Name>.csv                   (edge-wise results behind the main figures and tables)
+#   supplement     SI<nn>_Fig_<Name>.tiff/.svg       SI<nn>_Table_<Name>.csv    (one SI number per topic; its tables and figures sort together)
+# <Name> is UpperCamelCase; sub-parts are separated by underscores. The SI numbers live only in this registry: renumber here
+# (e.g. SI_ID[["gt32"]] <- "SI12") and every file name follows. Fig. 1 (flowchart) is made by flowchart/make_flowchart.py.
+SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03", posthoc = "SI04",
+           clinical = "SI05", continuous_GA = "SI06", gt32 = "SI07", within_between = "SI08",
+           volumes = "SI09", motion_covariate = "SI10", age_matched = "SI11", postnatal = "SI12",
+           unharmonized = "SI13", distance = "SI14", motion_followup = "SI15", equal_volume = "SI16",
+           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19")
+si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
+si_table <- function(df, key, name) {
+  df <- as.data.frame(df)
+  if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", si_name(name), ".csv")), row.names = FALSE)
+  invisible(df)
+}
+si_fig <- function(key, name, w, h, draw, ...) show_fig(paste0(SI_ID[[key]], "_Fig_", si_name(name)), w, h, draw, ...)
 
 ## ---- Speed: parallel loops and cached results -------------------------------
 # par_lapply(): lapply() over edges, spread across N_CORES. Linux/Mac use forked
@@ -372,7 +392,7 @@ if (RUN_QA_PLOTS) {
   p_qa_pt_s <- qa_panel(qa_good_pt, sprintf("Preterm (%d infants, %d scans)", length(unique(qa_good_pt$shortID)), nrow(qa_good_pt)))
   p_qa_ft_s <- qa_panel(qa_good_ft, sprintf("Fetal (%d participants, %d scans)", length(unique(qa_good_ft$shortID)), nrow(qa_good_ft)))
   p_qa_stack <- ggpubr::ggarrange(p_qa_pt_s, p_qa_ft_s, ncol = 1, nrow = 2, align = "v", common.legend = TRUE, legend = "bottom")
-  show_fig("qaPlot_goodOnly_stacked", 18, 12, function() print(p_qa_stack))
+  si_fig("usable_scans", "UsableScans", 18, 12, function() print(p_qa_stack))
 }
 
 combFCData   <- rbind(fcData, fetalFCData)
@@ -440,7 +460,7 @@ if (RUN_HARMONIZATION_CHECKS) {
     geom_histogram(aes(x = d_post), color = "#e5af74", fill = "#e5af7470", bins = 65, linewidth = 1) +
     geom_vline(xintercept = 0, linewidth = 1, linetype = "dashed") +
     xlab("Scanner difference (Cohen's d)") + ylab("Count") + theme_paper(legend = "bottom")
-  show_fig("harmonizationScannerDif.tif", 6, 6, function() print(p_scan_d))
+  si_fig("harmonization", "ScannerDifference", 6, 6, function() print(p_scan_d))
 
   # (2) PCA of preterm scans colored by scanner, before vs. after
   par(mfrow = c(1, 2))
@@ -463,7 +483,7 @@ if (RUN_HARMONIZATION_CHECKS) {
     geom_abline(intercept = 0, slope = 1, linewidth = 1, linetype = "dashed") +
     xlab("Pre-Harmonization Beta for PMA at Scan") + ylab("Post-Harmonization Beta for PMA at Scan") +
     theme_paper(grid_x = TRUE)
-  show_fig("harmonizationPreservePMA.tif", 6, 6, function() print(p_bio))
+  si_fig("harmonization", "PmaPreservation", 6, 6, function() print(p_bio))
 }
 
 ## ---- Harmonized data replaces the raw data from here on ---------------------
@@ -834,8 +854,8 @@ tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
 }
 p_tri_fetal   <- tri_heat(cp$B < 0 & cp$pAdj < .05, pal$heat_fetal)
 p_tri_preterm <- tri_heat(cp$B > 0 & cp$pAdj < .05, pal$heat_preterm)
-show_fig("Fig2_matrix_fetal",   6, 6, function() print(p_tri_fetal))
-show_fig("Fig2_matrix_preterm", 6, 6, function() print(p_tri_preterm))
+show_fig("Fig2_part_MatrixFetal",   6, 6, function() print(p_tri_fetal))
+show_fig("Fig2_part_MatrixPreterm", 6, 6, function() print(p_tri_preterm))
 
 ## ---- 4c. Fig. 2 chord diagrams (one file per group) ------------------------
 # ROI order and gaps: right hemisphere then left (mirrored), grouped by lobe
@@ -878,8 +898,8 @@ draw_chord <- function(cols, label_cex = chord_label_cex) {
                 facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex = label_cex))
   circos.clear()
 }
-show_fig("Fig2_chord_fetal",   9, 9, function() draw_chord(chord_col_fetal))
-show_fig("Fig2_chord_preterm", 9, 9, function() draw_chord(chord_col_preterm))
+show_fig("Fig2_part_ChordFetal",   9, 9, function() draw_chord(chord_col_fetal))
+show_fig("Fig2_part_ChordPreterm", 9, 9, function() draw_chord(chord_col_preterm))
 
 ## ---- 4d. Table 2 + data for the homotopic chart --------------------------------
 # Homotopic edges = the same region in the left and right hemispheres.
@@ -981,7 +1001,7 @@ if (homo_show_stars) {       # * = FDR-corrected p < .05 (say so in the caption)
     annotate("text", x = star_x, y = row_pos[homo_sig], label = "*", hjust = 0.5, vjust = homo_star_vjust,
              size = homo_star_pt / ggplot2::.pt, color = "#000000")
 }
-show_fig("Fig2_homotopic_horizontal", 6.2, 10, function() print(p_homo_h))
+show_fig("Fig2_part_HomotopicBars", 6.2, 10, function() print(p_homo_h))
 
 ## ---- 4f. Figure 2 assembled: A = preterm (top), B = fetal (bottom), C = homotopic bars -------------
 # Each piece (chord diagram + triangular matrix per group, and the homotopic chart) is drawn at its own design size
@@ -1052,7 +1072,7 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
     img(hm, xc + fig2_pad_in, 0.05 + fig2_pad_in, homo_w, homo_h)
     txt("C", xc + 0.1, 0.05 + 2 * box_h + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
   }
-  show_fig("Fig2_assembled", W2, H2, draw_fig2, save = TRUE)   # always written to file: drawing this many large pictures in the RStudio plot pane times out
+  show_fig("Fig2_FetalVsPreterm", W2, H2, draw_fig2, save = TRUE)   # always written to file: drawing this many large pictures in the RStudio plot pane times out
 }
 
 ## ---- 4g. SI Fig. 2: mean connectivity matrices, one per group (Fetal, EPT, VPT, MPT) ----
@@ -1178,7 +1198,7 @@ if (RUN_SI_MATRICES) {
     letter("A", 1, 1); letter("B", 1, 2); letter("C", 1, 3); letter("D", 2, 2)
     grid::popViewport()
   }
-  show_fig("SIFig2_connectivity_matrices", 3 * si2_cell_w_in, 2 * si2_cell_h_in, draw_si2)   # the only file written for SI Fig. 2
+  si_fig("mean_matrices", "MeanConnectivity", 3 * si2_cell_w_in, 2 * si2_cell_h_in, draw_si2)   # the only file written for this figure
 }
 
 
@@ -1466,7 +1486,7 @@ write_brainnet_edges <- function(edges, nodeFile, outFile) {
 }
 nodeFile <- file.path(figureDir, "bainNetPlotting", "new_AALNode_80_cortical.node")
 if (file.exists(nodeFile)) {
-  edgeMat <- write_brainnet_edges(sigEdges, nodeFile, file.path(figureDir, "bainNetPlotting", "brainDiff_Update.edge"))
+  edgeMat <- write_brainnet_edges(sigEdges, nodeFile, file.path(figureDir, "bainNetPlotting", "Fig3_BrainNet_Edges.edge"))
   print(c(edges_written = sum(edgeMat) / 2, n_sigEdges = length(sigEdges)))   # should match
 } else message("Node file not found; skipping BrainNet edge export.")
 
@@ -1663,7 +1683,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
         round_box(0, 0, fig3_w, c_h_in + 2 * p3)
       }
     }
-    show_fig("Fig3_PanelsAB", fig3_w, fig3_h, draw_fig3)
+    show_fig("Fig3_PmaByPrematurity", fig3_w, fig3_h, draw_fig3)
   }
   # The rgl window stays open: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
 }
@@ -1716,7 +1736,7 @@ slopesMain_wide
 # Uncorrected contrast p-values: these are follow-ups to the FDR-significant omnibus interaction.
 
 # Supplemental table of the post hoc results: group slopes and pairwise slope contrasts on the 16 edges, with full region
-# names, the Fig. 3 panel, uncorrected p and BH-FDR p (across the 16 edges, per contrast). Written as SI16 (see SI_ID).
+# names, the Fig. 3 panel, uncorrected p and BH-FDR p (across the 16 edges, per contrast). Written under the "posthoc" SI number (see SI_ID).
 si_posthoc <- local({
   tl <- slopesMain; g <- function(k) tl[tl$term == k, ]
   cell <- function(r) sprintf("%s [%s, %s]", fmt3(r$est), fmt3(r$lo), fmt3(r$hi))
@@ -1742,9 +1762,11 @@ si_posthoc_counts
 #    SUPPLEMENTAL OUTPUTS: every control writes >= 1 table (SI<nn>_Table_*.csv, needs SAVE_TABLES) and >= 1 figure
 #    (SI<nn>_Fig_*, needs SAVE_FIGS) to figureDir. Numbers come from the SI_ID registry (defined just before 9a), so
 #    renumbering is one edit there; outputs of one control share a number and sort together:
-#      SI01 clinical cutoffs (9a)   SI02 continuous birth GA (9b)   SI03 scans > 32 wk (9c)   SI04 within/between (9d)
-#      SI05 usable volumes (9e A-C) SI06 motion as covariate (9e D-F)   SI07 age-matched (9f)   SI08 postnatal age (9g)
-#      SI09 unharmonized (9h)       SI10 distance (9i)   SI11 motion follow-up (9j)   SI12 equal volume (9k)
+#      SI01 usable scans (QA)       SI02 mean connectivity matrices   SI03 harmonization checks   SI04 post hoc slope contrasts
+#      SI05 clinical cutoffs (9a)   SI06 continuous birth GA (9b)     SI07 scans > 32 wk (9c)    SI08 within/between (9d)
+#      SI09 usable volumes (9e A-C) SI10 motion as covariate (9e D-F) SI11 age-matched (9f)      SI12 postnatal age (9g)
+#      SI13 unharmonized (9h)       SI14 distance (9i)                SI15 motion follow-up (9j) SI16 equal volume (9k)
+#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)
 #
 #    OVERVIEW (what each check tests and what it showed; details above each block)
 #      9a  clinical cutoffs ........ 9 of the edges FDR-significant; 8 of the 16 hold (cutoff-dependent set)
@@ -1778,19 +1800,7 @@ with_fc <- function(fc, code, tag = "alt") {
   force(code)
 }
 
-## ---- Supplemental (SI) outputs: numbering and helpers ----------------------------------------------------------
-# Every control writes at least one table (SI<nn>_Table_*.csv, if SAVE_TABLES) and one figure (SI<nn>_Fig_*, if SAVE_FIGS).
-# The numbers live only in this registry: renumber here (e.g. SI_ID[["gt32"]] <- "SI07") and every file name follows.
-SI_ID <- c(clinical = "SI01", continuous_GA = "SI02", gt32 = "SI03", within_between = "SI04",
-           volumes = "SI05", motion_covariate = "SI06", age_matched = "SI07", postnatal = "SI08",
-           unharmonized = "SI09", distance = "SI10", motion_followup = "SI11", equal_volume = "SI12",
-           sex_fetal_preterm = "SI13", sex_preterm = "SI14", four_group = "SI15", posthoc = "SI16")
-si_table <- function(df, key, name) {
-  df <- as.data.frame(df)
-  if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", name, ".csv")), row.names = FALSE)
-  invisible(df)
-}
-si_fig <- function(key, name, w, h, draw) show_fig(paste0(SI_ID[[key]], "_Fig_", name), w, h, draw)
+## ---- Supplemental (SI) outputs: helpers (the numbering registry SI_ID is in section 0) ----------------------------
 si_theme <- function() theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4),
                                                             strip.background = element_blank(), legend.position = "bottom")
 facet_dims <- function(n, w = 2.5, h = 2.6) { nc <- min(n, 3); c(w = w * nc + 0.4, h = h * ceiling(n / nc) + 0.7) }
@@ -1890,7 +1900,7 @@ if (RUN_SENSITIVITY) {
   # Supplemental figure: the Fig. 3 B/C trajectories refit on these scans only (same connections, order and layout).
   pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
   pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
-  show_fig(paste0(SI_ID[["gt32"]], "_Fig_after32wk_trajectories"), panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
+  si_fig("gt32", "After32wk_Trajectories", panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
            function() { grid::grid.newpage(); draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B")) },
            save = TRUE)                                                   # always written to figureDir (the plot pane shows blank space above it: the pane is taller than the figure)
 
@@ -2781,11 +2791,11 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
 if (SAVE_TABLES) {
   write.csv(cbind(Row = rownames(Table1_ByScan),        Table1_ByScan),        file.path(figureDir, "Table1_ByScan.csv"),        row.names = FALSE)
   write.csv(cbind(Row = rownames(Table1_ByParticipant), Table1_ByParticipant), file.path(figureDir, "Table1_ByParticipant.csv"), row.names = FALSE)
-  write.csv(fetalRes,        file.path(figureDir, "fetalVsPreterm_allEdges.csv"),        row.names = FALSE)
-  write.csv(table2,          file.path(figureDir, "Table2_homotopic.csv"),               row.names = FALSE)
-  write.csv(intxRes,         file.path(figureDir, "pmaByPrematurity_allEdges.csv"),      row.names = FALSE)
-  write.csv(tab3_display,    file.path(figureDir, "Table3.csv"),                         row.names = FALSE)
-  write.csv(slopesMain_wide, file.path(figureDir, "slopesAndContrasts_sigEdges.csv"),    row.names = FALSE)
+  write.csv(fetalRes,        file.path(figureDir, "Data_FetalVsPreterm_AllEdges.csv"),        row.names = FALSE)
+  write.csv(table2,          file.path(figureDir, "Table2_HomotopicFetalVsPreterm.csv"),               row.names = FALSE)
+  write.csv(intxRes,         file.path(figureDir, "Data_PmaByPrematurity_AllEdges.csv"),      row.names = FALSE)
+  write.csv(tab3_display,    file.path(figureDir, "Table3_PmaByPrematurity.csv"),                         row.names = FALSE)
+  write.csv(slopesMain_wide, file.path(figureDir, "Data_PmaByPrematurity_SlopesSigEdges.csv"),    row.names = FALSE)
 }
 
 ###############################################################################
@@ -2804,7 +2814,7 @@ if (SAVE_TABLES) {
 #     also gives the raw-p count against the 5% expected by chance. Sex is coded from goodData$sex (0 = female,
 #     1 = male, as in Table 1; character codes beginning F / M are also accepted); check the printed coding table.
 #     PMA is centered in the preterm models so the sex coefficient is the male - female difference at the mean PMA.
-#     Output numbers: SI13 (fetal vs. preterm) and SI14 (preterm); see SI_ID.
+#     Output numbers: "sex_fetal_preterm" and "sex_preterm" in SI_ID.
 ###############################################################################
 
 if (RUN_SEX_ANALYSES) {
@@ -2957,7 +2967,7 @@ if (RUN_SEX_ANALYSES) {
                         sex_volcano(res_sex_fp, "scanType:sexF", "scanTypePreterm:sexFMale", "Group x sex (beta)"),
                         p_fm, nrow = 1, labels = c("A", "B", "C"), common.legend = TRUE, legend = "bottom"),
       sex_edge_plot(si_sex, top_fp, by_type = TRUE), ncol = 1, heights = c(1, 1.15), labels = c("", "D"))))
-  si_fig("sex_fetal_preterm", "qq", 4.6, 2.9, function() print(sex_qq(res_sex_fp, sexfp_terms, sexfp_labels)))
+  si_fig("sex_fetal_preterm", "PvalueQQ", 4.6, 2.9, function() print(sex_qq(res_sex_fp, sexfp_terms, sexfp_labels)))
 
   ## ---- 11c. Within preterm ---------------------------------------------------------------------------------------
   print(group_counts(pt_f)); print(group_counts(pt_m))
@@ -3007,7 +3017,7 @@ if (RUN_SEX_ANALYSES) {
                         sex_volcano(res_sex_pt, "ScanPMAc:sexF", "ScanPMAc:sexFMale", "PMA x sex (beta per week)"),
                         nrow = 1, labels = c("A", "B"), common.legend = TRUE, legend = "bottom"),
       sex_edge_plot(pt_sex, top_pt), ncol = 1, heights = c(1, 1.7), labels = c("", "C"))))
-  si_fig("sex_preterm", "qq", 6.2, 5.0, function() print(sex_qq(res_sex_pt, pts_terms, pts_labels)))
+  si_fig("sex_preterm", "PvalueQQ", 6.2, 5.0, function() print(sex_qq(res_sex_pt, pts_terms, pts_labels)))
 
   ## ---- 11d. Focused test on the 16 primary edges: does the Fig. 3 slope pattern differ by sex? ---------------------
   # One model per edge: FC ~ scanner + PMA * birth group * sex (random intercept per infant). From it: the PMA slope in each
@@ -3090,7 +3100,7 @@ if (RUN_SEX_ANALYSES) {
 #     CAUTION: group, PMA range and scanner overlap heavily (fetal scans are all 1.5T and span younger ages than most
 #     preterm scans), so the fetal contrasts rest on the PMA and scanner adjustment, as in the two-group model of
 #     section 4. The preterm-only contrasts are not affected by this.
-#     Output number: SI15 (see SI_ID).
+#     Output number: "four_group" in SI_ID.
 ###############################################################################
 
 if (RUN_FOUR_GROUP) {

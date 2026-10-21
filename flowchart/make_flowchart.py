@@ -228,10 +228,10 @@ def render_raster(path_tif, path_png, dpi=600, ss=2):
             d.text((x * k, y * k), s, font=font(sz, bold), fill=INK, anchor="ls")
     img = img.resize((round(W * dpi / 72), round(H * dpi / 72)), Image.LANCZOS)
     img.save(path_tif, compression="tiff_lzw", dpi=(dpi, dpi))
-    img.save(path_png, dpi=(dpi, dpi))
+    if path_png: img.save(path_png, dpi=(dpi, dpi))
 
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
-    render_svg(os.path.join(here, "Flowchart_redrawn.svg"))
-    render_raster(os.path.join(here, "Flowchart_redrawn.tif"), os.path.join(here, "Flowchart_redrawn.png"))
-    print(f"Wrote Flowchart_redrawn.svg/.tif/.png  ({W/72:.2f} x {H/72:.2f} in)")
+    render_svg(os.path.join(here, "Fig1_Flowchart.svg"))
+    render_raster(os.path.join(here, "Fig1_Flowchart.tif"), None)
+    print(f"Wrote Fig1_Flowchart.svg/.tif  ({W/72:.2f} x {H/72:.2f} in)")
