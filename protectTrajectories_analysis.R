@@ -2671,7 +2671,8 @@ if (SAVE_TABLES) {
 #       11c  within preterm:     FC ~ scanner + PMA * birth group + sex + PMA:sex + birth group:sex
 #            (sex main effect, PMA x sex, birth group x sex; the PMA x birth group test is carried along),
 #            the three-way PMA x birth group x sex test, and the primary PMA x birth group scan adjusted for sex
-#            and within each sex
+#            and within each sex (11c); 11d: focused 1-df test on the 16 primary edges of whether the MPT - EPT and
+#            MPT - VPT slope contrasts differ between males and females
 #     All edge-wise tests are corrected across the 3,003 edges (BH-FDR) separately for each term. These are
 #     exploratory: the sample is small for interactions (especially the three-way test), so each summary table
 #     also gives the raw-p count against the 5% expected by chance. Sex is coded from goodData$sex (0 = female,
@@ -2881,6 +2882,76 @@ if (RUN_SEX_ANALYSES) {
                         nrow = 1, labels = c("A", "B"), common.legend = TRUE, legend = "bottom"),
       sex_edge_plot(pt_sex, top_pt), ncol = 1, heights = c(1, 1.7), labels = c("", "C"))))
   si_fig("sex_preterm", "qq", 6.2, 5.0, function() print(sex_qq(res_sex_pt, pts_terms, pts_labels)))
+
+  ## ---- 11d. Focused test on the 16 primary edges: does the Fig. 3 slope pattern differ by sex? ---------------------
+  # One model per edge: FC ~ scanner + PMA * birth group * sex (random intercept per infant). From it: the PMA slope in each
+  # birth group and sex, the male - female difference of each slope (3 contrasts), and the difference-in-differences that
+  # tests the Fig. 3 pattern directly: (MPT slope - EPT slope) and (MPT slope - VPT slope) in males minus the same in
+  # females (1 df each). FDR is applied across the 16 edges for each contrast family. This is a targeted follow-up on
+  # edges chosen from the primary analysis, not a discovery scan, so report it as such.
+  sex_focus <- function(cn) {
+    d <- pt_sex; d$FCz <- as.numeric(goodFCData[d$longID, cn])
+    m <- lme(FCz ~ scanner + ScanPMAc * BirthCat * sexF, random = ~ 1 | shortID, data = d, method = "REML", control = ctrl)
+    b <- nlme::fixef(m); V <- vcov(m)
+    P <- "ScanPMAc"; PV <- "ScanPMAc:BirthCatVPT"; PM <- "ScanPMAc:BirthCatMPT"; PS <- "ScanPMAc:sexFMale"
+    PVS <- "ScanPMAc:BirthCatVPT:sexFMale"; PMS <- "ScanPMAc:BirthCatMPT:sexFMale"
+    stopifnot(all(c(P, PV, PM, PS, PVS, PMS) %in% names(b)))
+    w <- function(...) { a <- c(...); x <- setNames(numeric(length(b)), names(b)); x[names(a)] <- a; x }
+    L <- list(
+      slope_EPT_F = w(setNames(1, P)),                         slope_EPT_M = w(setNames(c(1, 1), c(P, PS))),
+      slope_VPT_F = w(setNames(c(1, 1), c(P, PV))),            slope_VPT_M = w(setNames(c(1, 1, 1, 1), c(P, PV, PS, PVS))),
+      slope_MPT_F = w(setNames(c(1, 1), c(P, PM))),            slope_MPT_M = w(setNames(c(1, 1, 1, 1), c(P, PM, PS, PMS))),
+      diff_EPT    = w(setNames(1, PS)),                        # male - female slope, by birth group
+      diff_VPT    = w(setNames(c(1, 1), c(PS, PVS))),
+      diff_MPT    = w(setNames(c(1, 1), c(PS, PMS))),
+      MPTvEPT_F   = w(setNames(1, PM)),                        MPTvEPT_M = w(setNames(c(1, 1), c(PM, PMS))),
+      MPTvEPT_diff = w(setNames(1, PMS)),                      # focused test 1: (MPT - EPT) in males minus females
+      MPTvVPT_F   = w(setNames(c(1, -1), c(PM, PV))),          MPTvVPT_M = w(setNames(c(1, -1, 1, -1), c(PM, PV, PMS, PVS))),
+      MPTvVPT_diff = w(setNames(c(1, -1), c(PMS, PVS))))       # focused test 2: (MPT - VPT) in males minus females
+    dfd <- min(m$fixDF$X[c(P, PV, PM, PS, PVS, PMS)]); tq <- qt(.975, dfd)
+    do.call(rbind, lapply(names(L), function(k) {
+      x <- L[[k]]; est <- sum(x * b); se <- sqrt(drop(t(x) %*% V %*% x))
+      data.frame(Connection = cn, term = k, est = est, se = se, lo = est - tq * se, hi = est + tq * se, p = 2 * stats::pt(-abs(est / se), dfd))
+    }))
+  }
+  focus_long <- do.call(rbind, lapply(sigEdges, function(cn) tryCatch(sex_focus(cn), error = function(e) { message(cn, ": ", e$message); NULL })))
+  focus_long$pAdj <- ave(focus_long$p, focus_long$term, FUN = function(p) p.adjust(p, "fdr"))      # across the 16 edges, per contrast
+  fterm <- function(k) focus_long[focus_long$term == k, ]
+  cell  <- function(r) sprintf("%s [%s, %s]", fmt3(r$est), fmt3(r$lo), fmt3(r$hi))
+  focus_wide <- data.frame(Connection = fterm("slope_MPT_F")$Connection,
+                           `MPT slope, female` = cell(fterm("slope_MPT_F")), `MPT slope, male` = cell(fterm("slope_MPT_M")),
+                           `MPT - EPT, female` = cell(fterm("MPTvEPT_F")), `MPT - EPT, male` = cell(fterm("MPTvEPT_M")),
+                           `Male - female (MPT - EPT)` = cell(fterm("MPTvEPT_diff")),
+                           `p` = signif(fterm("MPTvEPT_diff")$p, 3), `FDR p` = signif(fterm("MPTvEPT_diff")$pAdj, 3),
+                           `MPT - VPT, female` = cell(fterm("MPTvVPT_F")), `MPT - VPT, male` = cell(fterm("MPTvVPT_M")),
+                           `Male - female (MPT - VPT)` = cell(fterm("MPTvVPT_diff")),
+                           `p ` = signif(fterm("MPTvVPT_diff")$p, 3), `FDR p ` = signif(fterm("MPTvVPT_diff")$pAdj, 3), check.names = FALSE)
+  focus_sum <- do.call(rbind, lapply(c("MPTvEPT_diff", "MPTvVPT_diff", "diff_EPT", "diff_VPT", "diff_MPT"), function(k) {
+    r <- fterm(k)
+    data.frame(Contrast = c(MPTvEPT_diff = "(MPT - EPT slope): male - female", MPTvVPT_diff = "(MPT - VPT slope): male - female",
+                            diff_EPT = "EPT slope: male - female", diff_VPT = "VPT slope: male - female", diff_MPT = "MPT slope: male - female")[[k]],
+               Edges = nrow(r), `p < .05` = sum(r$p < .05), `FDR p < .05` = sum(r$pAdj < .05), `Smallest p` = signif(min(r$p), 3),
+               `Smallest FDR p` = signif(min(r$pAdj), 3), `Median estimate (male - female)` = round(median(r$est), 4),
+               `Edges with male > female` = sum(r$est > 0), check.names = FALSE)
+  }))
+  print(focus_sum, row.names = FALSE)
+  print(focus_wide[, c(1, 2, 3, 6, 7, 8, 11, 12, 13)], row.names = FALSE)
+  si_table(focus_sum,  "sex_preterm", "focused16_summary")
+  si_table(focus_wide, "sex_preterm", "focused16_slopesAndContrasts")
+  si_table(focus_long, "sex_preterm", "focused16_allEstimates")
+  # Figure: A. the MPT - EPT slope contrast in each sex; B. its male - female difference (the focused test), per edge
+  fl <- rbind(transform(fterm("MPTvEPT_F"), Sex = "Female"), transform(fterm("MPTvEPT_M"), Sex = "Male"))
+  fl$Connection <- factor(fl$Connection, rev(sigEdges))
+  fd <- fterm("MPTvEPT_diff"); fd$Connection <- factor(fd$Connection, rev(sigEdges))
+  p_fa <- ggplot(fl, aes(est, Connection, color = Sex)) + geom_vline(xintercept = 0, linewidth = 0.3) +
+    geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge(width = 0.6), size = 0.25, linewidth = 0.4) +
+    scale_color_manual(values = sex_cols, name = NULL) + labs(x = "MPT - EPT slope (Fisher z per week)", y = NULL) + si_theme()
+  p_fb <- ggplot(fd, aes(est, Connection)) + geom_vline(xintercept = 0, linewidth = 0.3) +
+    geom_pointrange(aes(xmin = lo, xmax = hi), size = 0.25, linewidth = 0.4, color = "#444444") +
+    labs(x = "Male - female difference in (MPT - EPT) slope", y = NULL) + si_theme() +
+    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank())
+  si_fig("sex_preterm", "focused16_MPTvsEPT", 7.0, 4.4, function()
+    print(ggpubr::ggarrange(p_fa, p_fb, nrow = 1, widths = c(1.55, 1), labels = c("A", "B"))))
 }
 
 sessionInfo()
