@@ -3267,7 +3267,7 @@ if (RUN_TABLE1_TESTS) {
   rowA <- function(sp) {
     lab <- sp[[1]]; col <- sp[[2]]; kind <- sp[[3]]; dg <- sp[[4]]
     base <- data.frame(Variable = lab, Level = if (kind == "scan") "Scan (mixed model)" else "Infant", check.names = FALSE, stringsAsFactors = FALSE)
-    if (sp[[5]]) return(cbind(base, Test = "preterm only", Fetal = "-", Preterm = "-", `Preterm - fetal [95% CI]` = "-", Statistic = "-", p = NA_real_, check.names = FALSE))
+    if (sp[[5]]) return(cbind(base, Test = "preterm only", Fetal = "-", Preterm = "-", `Preterm - fetal [95% CI]` = "-", Statistic = "-", p = NA_real_))
     d <- if (kind == "scan") scan_df else inf_t; x <- d[[col]]; g <- d$cohort; ok <- !is.na(x); x <- x[ok]; g <- droplevels(g[ok]); d <- d[ok, ]
     cells <- c(Fetal = summ(x[g == "Fetal"], kind, dg), Preterm = summ(x[g == "Preterm"], kind, dg))
     out <- tryCatch(switch(kind,
@@ -3280,7 +3280,7 @@ if (RUN_TABLE1_TESTS) {
                q <- qt(.975, tt["DF"]); list("Mixed model (random intercept per infant)", ci_txt(tt["Value"], tt["Value"] - q * tt["Std.Error"], tt["Value"] + q * tt["Std.Error"], dg + 1),
                                              sprintf("t(%d) = %.2f", tt["DF"], tt["t-value"]), tt["p-value"]) }),
       error = function(e) list("failed", "-", "-", NA_real_))
-    cbind(base, Test = out[[1]], Fetal = cells[["Fetal"]], Preterm = cells[["Preterm"]], `Preterm - fetal [95% CI]` = out[[2]], Statistic = out[[3]], p = sg(unname(out[[4]])), check.names = FALSE)
+    cbind(base, Test = out[[1]], Fetal = cells[["Fetal"]], Preterm = cells[["Preterm"]], `Preterm - fetal [95% CI]` = out[[2]], Statistic = out[[3]], p = sg(unname(out[[4]])))
   }
   tabA <- adj(do.call(rbind, lapply(specs, rowA)))
   print(tabA, row.names = FALSE)
