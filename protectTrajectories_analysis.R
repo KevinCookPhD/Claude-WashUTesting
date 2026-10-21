@@ -672,12 +672,17 @@ stopifnot(!anyNA(pt_map), !anyNA(ft_map))
 id_pt <- as.character(inf_t$shortID[inf_t$grp != "Fetal"]); id_ft <- as.character(inf_t$shortID[inf_t$grp == "Fetal"])
 sheet_id <- function(d) trimws(as.character(d[[clin_pick(d, "^id$")]]))
 m_pt <- match(id_pt, sheet_id(clin_pt)); m_ft <- match(id_ft, sheet_id(clin_ft))
-message("Clinical workbook match: PRETERM ", sum(!is.na(m_pt)), " of ", length(id_pt), " infants; FETAL ", sum(!is.na(m_ft)), " of ", length(id_ft), " infants")
+message("Clinical workbook match: PRETERM ", sum(!is.na(m_pt)), " of ", length(id_pt), " infants; FETAL ", sum(!is.na(m_ft)), " of ", length(id_ft), " infants",
+        "; repeated IDs: PRETERM ", sum(duplicated(sheet_id(clin_pt))), ", FETAL ", sum(duplicated(sheet_id(clin_ft))), " (the first non-empty value per infant is used)")
 if (mean(!is.na(m_pt)) < 0.8) stop("Fewer than 80% of preterm infants match the PRETERM sheet's ID column: the IDs probably need reformatting (compare head(sheet_id(clin_pt)) with head(id_pt)).")
 clin_items <- names(pt_cols)
+by_id <- function(d, col, ids) {                                       # first non-empty value per infant (the sheet may have several rows per infant)
+  x <- suppressWarnings(as.numeric(d[[col]]))
+  v <- sapply(split(x, sheet_id(d)), function(z) if (all(is.na(z))) NA_real_ else z[!is.na(z)][1])
+  unname(v[ids])
+}
 clin_inf <- data.frame(shortID = c(id_pt, id_ft), stringsAsFactors = FALSE)
-for (k in clin_items) clin_inf[[k]] <- c(clin_pt[[pt_map[[k]]]][m_pt], if (k %in% names(ft_map)) clin_ft[[ft_map[[k]]]][m_ft] else rep(NA, length(id_ft)))
-for (k in clin_items) clin_inf[[k]] <- suppressWarnings(as.numeric(clin_inf[[k]]))
+for (k in clin_items) clin_inf[[k]] <- c(by_id(clin_pt, pt_map[[k]], id_pt), if (k %in% names(ft_map)) by_id(clin_ft, ft_map[[k]], id_ft) else rep(NA_real_, length(id_ft)))
 print(round(100 * sapply(clin_inf[clin_items], function(x) mean(is.na(x[seq_along(id_pt)]))), 1))        # % of preterm infants with no value, per item
 as_yes <- function(x) ifelse(is.na(x), NA, x > 0)
 for (k in setdiff(clin_items, c("Days on ventilation", "APGAR 1 minute", "APGAR 5 minute"))) { cat("\n", k, ":\n"); print(table(clin_inf[[k]][seq_along(id_pt)], useNA = "ifany")) }   # check the coding
