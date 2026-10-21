@@ -686,6 +686,14 @@ for (k in clin_items) clin_inf[[k]] <- c(by_id(clin_pt, pt_map[[k]], id_pt), if 
 print(round(100 * sapply(clin_inf[clin_items], function(x) mean(is.na(x[seq_along(id_pt)]))), 1))        # % of preterm infants with no value, per item
 as_yes <- function(x) ifelse(is.na(x), NA, x > 0)
 for (k in setdiff(clin_items, c("Days on ventilation", "APGAR 1 minute", "APGAR 5 minute"))) { cat("\n", k, ":\n"); print(table(clin_inf[[k]][seq_along(id_pt)], useNA = "ifany")) }   # check the coding
+# Coverage check: infants with a value for each item, by group (and how many infants the group has), so low coverage is visible.
+clin_cov <- do.call(rbind, lapply(clin_items, function(k) {
+  v <- clin_inf[[k]][match(inf_t$shortID, clin_inf$shortID)]
+  data.frame(Item = k, sapply(grp_sel_cov <- list(EPT = inf_t$grp == "EPT", VPT = inf_t$grp == "VPT", MPT = inf_t$grp == "MPT", Fetal = inf_t$grp == "Fetal"),
+                              function(i) sprintf("%d of %d", sum(!is.na(v[i])), sum(i))), check.names = FALSE) }))
+rownames(clin_cov) <- NULL
+cat("\nInfants with a value, by item and group:\n"); print(clin_cov, row.names = FALSE)
+if (SAVE_TABLES) write.csv(clin_cov, file.path(figureDir, "Table1_ClinicalCoverage.csv"), row.names = FALSE)
 inf_t   <- merge(inf_t,   clin_inf, by = "shortID", all.x = TRUE)       # infant-level items; fetal infants get NA
 scan_df <- merge(scan_df, clin_inf, by = "shortID", all.x = TRUE)       # each scan carries its infant's values
 
