@@ -3468,6 +3468,32 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
     si_table(fp_sum,      "fetal_pipeline", "FetalPipeline_ShiftVsGroupDifference")
     si_table(fp_edges,    "fetal_pipeline", "FetalPipeline_AllEdges")
 
+    ## (c) pattern only: remove each scan's global level from both pipelines, then ask whether the remaining edge pattern of the
+    ## pipeline shift resembles the group difference. Because centering is linear, the centered shift is the shift minus its
+    ## mean and the centered group difference is the group difference minus its mean (= the group difference in global level),
+    ## so correlations are unchanged; the fraction reproduced and the sign agreement are recomputed on the centered values.
+    d_c <- d_edge - mean(d_edge); g_c <- gdiff - mean(gdiff, na.rm = TRUE)
+    pat_in <- function(i) c(edges = sum(i), mean_shift = mean(d_c[i]), mean_group_diff = mean(g_c[i]),
+                            fraction_reproduced = sum(d_c[i]) / sum(g_c[i]), same_sign = mean(sign(d_c[i]) == sign(g_c[i])),
+                            pearson = cor(d_c[i], g_c[i]), spearman = cor(d_c[i], g_c[i], method = "spearman"))
+    fp_pat <- rbind(`All 3,003 edges`         = pat_in(rep(TRUE, length(allConn))),
+                    `1,404 primary edges`      = pat_in(sigFetal),
+                    `Primary, preterm > fetal` = pat_in(sigFetal & gdiff < 0),
+                    `Primary, fetal > preterm` = pat_in(sigFetal & gdiff > 0))
+    fp_pat <- data.frame(`Edge set` = rownames(fp_pat), round(fp_pat, 3), check.names = FALSE, row.names = NULL)
+    names(fp_pat) <- c("Edge set", "Edges", "Mean shift, centered", "Mean group difference, centered", "Fraction of group difference reproduced",
+                       "Same sign, proportion", "Pearson r", "Spearman rho")
+    print(fp_pat, row.names = FALSE)
+    # per scan: pattern similarity of that scan's own shift with the group difference (centering does not change a correlation)
+    fp_pat_scan <- data.frame(Scan = seq_along(fp_scan),
+      `Spearman rho, all edges`     = round(sapply(seq_along(fp_scan), function(i) cor(FP[i, ] - STD[i, ], gdiff, method = "spearman")), 3),
+      `Spearman rho, primary edges` = round(sapply(seq_along(fp_scan), function(i) cor((FP[i, ] - STD[i, ])[sigFetal], gdiff[sigFetal], method = "spearman")), 3),
+      `Pearson r, all edges`        = round(sapply(seq_along(fp_scan), function(i) cor(FP[i, ] - STD[i, ], gdiff)), 3),
+      `Pearson r, primary edges`    = round(sapply(seq_along(fp_scan), function(i) cor((FP[i, ] - STD[i, ])[sigFetal], gdiff[sigFetal])), 3), check.names = FALSE)
+    print(fp_pat_scan, row.names = FALSE)
+    si_table(fp_pat,      "fetal_pipeline", "FetalPipeline_PatternOnly")
+    si_table(fp_pat_scan, "fetal_pipeline", "FetalPipeline_PatternOnlyPerScan")
+
     # Figure: A. fetal-pipeline vs. standard-pipeline connectivity per scan (one panel per scan); B. pipeline shift vs. group difference per edge
     d_sc <- do.call(rbind, lapply(seq_along(fp_scan), function(i) data.frame(Scan = paste("Scan", i), std = STD[i, ], fp = FP[i, ])))
     d_sc$Scan <- factor(d_sc$Scan, paste("Scan", seq_along(fp_scan)))
@@ -3482,8 +3508,13 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
       geom_point(size = 0.5, alpha = 0.4, stroke = 0) +
       scale_color_manual(values = c("Primary (1,404 edges)" = col_preterm, "Other edges" = "#8a8a8a"), name = NULL) +
       labs(x = "Group difference (fetal - preterm, adjusted mean)", y = "Pipeline shift (fetal - standard pipeline)") + si_theme()
-    si_fig("fetal_pipeline", "FetalPipeline", 10.0, 4.0, function()
-      print(ggpubr::ggarrange(p14a, p14b, nrow = 1, widths = c(2.1, 1), labels = c("A", "B"))))
+    d_ps <- rbind(data.frame(Scan = factor(fp_pat_scan$Scan), Edges = "All edges", rho = fp_pat_scan[["Spearman rho, all edges"]]),
+                  data.frame(Scan = factor(fp_pat_scan$Scan), Edges = "Primary edges", rho = fp_pat_scan[["Spearman rho, primary edges"]]))
+    p14c <- ggplot(d_ps, aes(Scan, rho, fill = Edges)) + geom_hline(yintercept = 0, linewidth = 0.3) +
+      geom_col(position = position_dodge(width = 0.8), width = 0.7) + scale_fill_manual(values = c("All edges" = "#8a8a8a", "Primary edges" = col_preterm), name = NULL) +
+      labs(x = "Scan", y = "Spearman rho: pipeline shift vs.\ngroup difference (pattern only)") + si_theme()
+    si_fig("fetal_pipeline", "FetalPipeline", 12.5, 4.0, function()
+      print(ggpubr::ggarrange(p14a, p14b, p14c, nrow = 1, widths = c(2.1, 1, 1), labels = c("A", "B", "C"))))
   }
 }
 
