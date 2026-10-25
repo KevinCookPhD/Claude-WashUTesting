@@ -3594,8 +3594,14 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
           Re(mvfft(X, inverse = TRUE)) / n
         }
         FPf <- t(sapply(seq_along(ok), function(k) fp_fz(bp_fill(fp_full[[ok[k]]])[shared[[k]], , drop = FALSE])))
+        # share of the power in 0.08-0.10 Hz (out of 0.009-0.10 Hz): the extra band the fetal pipeline's 0.01-0.1 Hz filter lets through
+        interp_gaps <- function(m) { u <- rowSums(abs(m)) > 0; ix <- seq_len(nrow(m)); apply(m, 2, function(y) approx(ix[u], y[u], xout = ix, rule = 2)$y) }
+        hi_share <- function(m) { m0 <- scale(interp_gaps(m)[, fp_used, drop = FALSE], scale = FALSE); n <- nrow(m0); P <- rowMeans(Mod(mvfft(m0))^2)
+          f <- pmin(0:(n - 1), n - 0:(n - 1)) / (n * fp_tr); sum(P[f >= 0.08 & f <= 0.10]) / sum(P[f >= 0.009 & f <= 0.10]) }
         fp_refilt_tab <- data.frame(
           Scan = ok, Scanner = fp_scan_tab$Scanner[ok],
+          `Power share 0.08-0.10 Hz, standard`       = round(sapply(ok, function(i) hi_share(std_full[[i]])), 3),
+          `Power share 0.08-0.10 Hz, fetal pipeline` = round(sapply(ok, function(i) hi_share(fp_full[[i]])), 3),
           `Mean z, standard`                  = round(rowMeans(STDs), 3),
           `Mean z, fetal pipeline`            = round(rowMeans(FPs), 3),
           `Mean z, fetal pipeline re-filtered` = round(rowMeans(FPf), 3),
@@ -3613,33 +3619,6 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
         si_table(data.frame(Comparison = names(lev_f), `Correlation of mean connectivity across scans` = round(unname(lev_f), 3), check.names = FALSE),
                  "fetal_pipeline", "FetalPipeline_RefilterTest_LevelCorrelation")
         si_table(fp_refilt_cmp, "fetal_pipeline", "FetalPipeline_RefilterTest_ShiftVsGroupDifference")
-
-        ## (g) frequency content and re-filter test. The standard pipeline band-passes 0.009-0.08 Hz, the fetal pipeline 0.01-0.1 Hz; the
-        ## six scans have TR = 2 s in both. (1) Share of the power in 0.08-0.10 Hz (out of 0.009-0.10 Hz): the extra band the fetal
-        ## pipeline lets through. (2) The fetal-pipeline signals are band-passed again to 0.009-0.08 Hz (ideal FFT filter) and the shift is
-        ## recomputed: if it shrinks, the band-pass difference explains it. Censored volumes (all-zero rows) are linearly interpolated before
-        ## filtering and spectra, and connectivity is again taken on the shared volumes. Approximate (interpolation, ideal filter edges).
-        fp_tr <- 2                                                                  # seconds; the preterm acquisition TR, same for both pipelines
-        interp_gaps <- function(m) { u <- rowSums(abs(m)) > 0; ix <- seq_len(nrow(m)); apply(m, 2, function(y) approx(ix[u], y[u], xout = ix, rule = 2)$y) }
-        fold_f  <- function(n, tr = fp_tr) { f <- (0:(n - 1)) / (n * tr); pmin(f, 1 / tr - f) }
-        band_pass <- function(m, lo, hi, tr = fp_tr) { m0 <- sweep(m, 2, colMeans(m)); keep <- fold_f(nrow(m), tr) >= lo & fold_f(nrow(m), tr) <= hi
-                                                       Re(mvfft(sweep(mvfft(m0), 1, keep, `*`), inverse = TRUE)) / nrow(m) }
-        hi_share <- function(m) { m0 <- sweep(m[, fp_used, drop = FALSE], 2, colMeans(m[, fp_used, drop = FALSE])); P <- rowMeans(Mod(mvfft(m0))^2); f <- fold_f(nrow(m))
-                                  sum(P[f >= 0.08 & f <= 0.10]) / sum(P[f >= 0.009 & f <= 0.10]) }
-        sh_std <- sapply(ok, function(i) hi_share(interp_gaps(std_full[[i]]))); sh_fp <- sapply(ok, function(i) hi_share(interp_gaps(fp_full[[i]])))
-        FPf <- t(sapply(seq_along(ok), function(k) fp_fz(band_pass(interp_gaps(fp_full[[ok[k]]]), 0.009, 0.08)[shared[[k]], , drop = FALSE])))
-        fp_filt_tab <- data.frame(
-          Scan = ok, Scanner = fp_scan_tab$Scanner[ok],
-          `Power share 0.08-0.10 Hz, standard` = round(sh_std, 3), `Power share 0.08-0.10 Hz, fetal pipeline` = round(sh_fp, 3),
-          `Mean z, standard` = round(rowMeans(STDs), 3), `Mean z, fetal pipeline` = round(rowMeans(FPs), 3), `Mean z, fetal pipeline re-filtered` = round(rowMeans(FPf), 3),
-          `Shift: fetal - standard` = round(rowMeans(FPs - STDs), 3), `Shift: re-filtered fetal - standard` = round(rowMeans(FPf - STDs), 3),
-          `r over edges: fetal vs standard` = rr(FPs, STDs), `r over edges: re-filtered fetal vs standard` = rr(FPf, STDs), check.names = FALSE)
-        print(fp_filt_tab, row.names = FALSE)
-        fp_filt_cmp <- rbind(shift_stats(seq_along(ok), sprintf("Fetal vs standard (n = %d)", length(ok)), FPs, STDs),
-                             shift_stats(seq_along(ok), sprintf("Re-filtered fetal vs standard (n = %d)", length(ok)), FPf, STDs))
-        print(fp_filt_cmp, row.names = FALSE)
-        si_table(fp_filt_tab, "fetal_pipeline", "FetalPipeline_BandPassTest_PerScan")
-        si_table(fp_filt_cmp, "fetal_pipeline", "FetalPipeline_BandPassTest_ShiftVsGroupDifference")
       }
     } else message("Shared-volume test skipped: the standard time series (rawTS / rawRS) for these scans were not found (ts_files).")
 
