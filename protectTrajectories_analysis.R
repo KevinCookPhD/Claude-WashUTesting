@@ -3497,6 +3497,26 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
     si_table(fp_pat,      "fetal_pipeline", "FetalPipeline_PatternOnly")
     si_table(fp_pat_scan, "fetal_pipeline", "FetalPipeline_PatternOnlyPerScan")
 
+    ## (d) scanner-matched sensitivity: the same comparison for all scans and for the 1.5T scans only (fetal scans are all 1.5T).
+    ## The reference group difference is unchanged (adjusted for scanner and PMA, all scans); only the pipeline shift is restricted.
+    ## "centered" columns remove each scan's global level as in (c). With very few scans this is a descriptive check only.
+    scn15 <- as.character(fp_si$scanner) == levels(scanInfo$scanner)[1]
+    shift_stats <- function(idx, label) {
+      dd <- colMeans((FP - STD)[idx, , drop = FALSE]); dc <- dd - mean(dd); gc <- gdiff - mean(gdiff, na.rm = TRUE)
+      sets <- list(`All 3,003 edges` = rep(TRUE, length(allConn)), `1,404 primary edges` = sigFetal,
+                   `Primary, preterm > fetal` = sigFetal & gdiff < 0, `Primary, fetal > preterm` = sigFetal & gdiff > 0)
+      do.call(rbind, lapply(names(sets), function(n) { i <- sets[[n]]
+        data.frame(Scans = label, `Edge set` = n, Edges = sum(i), `Mean shift` = round(mean(dd[i]), 3), `Mean group difference` = round(mean(gdiff[i]), 3),
+                   `Fraction reproduced` = round(sum(dd[i]) / sum(gdiff[i]), 3), `Same sign` = round(mean(sign(dd[i]) == sign(gdiff[i])), 3),
+                   `Spearman rho` = round(cor(dd[i], gdiff[i], method = "spearman"), 3),
+                   `Fraction reproduced, centered` = round(sum(dc[i]) / sum(gc[i]), 3), `Same sign, centered` = round(mean(sign(dc[i]) == sign(gc[i])), 3),
+                   `Pearson r, centered` = round(cor(dc[i], gc[i]), 3), check.names = FALSE) }))
+    }
+    fp_scanner_tab <- rbind(shift_stats(seq_along(fp_scan), sprintf("All scans (n = %d)", length(fp_scan))),
+                            if (sum(scn15) >= 2) shift_stats(which(scn15), sprintf("1.5T only (n = %d)", sum(scn15))))
+    print(fp_scanner_tab, row.names = FALSE)
+    si_table(fp_scanner_tab, "fetal_pipeline", "FetalPipeline_ScannerMatched")
+
     # Figure: A. fetal-pipeline vs. standard-pipeline connectivity per scan (one panel per scan); B. pipeline shift vs. group difference per edge
     d_sc <- do.call(rbind, lapply(seq_along(fp_scan), function(i) data.frame(Scan = paste("Scan", i), std = STD[i, ], fp = FP[i, ])))
     d_sc$Scan <- factor(d_sc$Scan, paste("Scan", seq_along(fp_scan)))
