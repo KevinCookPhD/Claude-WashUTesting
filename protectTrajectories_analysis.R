@@ -3501,8 +3501,8 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
     ## The reference group difference is unchanged (adjusted for scanner and PMA, all scans); only the pipeline shift is restricted.
     ## "centered" columns remove each scan's global level as in (c). With very few scans this is a descriptive check only.
     scn15 <- as.character(fp_si$scanner) == levels(scanInfo$scanner)[1]
-    shift_stats <- function(idx, label) {
-      dd <- colMeans((FP - STD)[idx, , drop = FALSE]); dc <- dd - mean(dd); gc <- gdiff - mean(gdiff, na.rm = TRUE)
+    shift_stats <- function(idx, label, F_ = FP, S_ = STD) {
+      dd <- colMeans((F_ - S_)[idx, , drop = FALSE]); dc <- dd - mean(dd); gc <- gdiff - mean(gdiff, na.rm = TRUE)
       sets <- list(`All 3,003 edges` = rep(TRUE, length(allConn)), `1,404 primary edges` = sigFetal,
                    `Primary, preterm > fetal` = sigFetal & gdiff < 0, `Primary, fetal > preterm` = sigFetal & gdiff > 0)
       do.call(rbind, lapply(names(sets), function(n) { i <- sets[[n]]
@@ -3516,6 +3516,40 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
                             if (sum(scn15) >= 2) shift_stats(which(scn15), sprintf("1.5T only (n = %d)", sum(scn15))))
     print(fp_scanner_tab, row.names = FALSE)
     si_table(fp_scanner_tab, "fetal_pipeline", "FetalPipeline_ScannerMatched")
+
+    ## (e) shared-volume test: is the level shift just the fetal pipeline's more lenient censoring? Both pipelines write one row
+    ## per volume, with censored volumes as all-zero rows. If the two files of a scan have the same number of rows, connectivity is
+    ## recomputed in BOTH pipelines on exactly the volumes that neither censored. If the shift disappears, censoring explains it;
+    ## if it stays, the difference lies in the other preprocessing steps. Needs the standard time series in rawTS/rawRS.
+    if (exists("ts_files") && all(fp_scan %in% names(ts_files))) {
+      fp_full  <- lapply(fp_files, read_ts); std_full <- lapply(fp_scan, function(id) read_ts(ts_files[[id]]))
+      same_n   <- mapply(function(a, b) nrow(a) == nrow(b), fp_full, std_full)
+      if (sum(same_n) < 2) {
+        message("Shared-volume test skipped: the two pipelines' time series have different numbers of rows for most scans (",
+                paste(sprintf("%d vs %d", sapply(fp_full, nrow), sapply(std_full, nrow)), collapse = "; "), ").")
+      } else {
+        ok <- which(same_n)
+        shared <- lapply(ok, function(i) rowSums(abs(fp_full[[i]])) > 0 & rowSums(abs(std_full[[i]])) > 0)
+        FPs  <- t(sapply(seq_along(ok), function(k) fp_fz(fp_full[[ok[k]]][shared[[k]], , drop = FALSE])))
+        STDs <- t(sapply(seq_along(ok), function(k) fp_fz(std_full[[ok[k]]][shared[[k]], , drop = FALSE])))
+        fp_shared_tab <- data.frame(
+          Scan = ok, Scanner = fp_scan_tab$Scanner[ok],
+          `Frames in the time series`           = sapply(ok, function(i) nrow(fp_full[[i]])),
+          `Usable, standard pipeline`           = sapply(ok, function(i) sum(rowSums(abs(std_full[[i]])) > 0)),
+          `Usable, fetal pipeline`              = sapply(ok, function(i) sum(rowSums(abs(fp_full[[i]])) > 0)),
+          `Usable in both (shared)`             = sapply(shared, sum),
+          `Mean shift, all usable volumes`      = round(rowMeans(FP - STD)[ok], 3),
+          `Mean shift, shared volumes only`     = round(rowMeans(FPs - STDs), 3),
+          `Pearson r over edges, all volumes`   = round(sapply(ok, function(i) cor(FP[i, ], STD[i, ])), 3),
+          `Pearson r over edges, shared volumes` = round(sapply(seq_along(ok), function(k) cor(FPs[k, ], STDs[k, ])), 3), check.names = FALSE)
+        print(fp_shared_tab, row.names = FALSE)
+        fp_shared_cmp <- rbind(shift_stats(seq_along(ok), sprintf("Shared volumes, all scans (n = %d)", length(ok)), FPs, STDs),
+                               if (sum(scn15[ok]) >= 2) shift_stats(which(scn15[ok]), sprintf("Shared volumes, 1.5T only (n = %d)", sum(scn15[ok])), FPs, STDs))
+        print(fp_shared_cmp, row.names = FALSE)
+        si_table(fp_shared_tab, "fetal_pipeline", "FetalPipeline_SharedVolumes_PerScan")
+        si_table(fp_shared_cmp, "fetal_pipeline", "FetalPipeline_SharedVolumes_ShiftVsGroupDifference")
+      }
+    } else message("Shared-volume test skipped: the standard time series (rawTS / rawRS) for these scans were not found (ts_files).")
 
     # Figure: A. fetal-pipeline vs. standard-pipeline connectivity per scan (one panel per scan); B. pipeline shift vs. group difference per edge
     d_sc <- do.call(rbind, lapply(seq_along(fp_scan), function(i) data.frame(Scan = paste("Scan", i), std = STD[i, ], fp = FP[i, ])))
