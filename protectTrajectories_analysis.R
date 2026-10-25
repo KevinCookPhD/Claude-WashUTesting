@@ -40,7 +40,8 @@
 #  10  Save tables
 #  11  Sex differences (exploratory)
 #  12  Four-group model (Fetal, EPT, VPT, MPT)
-#  13  Group comparisons for the Table 1 variables, session info
+#  13  Group comparisons for the Table 1 variables
+#  14  Preterm scans re-run through the fetal pipeline (control), session info
 #
 # NOTES FROM THE ORIGINAL SCRIPT
 #   * onesie_1z065_03 is removed from the connectivity data (extreme outlier).
@@ -77,6 +78,7 @@ RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. pret
 RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm differences depend on the distance between ROIs?
 RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns
 RUN_SEX_ANALYSES          <- TRUE   # section 11: sex differences (fetal vs. preterm and within preterm; exploratory)
+RUN_FETAL_PIPELINE_CONTROL <- TRUE  # section 14: preterm scans re-run through the fetal pipeline (data/preemieFetalPipeline)
 RUN_TABLE1_TESTS          <- TRUE   # section 13: group comparisons for the Table 1 variables (preterm vs. fetal; EPT / VPT / MPT)
 RUN_FOUR_GROUP            <- TRUE   # section 12: four-group model (Fetal, EPT, VPT, MPT)
 RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: fetal vs. preterm with every scan cut to the same number of volumes (needs data/rawTS or data/rawRS)
@@ -230,7 +232,7 @@ SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03"
            clinical = "SI05", continuous_GA = "SI06", gt32 = "SI07", within_between = "SI08",
            volumes = "SI09", motion_covariate = "SI10", age_matched = "SI11", postnatal = "SI12",
            unharmonized = "SI13", distance = "SI14", motion_followup = "SI15", equal_volume = "SI16",
-           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20")
+           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20", fetal_pipeline = "SI21")
 si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
@@ -1797,7 +1799,7 @@ si_posthoc_counts
 #      SI05 clinical cutoffs (9a)   SI06 continuous birth GA (9b)     SI07 scans > 32 wk (9c)    SI08 within/between (9d)
 #      SI09 usable volumes (9e A-C) SI10 motion as covariate (9e D-F) SI11 age-matched (9f)      SI12 postnatal age (9g)
 #      SI13 unharmonized (9h)       SI14 distance (9i)                SI15 motion follow-up (9j) SI16 equal volume (9k)
-#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)
+#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)   SI21 fetal-pipeline control (14)
 #
 #    OVERVIEW (what each check tests and what it showed; details above each block)
 #      9a  clinical cutoffs ........ 9 of the edges FDR-significant; 8 of the 16 hold (cutoff-dependent set)
@@ -3372,6 +3374,115 @@ if (RUN_TABLE1_TESTS) {
     scale_fill_manual(values = grp_fill, guide = "none") + scale_color_manual(values = grp_fill, guide = "none") +
     facet_wrap(~Variable, scales = "free_y", ncol = 2) + labs(x = NULL, y = NULL) + si_theme()
   si_fig("table1_tests", "Table1_Distributions", 6.4, 5.6, function() print(p13c))
+}
+
+###############################################################################
+# 14. PRETERM SCANS RUN THROUGH THE FETAL PIPELINE (control)
+#     A few preterm scans were also processed with the fetal preprocessing pipeline. Their ROI time series are in
+#     data/preemieFetalPipeline (one tab-separated .1D file per scan, same format and ROI order as data/rawTS: rows =
+#     volumes, 111 ROI columns, censored volumes all-zero). Because the same scans exist in the standard-pipeline
+#     connectivity (unharmonized `combFCData`), the comparison is paired:
+#       (a) how closely the fetal-pipeline connectivity reproduces the standard-pipeline connectivity of the same scan
+#           (Pearson and Spearman correlation over the 3,003 edges, mean Fisher z, usable volumes);
+#       (b) whether the edge-wise shift caused by the pipeline (fetal pipeline - standard pipeline, averaged over the
+#           scans) resembles the fetal-vs-preterm group difference (adjusted mean fetal - preterm; unharmonized when
+#           section 9h has run, so it is on the same footing as the unharmonized scan values). If it does, part of the
+#           group difference could be a preprocessing effect; the "fraction reproduced" is the sum of the pipeline shift
+#           over the 1,404 primary edges divided by the sum of the group difference over the same edges.
+#     Only a handful of scans: everything here is descriptive (no p-values), and each scan is its own replicate.
+#     Scans are matched by name: a file belongs to the scan whose full ID is the file name (without "_ts.1D") or,
+#     failing that, appears inside it; the matches are printed (counts only). Set fp_file_id() for another naming scheme.
+#     Output number: "fetal_pipeline" in SI_ID.
+###############################################################################
+
+if (RUN_FETAL_PIPELINE_CONTROL) {
+  fp_dir <- file.path(dataDir, "preemieFetalPipeline")
+  fp_files <- if (dir.exists(fp_dir)) list.files(fp_dir, pattern = "\\.1D$", recursive = TRUE, full.names = TRUE) else character(0)
+  if (length(fp_files) == 0) {
+    message("No .1D files found in ", fp_dir, ": skipping section 14.")
+  } else {
+    fp_file_id <- function(f) sub("_ts\\.1D$", "", basename(f))                       # edit if the files are named differently
+    fp_id  <- fp_file_id(fp_files)
+    hit    <- ifelse(fp_id %in% scanInfo$longID, fp_id,
+                     vapply(fp_id, function(z) { m <- scanInfo$longID[vapply(scanInfo$longID, function(id) grepl(id, z, fixed = TRUE), NA)]
+                                                  if (length(m) == 1) m else NA_character_ }, ""))
+    message("Fetal-pipeline files: ", length(fp_files), "; matched to a scan in the analysis: ", sum(!is.na(hit)), "; unmatched: ", sum(is.na(hit)))
+    keep <- !is.na(hit) & !duplicated(hit)
+    if (!any(keep)) stop("No fetal-pipeline file matches a scan ID. Adjust fp_file_id() (file names look like: ", paste(head(basename(fp_files), 2), collapse = ", "), ").")
+    fp_files <- fp_files[keep]; fp_scan <- hit[keep]
+    fp_pre <- scanInfo$scanType[match(fp_scan, scanInfo$longID)] == "Preterm"
+    if (!all(fp_pre)) message(sum(!fp_pre), " matched scan(s) are fetal scans and are ignored.")
+    fp_files <- fp_files[fp_pre]; fp_scan <- fp_scan[fp_pre]
+    message("Preterm scans compared: ", length(fp_scan))
+
+    # Fisher z of the 3,003 edges from a time series (usable volumes only), same ROI mapping as section 9k
+    fp_roi <- gsub("-", ".", roiData$FullLabel[1:111], fixed = TRUE)
+    fp_parts <- strsplit(allConn, "_", fixed = TRUE)
+    fp_ei <- match(sapply(fp_parts, `[`, 1), fp_roi); fp_ej <- match(sapply(fp_parts, `[`, 2), fp_roi)
+    stopifnot(!anyNA(fp_ei), !anyNA(fp_ej))
+    fp_used <- sort(unique(c(fp_ei, fp_ej))); fp_ci <- match(fp_ei, fp_used); fp_cj <- match(fp_ej, fp_used)
+    fp_fz <- function(x) { cm <- suppressWarnings(cor(x[, fp_used])); atanh(pmin(pmax(cm[cbind(fp_ci, fp_cj)], -0.999999), 0.999999)) }
+    fp_ts <- lapply(fp_files, function(f) { m <- read_ts(f)
+      if (ncol(m) != 111) stop(basename(f), " has ", ncol(m), " columns; expected the 111 ROIs of rawTS (check the ROI set/order of the fetal pipeline output).")
+      m[rowSums(abs(m)) > 0, , drop = FALSE] })
+    FP  <- t(sapply(fp_ts, fp_fz)); rownames(FP) <- fp_scan; colnames(FP) <- allConn           # fetal-pipeline connectivity (scans x edges)
+    STD <- as.matrix(combFCData[fp_scan, allConn])                                              # standard pipeline, same scans, unharmonized
+    stopifnot(!anyNA(STD))
+
+    ## (a) agreement within each scan
+    fp_scan_tab <- data.frame(
+      Scan = seq_along(fp_scan),
+      `Usable volumes, standard pipeline`    = scan_vol[match(fp_scan, scanInfo$longID)],
+      `Usable volumes, fetal pipeline`       = vapply(fp_ts, nrow, 1L),
+      `Mean Fisher z, standard pipeline`     = round(rowMeans(STD), 3),
+      `Mean Fisher z, fetal pipeline`        = round(rowMeans(FP), 3),
+      `Mean difference (fetal - standard)`   = round(rowMeans(FP - STD), 3),
+      `RMS difference`                       = round(sqrt(rowMeans((FP - STD)^2)), 3),
+      `Pearson r over edges`                 = round(sapply(seq_along(fp_scan), function(i) cor(FP[i, ], STD[i, ])), 3),
+      `Spearman rho over edges`              = round(sapply(seq_along(fp_scan), function(i) cor(FP[i, ], STD[i, ], method = "spearman")), 3),
+      check.names = FALSE)
+    print(fp_scan_tab, row.names = FALSE)
+
+    ## (b) does the pipeline shift resemble the fetal-vs-preterm difference?
+    d_edge <- colMeans(FP - STD)                                                               # mean shift per edge, over the scans
+    ref    <- if (exists("fetalRes_raw")) fetalRes_raw else fetalRes
+    gdiff  <- ref$emmMean.Fetal - ref$emmMean.Preterm                                          # group difference (fetal - preterm), adjusted means
+    gdiff  <- gdiff[match(allConn, ref$Connection)]
+    ratio_in <- function(i) c(edges = sum(i), mean_shift = mean(d_edge[i]), mean_group_diff = mean(gdiff[i]),
+                              fraction_reproduced = sum(d_edge[i]) / sum(gdiff[i]),
+                              same_sign = mean(sign(d_edge[i]) == sign(gdiff[i])), rho = cor(d_edge[i], gdiff[i], method = "spearman"))
+    fp_sum <- rbind(`All 3,003 edges`          = ratio_in(rep(TRUE, length(allConn))),
+                    `1,404 primary edges`       = ratio_in(sigFetal),
+                    `Primary, preterm > fetal`  = ratio_in(sigFetal & gdiff < 0),
+                    `Primary, fetal > preterm`  = ratio_in(sigFetal & gdiff > 0))
+    fp_sum <- data.frame(Edges = rownames(fp_sum), round(fp_sum, 3), check.names = FALSE, row.names = NULL)
+    names(fp_sum) <- c("Edge set", "Edges", "Mean pipeline shift (fetal - standard)", "Mean group difference (fetal - preterm)",
+                       "Fraction of group difference reproduced", "Same sign, proportion", "Spearman rho (shift vs. group difference)")
+    print(fp_sum, row.names = FALSE)
+
+    fp_edges <- data.frame(Connection = allConn, standard_mean = colMeans(STD), fetalPipeline_mean = colMeans(FP), shift = d_edge,
+                           shift_sd_over_scans = apply(FP - STD, 2, sd), group_difference = gdiff, primary_fetal_vs_preterm = sigFetal)
+    si_table(fp_scan_tab, "fetal_pipeline", "FetalPipeline_PerScan")
+    si_table(fp_sum,      "fetal_pipeline", "FetalPipeline_ShiftVsGroupDifference")
+    si_table(fp_edges,    "fetal_pipeline", "FetalPipeline_AllEdges")
+
+    # Figure: A. fetal-pipeline vs. standard-pipeline connectivity per scan (one panel per scan); B. pipeline shift vs. group difference per edge
+    d_sc <- do.call(rbind, lapply(seq_along(fp_scan), function(i) data.frame(Scan = paste("Scan", i), std = STD[i, ], fp = FP[i, ])))
+    d_sc$Scan <- factor(d_sc$Scan, paste("Scan", seq_along(fp_scan)))
+    ann_sc <- data.frame(Scan = factor(paste("Scan", seq_along(fp_scan)), levels(d_sc$Scan)), x = -Inf, y = Inf,
+                         lab = sprintf("r = %.2f", fp_scan_tab[["Pearson r over edges"]]))
+    p14a <- ggplot(d_sc, aes(std, fp)) + geom_abline(linetype = "dashed", linewidth = 0.3) +
+      geom_point(color = "#8a8a8a", alpha = 0.25, size = 0.4, stroke = 0) +
+      geom_text(data = ann_sc, aes(x = x, y = y, label = lab), hjust = -0.1, vjust = 1.4, size = 2.6, inherit.aes = FALSE) +
+      facet_wrap(~Scan, ncol = min(3, length(fp_scan))) + labs(x = "Connectivity, standard pipeline (Fisher z)", y = "Connectivity, fetal pipeline (Fisher z)") + si_theme()
+    d_sh <- data.frame(x = gdiff, y = d_edge, sig = factor(sigFetal, c(TRUE, FALSE), c("Primary (1,404 edges)", "Other edges")))
+    p14b <- ggplot(d_sh, aes(x, y, color = sig)) + geom_hline(yintercept = 0, linewidth = 0.3) + geom_vline(xintercept = 0, linewidth = 0.3) +
+      geom_point(size = 0.5, alpha = 0.4, stroke = 0) +
+      scale_color_manual(values = c("Primary (1,404 edges)" = col_preterm, "Other edges" = "#8a8a8a"), name = NULL) +
+      labs(x = "Group difference (fetal - preterm, adjusted mean)", y = "Pipeline shift (fetal - standard pipeline)") + si_theme()
+    si_fig("fetal_pipeline", "FetalPipeline", 10.0, 4.0, function()
+      print(ggpubr::ggarrange(p14a, p14b, nrow = 1, widths = c(2.1, 1), labels = c("A", "B"))))
+  }
 }
 
 sessionInfo()
