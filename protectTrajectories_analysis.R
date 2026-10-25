@@ -3548,6 +3548,37 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
         print(fp_shared_cmp, row.names = FALSE)
         si_table(fp_shared_tab, "fetal_pipeline", "FetalPipeline_SharedVolumes_PerScan")
         si_table(fp_shared_cmp, "fetal_pipeline", "FetalPipeline_SharedVolumes_ShiftVsGroupDifference")
+
+        ## (f) global-signal test: a rough global signal regression (the mean of the 111 ROI signals, regressed out of every ROI,
+        ## on the shared volumes). If the fetal pipeline lowers connectivity because it removes a shared whole-brain signal that
+        ## the standard pipeline keeps, then regressing it out of the standard time series should move the standard connectivity
+        ## toward the fetal-pipeline connectivity: the level shift should shrink and the agreement between pipelines should rise.
+        ## "both" regresses it from both pipelines. This is only an approximation (ROI-mean signal, not a voxelwise global signal).
+        gsr_fz <- function(m) { g <- cbind(1, rowMeans(m)); fp_fz(m - g %*% solve(crossprod(g), crossprod(g, m))) }
+        STDg <- t(sapply(seq_along(ok), function(k) gsr_fz(std_full[[ok[k]]][shared[[k]], , drop = FALSE])))
+        FPg  <- t(sapply(seq_along(ok), function(k) gsr_fz(fp_full[[ok[k]]][shared[[k]], , drop = FALSE])))
+        rr   <- function(A, B) round(sapply(seq_len(nrow(A)), function(i) cor(A[i, ], B[i, ])), 3)
+        fp_gsr_tab <- data.frame(
+          Scan = ok, Scanner = fp_scan_tab$Scanner[ok],
+          `Mean z, standard`                 = round(rowMeans(STDs), 3), `Mean z, standard + GSR` = round(rowMeans(STDg), 3),
+          `Mean z, fetal pipeline`           = round(rowMeans(FPs), 3),  `Mean z, fetal pipeline + GSR` = round(rowMeans(FPg), 3),
+          `Shift: fetal - standard`          = round(rowMeans(FPs - STDs), 3),
+          `Shift: fetal - standard+GSR`      = round(rowMeans(FPs - STDg), 3),
+          `Shift: fetal+GSR - standard+GSR`  = round(rowMeans(FPg - STDg), 3),
+          `r over edges: fetal vs standard`        = rr(FPs, STDs),
+          `r over edges: fetal vs standard+GSR`    = rr(FPs, STDg),
+          `r over edges: fetal+GSR vs standard+GSR` = rr(FPg, STDg), check.names = FALSE)
+        print(fp_gsr_tab, row.names = FALSE)
+        lev_r <- c(`standard vs fetal` = cor(rowMeans(STDs), rowMeans(FPs)), `standard+GSR vs fetal` = cor(rowMeans(STDg), rowMeans(FPs)),
+                   `standard+GSR vs fetal+GSR` = cor(rowMeans(STDg), rowMeans(FPg)))
+        print(round(lev_r, 3))                                   # correlation of the scan-level mean connectivity across scans
+        fp_gsr_cmp <- rbind(shift_stats(seq_along(ok), sprintf("Fetal vs standard (n = %d)", length(ok)), FPs, STDs),
+                            shift_stats(seq_along(ok), sprintf("Fetal vs standard + GSR (n = %d)", length(ok)), FPs, STDg))
+        print(fp_gsr_cmp, row.names = FALSE)
+        si_table(fp_gsr_tab, "fetal_pipeline", "FetalPipeline_GlobalSignalTest_PerScan")
+        si_table(data.frame(Comparison = names(lev_r), `Correlation of mean connectivity across scans` = round(unname(lev_r), 3), check.names = FALSE),
+                 "fetal_pipeline", "FetalPipeline_GlobalSignalTest_LevelCorrelation")
+        si_table(fp_gsr_cmp, "fetal_pipeline", "FetalPipeline_GlobalSignalTest_ShiftVsGroupDifference")
       }
     } else message("Shared-volume test skipped: the standard time series (rawTS / rawRS) for these scans were not found (ts_files).")
 
