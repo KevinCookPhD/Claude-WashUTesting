@@ -3580,6 +3580,40 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
                  "fetal_pipeline", "FetalPipeline_GlobalSignalTest_LevelCorrelation")
         si_table(fp_gsr_cmp, "fetal_pipeline", "FetalPipeline_GlobalSignalTest_ShiftVsGroupDifference")
 
+        ## (g) re-filter test: the fetal-pipeline signals keep far more power below 0.009 Hz than the standard ones (about 20% vs 1-3% in the
+        ## cleanest scans), although both nominally high-pass near 0.01 Hz. Here the fetal-pipeline signals are band-passed again with a
+        ## sharp 0.009-0.08 Hz filter (the standard band; TR in fp_tr), connectivity is recomputed on the shared volumes, and the shift
+        ## and the agreement with the standard pipeline are compared with the unfiltered fetal-pipeline values. Censored frames are filled
+        ## by linear interpolation before filtering (an approximation); the standard signals are left as they are.
+        fp_tr <- 2                                                 # seconds; these scans were acquired with TR = 2000 ms
+        bp_fill <- function(m, lo = 0.009, hi = 0.08, tr = fp_tr) {
+          keep <- which(rowSums(abs(m)) > 0)
+          mi <- apply(m, 2, function(y) approx(keep, y[keep], xout = seq_along(y), rule = 2)$y)
+          mi <- scale(mi, scale = FALSE); n <- nrow(mi); k <- 0:(n - 1); fr <- pmin(k, n - k) / (n * tr)
+          X <- mvfft(mi); X[!(fr >= lo & fr <= hi), ] <- 0
+          Re(mvfft(X, inverse = TRUE)) / n
+        }
+        FPf <- t(sapply(seq_along(ok), function(k) fp_fz(bp_fill(fp_full[[ok[k]]])[shared[[k]], , drop = FALSE])))
+        fp_refilt_tab <- data.frame(
+          Scan = ok, Scanner = fp_scan_tab$Scanner[ok],
+          `Mean z, standard`                  = round(rowMeans(STDs), 3),
+          `Mean z, fetal pipeline`            = round(rowMeans(FPs), 3),
+          `Mean z, fetal pipeline re-filtered` = round(rowMeans(FPf), 3),
+          `Shift: fetal - standard`           = round(rowMeans(FPs - STDs), 3),
+          `Shift: re-filtered - standard`     = round(rowMeans(FPf - STDs), 3),
+          `r over edges: fetal vs standard`        = rr(FPs, STDs),
+          `r over edges: re-filtered vs standard`  = rr(FPf, STDs), check.names = FALSE)
+        print(fp_refilt_tab, row.names = FALSE)
+        lev_f <- c(`standard vs fetal pipeline` = cor(rowMeans(STDs), rowMeans(FPs)), `standard vs re-filtered` = cor(rowMeans(STDs), rowMeans(FPf)))
+        print(round(lev_f, 3))
+        fp_refilt_cmp <- rbind(shift_stats(seq_along(ok), sprintf("Fetal vs standard (n = %d)", length(ok)), FPs, STDs),
+                               shift_stats(seq_along(ok), sprintf("Re-filtered fetal vs standard (n = %d)", length(ok)), FPf, STDs))
+        print(fp_refilt_cmp, row.names = FALSE)
+        si_table(fp_refilt_tab, "fetal_pipeline", "FetalPipeline_RefilterTest_PerScan")
+        si_table(data.frame(Comparison = names(lev_f), `Correlation of mean connectivity across scans` = round(unname(lev_f), 3), check.names = FALSE),
+                 "fetal_pipeline", "FetalPipeline_RefilterTest_LevelCorrelation")
+        si_table(fp_refilt_cmp, "fetal_pipeline", "FetalPipeline_RefilterTest_ShiftVsGroupDifference")
+
         ## (g) frequency content and re-filter test. The standard pipeline band-passes 0.009-0.08 Hz, the fetal pipeline 0.01-0.1 Hz; the
         ## six scans have TR = 2 s in both. (1) Share of the power in 0.08-0.10 Hz (out of 0.009-0.10 Hz): the extra band the fetal
         ## pipeline lets through. (2) The fetal-pipeline signals are band-passed again to 0.009-0.08 Hz (ideal FFT filter) and the shift is
