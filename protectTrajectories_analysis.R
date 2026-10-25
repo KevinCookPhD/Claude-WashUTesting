@@ -3432,8 +3432,11 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
     stopifnot(!anyNA(STD))
 
     ## (a) agreement within each scan
+    fp_si <- scanInfo[match(fp_scan, scanInfo$longID), ]
     fp_scan_tab <- data.frame(
       Scan = seq_along(fp_scan),
+      Scanner = ifelse(as.character(fp_si$scanner) == levels(scanInfo$scanner)[1], "1.5T", "3T"),          # 450 = 1.5T, 750 = 3T
+      `PMA at scan, wk` = round(fp_si$ScanPMA, 1), `Birth group` = as.character(fp_si$BirthCat),
       `Usable volumes, standard pipeline`    = scan_vol[match(fp_scan, scanInfo$longID)],
       `Usable volumes, fetal pipeline`       = vapply(fp_ts, nrow, 1L),
       `Mean Fisher z, standard pipeline`     = round(rowMeans(STD), 3),
