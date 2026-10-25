@@ -41,7 +41,8 @@
 #  11  Sex differences (exploratory)
 #  12  Four-group model (Fetal, EPT, VPT, MPT)
 #  13  Group comparisons for the Table 1 variables
-#  14  Preterm scans re-run through the fetal pipeline (control), session info
+#  14  Preterm scans re-run through the fetal pipeline (control)
+#  15  Fetal vs. preterm with each scan's global level removed, session info
 #
 # NOTES FROM THE ORIGINAL SCRIPT
 #   * onesie_1z065_03 is removed from the connectivity data (extreme outlier).
@@ -79,6 +80,7 @@ RUN_DISTANCE_CONTROL      <- TRUE   # section 9i: do fetal-vs-preterm difference
 RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise displacement) covariates and similar-volume / similar-motion reruns
 RUN_SEX_ANALYSES          <- TRUE   # section 11: sex differences (fetal vs. preterm and within preterm; exploratory)
 RUN_FETAL_PIPELINE_CONTROL <- TRUE  # section 14: preterm scans re-run through the fetal pipeline (data/preemieFetalPipeline)
+RUN_GLOBAL_LEVEL_CONTROL  <- TRUE   # section 15: fetal vs. preterm after removing each scan's global connectivity level
 RUN_TABLE1_TESTS          <- TRUE   # section 13: group comparisons for the Table 1 variables (preterm vs. fetal; EPT / VPT / MPT)
 RUN_FOUR_GROUP            <- TRUE   # section 12: four-group model (Fetal, EPT, VPT, MPT)
 RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: fetal vs. preterm with every scan cut to the same number of volumes (needs data/rawTS or data/rawRS)
@@ -232,7 +234,7 @@ SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03"
            clinical = "SI05", continuous_GA = "SI06", gt32 = "SI07", within_between = "SI08",
            volumes = "SI09", motion_covariate = "SI10", age_matched = "SI11", postnatal = "SI12",
            unharmonized = "SI13", distance = "SI14", motion_followup = "SI15", equal_volume = "SI16",
-           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20", fetal_pipeline = "SI21")
+           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20", fetal_pipeline = "SI21", global_level = "SI22")
 si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
@@ -1799,7 +1801,7 @@ si_posthoc_counts
 #      SI05 clinical cutoffs (9a)   SI06 continuous birth GA (9b)     SI07 scans > 32 wk (9c)    SI08 within/between (9d)
 #      SI09 usable volumes (9e A-C) SI10 motion as covariate (9e D-F) SI11 age-matched (9f)      SI12 postnatal age (9g)
 #      SI13 unharmonized (9h)       SI14 distance (9i)                SI15 motion follow-up (9j) SI16 equal volume (9k)
-#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)   SI21 fetal-pipeline control (14)
+#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)   SI21 fetal-pipeline control (14)   SI22 global level removed (15)
 #
 #    OVERVIEW (what each check tests and what it showed; details above each block)
 #      9a  clinical cutoffs ........ 9 of the edges FDR-significant; 8 of the 16 hold (cutoff-dependent set)
@@ -3483,6 +3485,74 @@ if (RUN_FETAL_PIPELINE_CONTROL) {
     si_fig("fetal_pipeline", "FetalPipeline", 10.0, 4.0, function()
       print(ggpubr::ggarrange(p14a, p14b, nrow = 1, widths = c(2.1, 1), labels = c("A", "B"))))
   }
+}
+
+###############################################################################
+# 15. GLOBAL LEVEL REMOVED: fetal vs. preterm after taking out each scan's overall connectivity level
+#     Section 14 showed that the fetal pipeline lowers connectivity overall, by about as much as the preterm > fetal
+#     group difference. To ask which fetal-vs-preterm differences are NOT just a difference in a scan's overall level, the
+#     primary scan model (FC ~ PMA + scanner + group, random intercept per infant) is repeated after
+#       - subtracting each scan's mean Fisher z over all 3,003 edges (harmonized data)           "global level removed"
+#       - also dividing by the scan's SD over the edges (harmonized data)                         "level and spread removed"
+#       - subtracting each scan's mean over all edges (unharmonized data)                         "global level removed"
+#     Edge values are then relative to the scan's own average connectivity, so the average group difference is 0 by
+#     construction and what remains is the pattern of differences across edges. Betas are comparable with the primary
+#     betas in the first and third variants; in the standardized variant read only direction and significance (its scale
+#     differs). A table also gives the group difference in the global level itself (same model, one value per scan), and
+#     how many of the primary edges of each direction keep their sign and FDR significance.
+#     Output number: "global_level" in SI_ID.
+###############################################################################
+
+if (RUN_GLOBAL_LEVEL_CONTROL) {
+  gl_h <- as.matrix(goodFCData[scanInfo$longID, allConn]); gl_u <- as.matrix(combFCData[scanInfo$longID, allConn])
+  gl_center <- function(m) m - rowMeans(m)
+  gl_std    <- function(m) (m - rowMeans(m)) / apply(m, 1, sd)
+  gl_runs <- list(`Harmonized, global level removed`           = list(fc = gl_center(gl_h), tag = "glLevelH"),
+                  `Harmonized, level and spread removed`       = list(fc = gl_std(gl_h),    tag = "glStdH"),
+                  `Unharmonized, global level removed`         = list(fc = gl_center(gl_u), tag = "glLevelU"))
+  res_gl <- lapply(gl_runs, function(g) with_fc(as.data.frame(g$fc), run_fetal(scanInfo, paste0("globalLevel_", g$tag)), g$tag))
+  n_gl   <- setNames(rep(list(nrow(scanInfo)), length(res_gl)), names(res_gl))
+  for (n in names(res_gl)) { cat("\n", n, "\n"); print(cmp_fetal(res_gl[[n]], n_scans = nrow(scanInfo))) }
+
+  # How many primary edges of each direction keep their sign and FDR significance
+  prim_pos <- sigFetal & fetalRes$scanTypeb > 0; prim_neg <- sigFetal & fetalRes$scanTypeb < 0       # preterm > fetal / fetal > preterm
+  keep_tab <- do.call(rbind, lapply(names(res_gl), function(n) {
+    r <- res_gl[[n]]; s <- !is.na(r$scanTypep.Adj) & r$scanTypep.Adj < .05
+    k_pos <- sum(prim_pos & s & r$scanTypeb > 0, na.rm = TRUE); k_neg <- sum(prim_neg & s & r$scanTypeb < 0, na.rm = TRUE)
+    data.frame(Analysis = n, `Preterm > fetal edges kept` = sprintf("%d of %d (%.1f%%)", k_pos, sum(prim_pos), 100 * k_pos / sum(prim_pos)),
+               `Fetal > preterm edges kept` = sprintf("%d of %d (%.1f%%)", k_neg, sum(prim_neg), 100 * k_neg / sum(prim_neg)),
+               `New FDR edges (not in the primary 1,404)` = sum(s & !sigFetal), `FDR edges, preterm > fetal` = sum(s & r$scanTypeb > 0), `FDR edges, fetal > preterm` = sum(s & r$scanTypeb < 0),
+               check.names = FALSE)
+  }))
+  print(keep_tab, row.names = FALSE)
+
+  # The group difference in the global level itself (one value per scan; same model as the primary scan)
+  gl_level_tab <- do.call(rbind, lapply(list(Harmonized = gl_h, Unharmonized = gl_u), function(m) {
+    d <- scanInfo; d$level <- rowMeans(m)
+    fit <- lme(level ~ ScanPMA + scanner + scanType, random = ~ 1 | shortID, data = d, control = ctrl); tt <- summary(fit)$tTable["scanTypePreterm", ]
+    q <- qt(.975, tt["DF"])
+    data.frame(`Mean Fisher z, fetal` = round(mean(d$level[d$scanType == "Fetal"]), 3), `Mean Fisher z, preterm` = round(mean(d$level[d$scanType == "Preterm"]), 3),
+               `Preterm - fetal, adjusted [95% CI]` = sprintf("%.3f [%.3f, %.3f]", tt["Value"], tt["Value"] - q * tt["Std.Error"], tt["Value"] + q * tt["Std.Error"]),
+               p = signif(tt["p-value"], 3), check.names = FALSE)
+  }))
+  gl_level_tab <- cbind(Data = rownames(gl_level_tab), gl_level_tab); rownames(gl_level_tab) <- NULL
+  print(gl_level_tab, row.names = FALSE)
+
+  si_table(keep_tab,     "global_level", "GlobalLevel_PrimaryEdgesKept")
+  si_table(gl_level_tab, "global_level", "GlobalLevel_GroupDifferenceInLevel")
+  # Results table + beta scatter (A) and the share of primary edges kept (B)
+  bars <- do.call(rbind, lapply(names(res_gl), function(n) {
+    r <- res_gl[[n]]; s <- !is.na(r$scanTypep.Adj) & r$scanTypep.Adj < .05
+    data.frame(Analysis = n, Direction = c("Preterm > fetal", "Fetal > preterm"),
+               pct = c(100 * sum(prim_pos & s & r$scanTypeb > 0, na.rm = TRUE) / sum(prim_pos), 100 * sum(prim_neg & s & r$scanTypeb < 0, na.rm = TRUE) / sum(prim_neg)))
+  }))
+  bars$Analysis <- factor(bars$Analysis, names(res_gl))
+  p15b <- ggplot(bars, aes(Analysis, pct, fill = Direction)) + geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+    geom_text(aes(label = sprintf("%.0f%%", pct)), position = position_dodge(width = 0.8), vjust = -0.4, size = 2.6) +
+    scale_fill_manual(values = c("Preterm > fetal" = col_preterm, "Fetal > preterm" = col_fetal), name = NULL) +
+    scale_x_discrete(labels = function(x) gsub(", ", ",\n", x)) + scale_y_continuous(limits = c(0, 105), expand = c(0, 0)) +
+    labs(x = NULL, y = "Primary edges still FDR-significant\nwith the same sign (%)") + si_theme()
+  si_fetal("global_level", "globalLevel", res_gl, n_gl, extra = p15b)
 }
 
 sessionInfo()
