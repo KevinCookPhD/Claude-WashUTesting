@@ -198,7 +198,14 @@ if (!exists("VERIFY_HELPERS_ONLY")) {
         Intx.p = list(function(o) o$Intx.p, function(n) n$Intx.p),
         Grp.p.adjust  = list(function(o) o$Grp.p.adjust,  function(n) n$Grp.p.adjust),
         Intx.p.adjust = list(function(o) o$Intx.p.adjust, function(n) n$Intx.p.adjust))
-      if (net != "CRB") m <- c(list(TD.Mean = list(function(o) o$TD.Mean, function(n) n$TD.Mean)), m)  # old CRB used emmeans
+      # old Limbic interaction table used RAW means; every other network used model-adjusted (emmeans) means
+      suf <- if (net == "Limbic") ".Raw" else ""
+      meanMap <- list(
+        TD.Mean  = list(function(o) o$TD.Mean,  function(n) n[[paste0("TD.Mean", suf)]]),
+        ASD.Mean = list(function(o) o$ASD.Mean, function(n) n[[paste0("ASD.Mean", suf)]]),
+        TD.SE    = list(function(o) o$TD.SE,    function(n) n[[paste0("TD.SE", suf)]]),
+        ASD.SE   = list(function(o) o$ASD.SE,   function(n) n[[paste0("ASD.SE", suf)]]))
+      m <- c(meanMap, m)
       compareTables(oldItx, newItx, m, paste(net, "network - interaction"))
     }
   }

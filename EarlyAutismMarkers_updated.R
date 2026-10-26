@@ -24,8 +24,11 @@
 # What was dropped / simplified (tell me if you want any back)
 #   * The older bar-chart regional figures (raw means; and the "Alt" versions): replaced by
 #     fitted-trajectory figures.
-#   * CRB network table used emmeans for its interaction-table means; all networks now use
-#     raw group means and SEs, like the others.
+#   * Network INTERACTION tables: the old code used model-adjusted means/SEs (emmeans) for CRB,
+#     DMN, SomMot, SubCort, Auditory and Visual, but raw means for Limbic. All networks now use
+#     the model-adjusted means/SEs (TD.Mean etc.); raw ones are kept as TD.Mean.Raw etc.
+#     The trend-connection figure therefore plots adjusted means, as the old figure did for
+#     all networks except Limbic.
 #   * Cerebellar power-analysis scraps (hard-coded eta2_to_f2 values) and unused objects.
 #   * Cortical thickness and tissue models now use the same exclusion list as the regional
 #     models (excludeScans) instead of having none / a different one.
@@ -121,14 +124,24 @@ compareGroups <- function(df, var, group = "mchat_result", levs = c("Pass", "Fai
 # d needs: Risk (factor, 'Low Risk' reference), scanAgeC, shortID (factor), and the outcome column.
 statNames <- c("LowRisk.Mean", "HighRisk.Mean", "LowRisk.SE", "HighRisk.SE",
                "Add.Grp.B", "Add.Grp.p", "Add.Age.B", "Add.Age.p",
-               "Itx.Grp.B", "Itx.Grp.p", "Itx.Age.B", "Itx.Age.p", "Itx.B", "Itx.p", "n")
+               "Itx.Grp.B", "Itx.Grp.p", "Itx.Age.B", "Itx.Age.p", "Itx.B", "Itx.p", "n",
+               "AdjLow.Mean", "AdjHigh.Mean", "AdjLow.SE", "AdjHigh.SE")
 emptyStats <- setNames(rep(NA_real_, length(statNames)), statNames)
 
 fitModels <- function(d, y) {
   d$y <- d[[y]]
   tryCatch({
     add <- summary(lme(y ~ Risk + scanAgeC, random = ~ 1 | shortID, data = d, control = lmeCtl))$tTable
-    itx <- summary(lme(y ~ Risk * scanAgeC, random = ~ 1 | shortID, data = d, control = lmeCtl))$tTable
+    mi  <- lme(y ~ Risk * scanAgeC, random = ~ 1 | shortID, data = d, control = lmeCtl)
+    itx <- summary(mi)$tTable
+    # Model-adjusted group means (what emmeans(model, "Grp") returned) at the sample's average age,
+    # from the interaction model's fixed effects: order is (Intercept), High Risk, age, High Risk:age
+    xbar <- mean(d$scanAgeC)
+    beta <- fixef(mi)
+    V <- mi$varFix
+    adj <- function(L) c(sum(L * beta), sqrt(drop(t(L) %*% V %*% L)))
+    adjLow  <- adj(c(1, 0, xbar, 0))
+    adjHigh <- adj(c(1, 1, xbar, xbar))
     lo <- d$y[d$Risk == "Low Risk"]
     hi <- d$y[d$Risk == "High Risk"]
     se <- function(x) sd(x) / sqrt(length(x))
@@ -138,7 +151,8 @@ fitModels <- function(d, y) {
       Itx.Grp.B = itx["RiskHigh Risk", "Value"], Itx.Grp.p = itx["RiskHigh Risk", "p-value"],
       Itx.Age.B = itx["scanAgeC", "Value"],      Itx.Age.p = itx["scanAgeC", "p-value"],
       Itx.B = itx["RiskHigh Risk:scanAgeC", "Value"], Itx.p = itx["RiskHigh Risk:scanAgeC", "p-value"],
-      n = nrow(d))
+      n = nrow(d),
+      AdjLow.Mean = adjLow[1], AdjHigh.Mean = adjHigh[1], AdjLow.SE = adjLow[2], AdjHigh.SE = adjHigh[2])
   }, error = function(e) emptyStats)
 }
 
@@ -729,8 +743,10 @@ networkFits <- lapply(names(networks), function(nm) {
                     ASD.Mean = net$ASD.Mean, ASD.SE = net$HighRisk.SE,
                     Grp.B = net$Add.Grp.B, Grp.p = net$Add.Grp.p, GA.B = net$Add.Age.B, GA.p = net$Add.Age.p,
                     Grp.p.adjust = net$Add.Grp.p.Adj, GA.p.adjust = net$Add.Age.p.Adj)
-  itx <- data.frame(ROI = net$ROI, TD.Mean = net$TD.Mean, TD.SE = net$LowRisk.SE,
-                    ASD.Mean = net$ASD.Mean, ASD.SE = net$HighRisk.SE,
+  itx <- data.frame(ROI = net$ROI, TD.Mean = net$AdjLow.Mean, TD.SE = net$AdjLow.SE,
+                    ASD.Mean = net$AdjHigh.Mean, ASD.SE = net$AdjHigh.SE,
+                    TD.Mean.Raw = net$TD.Mean, ASD.Mean.Raw = net$ASD.Mean,
+                    TD.SE.Raw = net$LowRisk.SE, ASD.SE.Raw = net$HighRisk.SE,
                     Grp.B = net$Itx.Grp.B, Grp.p = net$Itx.Grp.p, GA.B = net$Itx.Age.B, GA.p = net$Itx.Age.p,
                     Intx.B = net$Itx.B, Intx.p = net$Itx.p,
                     Grp.p.adjust = net$Itx.Grp.p.Adj, GA.p.adjust = net$Itx.Age.p.Adj, Intx.p.adjust = net$Itx.p.Adj)
