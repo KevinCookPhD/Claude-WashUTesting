@@ -1700,7 +1700,7 @@ tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=
 tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
 tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
 
-meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
 
 meansTablePlot <- summary(meansTable)
 
@@ -1751,7 +1751,7 @@ tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fet
 tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
 tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
 tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
 
 meansTablePlot <- summary(meansTable)
 
@@ -1799,7 +1799,7 @@ tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fet
 tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
 tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
 tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
 
 meansTablePlot <- summary(meansTable)
 
@@ -1847,7 +1847,7 @@ tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fet
 tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
 tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
 tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
 
 meansTablePlot <- summary(meansTable)
 
@@ -1895,7 +1895,7 @@ tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fet
 tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
 tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
 tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
 
 meansTablePlot <- summary(meansTable)
 
@@ -1943,7 +1943,7 @@ tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fet
 tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
 tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
 tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
 
 meansTablePlot <- summary(meansTable)
 
@@ -1991,7 +1991,7 @@ tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fet
 tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
 tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
 tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
 
 meansTablePlot <- summary(meansTable)
 
