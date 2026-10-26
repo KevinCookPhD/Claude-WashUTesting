@@ -137,7 +137,10 @@ if (!exists("VERIFY_HELPERS_ONLY")) {
   newEnv$excludeCT     <- character(0)                                   # old CT code excluded nothing
   # Where the new script lives. Set newScriptPath before sourcing this file to point anywhere, e.g.
   #   newScriptPath <- "C:/Users/Kevin/Downloads/EarlyAutismMarkers_updated.R"
-  newScript <- if (exists("newScriptPath")) newScriptPath else here("EarlyAutismMarkers_updated.R")
+  newScript <- if (exists("newScriptPath")) newScriptPath else
+    c(here("code", "EarlyAutismMarkers_updated.R"), here("EarlyAutismMarkers_updated.R"))[
+      file.exists(c(here("code", "EarlyAutismMarkers_updated.R"), here("EarlyAutismMarkers_updated.R")))][1]
+  if (is.na(newScript)) newScript <- here("code", "EarlyAutismMarkers_updated.R")
   if (!file.exists(newScript)) stop("Can't find the new script at: ", newScript,
                                     "\nDownload it from the GitHub branch (or set newScriptPath).")
   source(newScript, local = newEnv)
