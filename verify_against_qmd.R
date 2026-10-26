@@ -135,7 +135,12 @@ if (!exists("VERIFY_HELPERS_ONLY")) {
   newEnv$excludeScans  <- c("rescue_0175_01", "rescue_0184_01")          # old regional table code
   newEnv$excludeTissue <- c("rescue_0175_01", "fetus_02178_01", "rescue_0184_01")   # old tissue code
   newEnv$excludeCT     <- character(0)                                   # old CT code excluded nothing
-  source(here("EarlyAutismMarkers_updated.R"), local = newEnv)
+  # Where the new script lives. Set newScriptPath before sourcing this file to point anywhere, e.g.
+  #   newScriptPath <- "C:/Users/Kevin/Downloads/EarlyAutismMarkers_updated.R"
+  newScript <- if (exists("newScriptPath")) newScriptPath else here("EarlyAutismMarkers_updated.R")
+  if (!file.exists(newScript)) stop("Can't find the new script at: ", newScript,
+                                    "\nDownload it from the GitHub branch (or set newScriptPath).")
+  source(newScript, local = newEnv)
 
   cat("\n\n=================== VERIFICATION ===================\n")
   cat("(ok = same to within 0.01% after accounting for the intentional sign/reference changes)\n")
