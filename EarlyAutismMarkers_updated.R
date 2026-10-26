@@ -46,21 +46,31 @@ library(parallel)
 
 baseDir <- here("data")
 figDir  <- here("paper", "figures")
-outDir  <- file.path(baseDir, "functional", "output")
 
 tissueDir   <- file.path(baseDir, "anatomical", "tissueVolumes_Individual")
 regionalDir <- file.path(baseDir, "anatomical", "regionalVolumes_Individual")
 
-CENTER_AGE      <- TRUE    # center scan age so group effect = difference at the average age
-HANDMATCH       <- TRUE    # hand swaps of Placenta-cohort Pass scans in the anatomical sample
-WRITE_OUTPUT    <- TRUE    # write the functional CSV tables (as the .qmd did)
-RUN_PERMUTATION <- FALSE   # global permutation test for regional group x age (slow)
-nPerm           <- 500
-INCLUDE_CEREBELLAR_PARCELLATION <- FALSE
+# Options can be pre-set before source()-ing this file (the verification script does this);
+# otherwise these defaults are used.
+opt <- function(name, default) {
+  env <- parent.frame()
+  if (exists(name, envir = env, inherits = FALSE)) get(name, envir = env, inherits = FALSE) else default
+}
 
-# Scans excluded from every anatomical model. (The old figure code also dropped
-# 'fetus_02178_01'; the old table code did not. Decide once, here.)
-excludeScans <- c("rescue_0175_01", "rescue_0184_01")
+CENTER_AGE      <- opt("CENTER_AGE", TRUE)       # center scan age so group effect = difference at the average age
+HANDMATCH       <- opt("HANDMATCH", TRUE)        # hand swaps of Placenta-cohort Pass scans in the anatomical sample
+WRITE_OUTPUT    <- opt("WRITE_OUTPUT", TRUE)     # write the functional CSV tables (as the .qmd did)
+RUN_PERMUTATION <- opt("RUN_PERMUTATION", FALSE) # global permutation test for regional group x age (slow)
+nPerm           <- opt("nPerm", 500)
+INCLUDE_CEREBELLAR_PARCELLATION <- opt("INCLUDE_CEREBELLAR_PARCELLATION", FALSE)
+outDir          <- opt("outDir", file.path(baseDir, "functional", "output"))   # where functional CSVs go
+
+# Scans excluded from the anatomical models. (The old figure code also dropped 'fetus_02178_01';
+# the old table code did not; the old tissue code dropped all three; old cortical thickness none.)
+# Decide once, here. Tissue and thickness can be overridden separately.
+excludeScans  <- opt("excludeScans", c("rescue_0175_01", "rescue_0184_01"))
+excludeTissue <- opt("excludeTissue", excludeScans)
+excludeCT     <- opt("excludeCT", excludeScans)
 
 lmeCtl <- lmeControl(msMaxIter = 200, tolerance = 1e-4, msTol = 1e-5, opt = "optim")
 
@@ -312,12 +322,17 @@ try({
 })
 
 # Analysis base: one row per scan, read once and reused by every anatomical analysis
-base <- data.frame(longID = fetalMatched$longID, shortID = fetalMatched$shortID,
-                   scanAge = as.numeric(fetalMatched$scanAge), mchat_result = fetalMatched$mchat_result,
-                   stringsAsFactors = FALSE)
-base <- base[!(base$longID %in% excludeScans), ]
-base$Risk <- factor(ifelse(base$mchat_result == "Fail", "High Risk", "Low Risk"),
-                    levels = c("Low Risk", "High Risk"))
+makeBase <- function(exclude) {
+  b <- data.frame(longID = fetalMatched$longID, shortID = fetalMatched$shortID,
+                  scanAge = as.numeric(fetalMatched$scanAge), mchat_result = fetalMatched$mchat_result,
+                  stringsAsFactors = FALSE)
+  b <- b[!(b$longID %in% exclude), ]
+  b$Risk <- factor(ifelse(b$mchat_result == "Fail", "High Risk", "Low Risk"), levels = c("Low Risk", "High Risk"))
+  b
+}
+base <- makeBase(excludeScans)
+tissueBase <- makeBase(excludeTissue)
+ctBase <- makeBase(excludeCT)
 
 
 # ---- 5. Tissue volumes -------------------------------------------------------
@@ -330,7 +345,7 @@ tissueMat <- as.matrix(tissueRaw[, tissueCols])
 rownames(tissueMat) <- tissueRaw$longID
 storage.mode(tissueMat) <- "numeric"
 
-tissueRes <- analyzeAnatomy(base, tissueMat, tissueTBV)
+tissueRes <- analyzeAnatomy(tissueBase, tissueMat, tissueTBV)
 reportSig(tissueRes$raw,    "Tissue volumes (raw)")
 reportSig(tissueRes$normed, "Tissue volumes (normalized to TBV)")
 
@@ -444,7 +459,7 @@ ctMat <- as.matrix(ctDataRaw[, c(1:70, 79:90)])
 globalCT <- setNames(as.numeric(t(read.csv(file.path(baseDir, "anatomical", "CT_Global_Thickness.csv"), header = FALSE))),
                      rownames(ctDataRaw))
 
-ctRes <- analyzeAnatomy(base, ctMat, globalCT)
+ctRes <- analyzeAnatomy(ctBase, ctMat, globalCT)
 reportSig(ctRes$raw,    "Cortical thickness (raw)")
 reportSig(ctRes$normed, "Cortical thickness (normalized to global CT)")
 
