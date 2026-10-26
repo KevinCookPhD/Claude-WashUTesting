@@ -1,0 +1,4244 @@
+---
+title: "EarlyAutismMarkers"
+format:
+  html:
+    page-layout: full
+    toc: true
+    toc-title: Contents
+    css: styles.css
+    theme: cyborg
+editor: visual
+---
+
+# Initialize Environment
+
+```{r setup}
+# added by rewrite_paths.R: 2026-10-26
+library(here)
+
+# WORK LAPTOP
+baseDir <- here("data")
+
+figDir <- here("paper", "figures")
+
+# HOME LAPTOP
+# baseDir <- here("data")
+
+# figDir <- here("paper", "figures")
+
+setwd(baseDir)
+knitr::opts_knit$set(root.dir = normalizePath(baseDir))
+library(ggplot2)
+library(ggpubr)
+# library(lmerTest)
+library(reshape2)
+library(MatchIt)
+library(nlme)
+library(circlize)
+library(emmeans)
+```
+
+# Prepare Data
+
+## Behavioral Data
+
+### QA Data
+
+```{r}
+# Read in ONLY the IDs for each assessment of potential interest
+bayleyID <- read.csv(paste0(baseDir,'/behavioral/Bayley.csv'))[,1:3]
+itseaID <- read.csv(paste0(baseDir,'/behavioral/ITSEA.csv'))[,1:3]
+mchatID <- read.csv(paste0(baseDir,'/behavioral/MCHAT.csv'))[,1:3]
+vinelandID <- read.csv(paste0(baseDir,'/behavioral/Vineland.csv'))[,1:3]
+srsID <- read.csv(paste0(baseDir,'/behavioral/SRS.csv'))[,1:3]
+cbclID <- read.csv(paste0(baseDir,'/behavioral/CBCL.csv'))[,1:3]
+briefID <- read.csv(paste0(baseDir,'/behavioral/BRIEF.csv'))[,1:3]
+
+# Concatonate IDs into one ID list
+allID <- c(bayleyID$study_id,
+           itseaID$study_id,
+           mchatID$study_id,
+           vinelandID$study_id,
+           srsID$study_id,
+           cbclID$study_id,
+           briefID$study_id)
+allID <- unique(allID)
+
+# Create a summarized ID frame for each measure
+assessmentSummary <- as.data.frame(matrix(nrow=length(allID), ncol=10))
+colnames(assessmentSummary) <- c('ID','Study','TimePoint',
+                                 'Bayley','ITSEA','MCHAT','Vineland','SRS','CBCL','BRIEF')
+
+# Pull IDs, Study, and Time points for each assessment
+for(i in 1:length(allID)){
+  
+  tempID <- allID[i]
+
+  #Bayley
+  tempData <- subset(bayleyID, study_id == tempID)
+  
+  if(nrow(tempData)>0){
+    assessmentSummary$ID[i] <- tempData$study_id[1]
+    assessmentSummary$Study[i] <- tempData$study [1]
+    assessmentSummary$TimePoint[i] <- tempData$timepoint [1]
+    assessmentSummary$Bayley[i] <- T
+  } else {
+    assessmentSummary$Bayley[i] <- F
+  }
+  
+  #ITSEA
+  tempData <- subset(itseaID, study_id == tempID)
+  
+  if(nrow(tempData)>0){
+    assessmentSummary$ID[i] <- tempData$study_id[1]
+    assessmentSummary$Study[i] <- tempData$study [1]
+    assessmentSummary$TimePoint[i] <- tempData$timepoint [1]
+    assessmentSummary$ITSEA[i] <- T
+  } else {
+    assessmentSummary$ITSEA[i] <- F
+  }
+  
+  #MCHAT
+  tempData <- subset(mchatID, study_id == tempID)
+  
+  if(nrow(tempData)>0){
+    assessmentSummary$ID[i] <- tempData$study_id[1]
+    assessmentSummary$Study[i] <- tempData$study [1]
+    assessmentSummary$TimePoint[i] <- tempData$timepoint [1]
+    assessmentSummary$MCHAT[i] <- T
+  } else {
+    assessmentSummary$MCHAT[i] <- F
+  }
+  
+  #Vineland
+  tempData <- subset(vinelandID, study_id == tempID)
+  
+  if(nrow(tempData)>0){
+    assessmentSummary$ID[i] <- tempData$study_id[1]
+    assessmentSummary$Study[i] <- tempData$study [1]
+    assessmentSummary$TimePoint[i] <- tempData$timepoint [1]
+    assessmentSummary$Vineland[i] <- T
+  } else {
+    assessmentSummary$Vineland[i] <- F
+  }
+  
+  #SRS
+  tempData <- subset(srsID, study_id == tempID)
+  
+  if(nrow(tempData)>0){
+    assessmentSummary$ID[i] <- tempData$study_id[1]
+    assessmentSummary$Study[i] <- tempData$study [1]
+    assessmentSummary$TimePoint[i] <- tempData$timepoint [1]
+    assessmentSummary$SRS[i] <- T
+  } else {
+    assessmentSummary$SRS[i] <- F
+  }
+  
+  #CBCL
+  tempData <- subset(cbclID, study_id == tempID)
+  
+  if(nrow(tempData)>0){
+    assessmentSummary$ID[i] <- tempData$study_id[1]
+    assessmentSummary$Study[i] <- tempData$study [1]
+    assessmentSummary$TimePoint[i] <- tempData$timepoint [1]
+    assessmentSummary$CBCL[i] <- T
+  } else {
+    assessmentSummary$CBCL[i] <- F
+  }
+  
+  #BRIEF
+  tempData <- subset(briefID, study_id == tempID)
+  
+  if(nrow(tempData)>0){
+    assessmentSummary$ID[i] <- tempData$study_id[1]
+    assessmentSummary$Study[i] <- tempData$study [1]
+   # assessmentSummary$TimePoint[i] <- tempData$timepoint [1]
+    assessmentSummary$BRIEF[i] <- T
+  } else {
+    assessmentSummary$BRIEF[i] <- F
+  }
+}
+
+# Write out a high level table verifying IF the test exists by ID
+# write.table(assessmentSummary, 'AssessmentSummary.csv',col.names = T, row.names = F, sep=',')
+```
+
+### Read in Behavioral Data
+
+```{r}
+
+## INITIAL SUMMARY ABOUT WHETHER DATA EXISTS
+
+# Read in behavioral data
+bayleyData <- read.csv(paste0(baseDir,'/behavioral/Bayley.csv'))
+itseaData <- read.csv(paste0(baseDir,'/behavioral/ITSEA.csv'))
+mchatData <- read.csv(paste0(baseDir,'/behavioral/MCHAT.csv'))
+vinelandData <- read.csv(paste0(baseDir,'/behavioral/Vineland.csv'))
+srsData <- read.csv(paste0(baseDir,'/behavioral/SRS.csv'))
+cbclData <- read.csv(paste0(baseDir,'/behavioral/CBCL.csv'))
+briefDATA <- read.csv(paste0(baseDir,'/behavioral/BRIEF.csv'))
+
+#Add a dummy variable to confirm it exists
+bayleyData$Bayley <-T
+itseaData$ITSEA <- T
+mchatData$MCHAT <- T
+vinelandData$VINELAND <- T
+srsData$SRS <- T
+cbclData$CBCL <- T
+briefDATA$BRIEF <- T
+
+#Merge all into a super wide data set
+assessmentDataSuperWide <- merge(merge(merge(merge(merge(merge(merge(bayleyData, itseaData, all=T),
+                                                              itseaData, all=T),
+                                                        mchatData, all=T),
+                                                  vinelandData, all=T),
+                                            srsData, all=T),
+                                      cbclData, all=T),
+                                briefDATA, all=T)        
+
+#write.table(assessmentDataSuperWide, 'AssessmentSummarySuperWide.csv',col.names = T, row.names = F, sep=',')
+
+
+```
+
+## Read Imaging Data
+
+### Anatomical Data
+
+```{r}
+
+testData <- read.csv(paste0(baseDir,'/anatomical/combinedASDData.csv'),stringsAsFactors=F)
+testPreemie <- subset(testData, PretermStatus=='Preterm' & (Kidokoro <8 | is.na(Kidokoro)))
+testFetal <- subset(testData, PretermStatus=='Term' & CHDStatus !='CHD' & AnyFetal==T)
+
+testFetalPass <- subset(testFetal, mchat_result=='Pass')
+testFetalFail <- subset(testFetal, mchat_result=='Fail')
+
+fetalPassID <- vector()
+fetalFailID <- vector()
+
+
+for(i in 1:nrow(testFetalPass)){
+  
+  tempID <- testFetalPass$study_id[i]
+  tempProj <- testFetalPass$study[i]
+  
+  if(tempProj=='ABC') {
+    tempIDFormat <- paste0('fetus_00',tempID)
+    fetalPassID[i] <- tempIDFormat
+  } else if(tempProj=='CHD R01') {
+    tempIDFormat <- paste0('fetus_0',tempID)
+    fetalPassID[i] <- tempIDFormat
+  } else if(tempProj=='Placenta') {
+    tempIDFormat <- paste0('pl_1',sprintf("%04d", as.numeric(substr(tempID,4,nchar(tempID)))))
+    fetalPassID[i] <- tempIDFormat
+  } else {
+    tempRescue <- as.numeric(substr(tempID,5,nchar(tempID)))
+    if(tempRescue < 100) {
+      tempIDFormat <- paste0('rescue_',sprintf("%03d", as.numeric(substr(tempID,5,nchar(tempID)))))
+      fetalPassID[i] <- tempIDFormat 
+    } else {
+      tempIDFormat <- paste0('rescue_',sprintf("%04d", as.numeric(substr(tempID,5,nchar(tempID)))))
+      fetalPassID[i] <- tempIDFormat 
+    }
+  }
+}
+
+for(i in 1:nrow(testFetalFail)){
+  
+  tempID <- testFetalFail$study_id[i]
+  tempProj <- testFetalFail$study[i]
+  
+  if(tempProj=='ABC') {
+    tempIDFormat <- paste0('fetus_00',tempID)
+    fetalFailID[i] <- tempIDFormat
+  } else if(tempProj=='CHD R01') {
+    tempIDFormat <- paste0('fetus_0',tempID)
+    fetalFailID[i] <- tempIDFormat
+  } else if(tempProj=='Placenta') {
+    tempIDFormat <- paste0('pl_1',sprintf("%04d", as.numeric(substr(tempID,4,nchar(tempID)))))
+    fetalFailID[i] <- tempIDFormat
+  } else {
+    tempRescue <- as.numeric(substr(tempID,5,nchar(tempID)))
+    if(tempRescue < 100) {
+      tempIDFormat <- paste0('rescue_',sprintf("%03d", as.numeric(substr(tempID,5,nchar(tempID)))))
+      fetalFailID[i] <- tempIDFormat 
+    } else {
+      tempIDFormat <- paste0('rescue_',sprintf("%04d", as.numeric(substr(tempID,5,nchar(tempID)))))
+      fetalFailID[i] <- tempIDFormat 
+    }
+  }
+}
+
+
+
+
+tissueDir <- here("data", "anatomical", "tissueVolumes_Individual")
+regionalDir <- here("data", "anatomical", "regionalVolumes_Individual")
+vermisVol <- read.csv(here("_Earlier_Iteration_NeurodevelopmentalRisk", "data", "anatomicalData", "vermisParcVolumes_071026.csv"), stringsAsFactors=F)
+vermisVol$totalVermis <- vermisVol$supVerm + vermisVol$infVerm + vermisVol$midVerm
+
+setwd(tissueDir)
+tissueFiles <- list.files()
+fetalFailID[!(fetalFailID %in% substr(tissueFiles, 0, nchar(tissueFiles)-19))]
+
+setwd(regionalDir)
+regionalFiles <- list.files()
+fetalFailID[!(fetalFailID %in% substr(regionalFiles, 0, nchar(regionalFiles)-21))]
+
+
+
+anatTimePoints <- as.data.frame(matrix(ncol=3, nrow=length(fetalFailID)))
+colnames(anatTimePoints) <- c('ID','tissueFiles','regionalFiles')
+anatTimePoints$ID <- fetalFailID
+
+for(i in 1:nrow(anatTimePoints)){
+  targetID <- anatTimePoints$ID[i]
+  anatTimePoints$tissueFiles[i] <- sum(substr(tissueFiles, 0, nchar(regionalFiles)-21) %in% targetID)
+  anatTimePoints$regionalFiles[i] <- sum(substr(regionalFiles, 0, nchar(regionalFiles)-21) %in% targetID)
+}
+
+
+```
+
+### Anatomical Matching
+
+IMPORTANT NOTE – ORIGINALLY WE MATCHED WITHIN COHORT WHEN POSSIBLE.
+
+TO AVOID ISSUES WITH HIGH RISK PREGNANCIES IN THE PL COHORT THE CODE HAS BEEN WRITTEN TO HARD CODE SOME PARTICIPANT LEVEL SWAPS TO REPLACE THE MCHAT PASSES FROM THE PLACENTA COHORT
+
+```{r}
+
+fetalMchatMelt <- melt(testFetal, measure.vars=c('ScanAge1', 'ScanAge2'), id.vars=c('study_id', 'mchat_result','study'))
+fetalMchatMelt <- subset(fetalMchatMelt, mchat_result!='' & value!='')
+rownames(fetalMchatMelt) <- 1:nrow(fetalMchatMelt)
+colnames(fetalMchatMelt) <- c('study_id','mchat_result','study','scanTimepoint','scanAge')
+
+# fetalMchatMelt <- fetalMchatMelt[!c(fetalMchatMelt$study == 'Placenta' & fetalMchatMelt$mchat_result == 'Pass'),]
+
+# fetalMchatMelt <- subset(fetalMchatMelt, study_id != 'RES-175' | scanTimepoint != 'ScanAge1')
+# fetalMchatMelt <- subset(fetalMchatMelt, study_id != 'RES-184' | scanTimepoint != 'ScanAge1')
+# fetalMchatMelt <- subset(fetalMchatMelt, study_id != 'RES-2175' | scanTimepoint != 'ScanAge1')
+
+set.seed(1000)
+fetalMchatMatch <- matchit(data=fetalMchatMelt, factor(mchat_result, levels=c('Pass','Fail')) ~ scanAge + study)
+
+fetalMatched <- fetalMchatMelt[c(fetalMchatMatch$match.matrix, rownames(!is.na(fetalMchatMatch$match.matrix))[!is.na(fetalMchatMatch$match.matrix)]),]
+fetalMatched <- subset(fetalMatched, !is.na(study_id ))
+
+t.test(subset(fetalMatched, mchat_result=='Fail')$scanAge, subset(fetalMatched, mchat_result=='Pass')$scanAge)
+
+fetalMatched$shortID <- NA
+for(i in 1:nrow(fetalMatched)){
+  
+  tempID <- fetalMatched$study_id[i]
+  tempProj <- fetalMatched$study[i]
+  
+  if(tempProj=='ABC') {
+    tempIDFormat <- paste0('fetus_00',tempID)
+    fetalMatched$shortID[i] <- tempIDFormat
+  } else if(tempProj=='CHD R01') {
+    tempIDFormat <- paste0('fetus_0',tempID)
+    fetalMatched$shortID[i] <- tempIDFormat
+  } else if(tempProj=='Placenta') {
+    tempIDFormat <- paste0('pl_1',sprintf("%04d", as.numeric(substr(tempID,4,nchar(tempID)))))
+    fetalMatched$shortID[i] <- tempIDFormat
+  } else {
+    tempRescue <- as.numeric(substr(tempID,5,nchar(tempID)))
+    if(tempRescue < 100) {
+      tempIDFormat <- paste0('rescue_',sprintf("%03d", as.numeric(substr(tempID,5,nchar(tempID)))))
+      fetalMatched$shortID[i] <- tempIDFormat 
+    } else {
+      tempIDFormat <- paste0('rescue_',sprintf("%04d", as.numeric(substr(tempID,5,nchar(tempID)))))
+      fetalMatched$shortID[i] <- tempIDFormat 
+    }
+  }
+}
+
+fetalMatched$scanTimepoint <- as.character(fetalMatched$scanTimepoint)
+fetalMatched$longID <- paste0(fetalMatched$shortID,'_0', substr(fetalMatched$scanTimepoint,nchar(fetalMatched$scanTimepoint),1000))
+rownames(fetalMatched) <- fetalMatched$longID
+
+
+fetalMatched[!(fetalMatched$longID %in% substr(tissueFiles, 0, nchar(tissueFiles)-16)),]
+fetalMatched[!(fetalMatched$longID %in% substr(regionalFiles, 0, nchar(regionalFiles)-18)),]
+
+# TRUE or FALSE to turn on the hand matching
+HANDMATCH <- T
+
+if(HANDMATCH) {
+  
+  ## HERE IS THE HAND MATCHING CODE
+  #View(subset(fetalMchatMelt, mchat_result=='Pass')[!c(subset(fetalMchatMelt, mchat_result=='Pass')$study_id %in% fetalMatched$study_id),])
+  
+  # WHEN IN DOUBT CAN GO A LITTLE YOUNGER AND STILL BE IN PARITY
+  #pl_10011_01 - 38.571 --- fetus_02151_02 - 38.571 - (F)
+  #pl_10027_01 - 38.429 --- fetus_02201_02 - 38.429 - (F)
+  #pl_10029_01 - 28.429 --- fetus_02020_01 - 28.286 - (M) | others nearby...
+  #pl_10029_02 - 31.571 --- rescue_0142_02 - 31.571 - (F) | others nearby (see pl_10125_01 below)
+  #pl_10051_01 - 23.571 --- fetus_00556_01 - 23.710 - (M) | others nearby...
+  #pl_10091_01 - 28.286 --- fetus_02172_01 - 28.286 - (M) | others nearby...
+  #pl_10106_01 - 35.143 --- fetus_02107_02 - 35.143 - (F) | RES-178_02
+  #pl_10124_01 - 26.429 --- fetus_02023_01 - 26.429 - (F) | RES-193_01
+  #pl_10125_01 - 35.571 --- fetus_02104_02 - 35.571 - (F) | others nearby...
+  
+  #fetus_02153_01 - 28.286 (F) --  
+  
+  #Identify who is to be removed and who is to be added
+  removeList <- c('pl_10011_01','pl_10027_01','pl_10029_01','pl_10029_02','pl_10051_01','pl_10091_01','pl_10106_01','pl_10124_01','pl_10125_01','fetus_02153_01')
+ 
+  addListShort <- c('2120', #pl_10011_01 match 1
+                    #'2151', #pl_10011_01 match 2
+                    
+                    '2121', #pl_10027_01 match 1
+                    #'2201', #pl_10027_01 match 2
+                    
+                    '2020',
+                    'RES-142',
+                    '556',
+                    '2172',
+                    '2107',
+                    
+                    'RES-193', #pl_10124_01 match 1
+                    #'2023', #pl_10124_01 match 2
+                    
+                    '2104',
+                    'RES-042')
+  
+  addListFull <- c('fetus_02120_02', #pl_10011_01 match 1
+                   #'fetus_02151_02', #pl_10011_01 match 2
+                   
+                   'fetus_02121_02', #pl_10027_01 match 1
+                   #'fetus_02201_02', #pl_10027_01 match 2
+                   
+                   'fetus_02020_01',
+                   'rescue_0142_02',
+                   
+                   'fetus_00556_01', #pl_10051_01 match 1
+                   #'RES-217', #pl_10051_01 match 2
+                   #'RES-79', #pl_10051_01 match 3
+                   
+                   'fetus_02172_01',
+                   'fetus_02107_02',
+                   
+                   'rescue_0193_01', #pl_10124_01 match 1
+                   #'fetus_02023_01', #pl_10124_01 match 2
+                   
+                   'fetus_02104_02',
+                   'rescue_0042_01')
+  
+  #Pull those to be added and format dataframe for merging
+  shortAddFrame <- fetalMchatMelt[fetalMchatMelt$study_id %in% addListShort,]
+  
+  shortAddFrame$shortID <- NA
+  for(i in 1:nrow(shortAddFrame)){
+    
+    tempID <- shortAddFrame$study_id[i]
+    tempProj <- shortAddFrame$study[i]
+    
+    if(tempProj=='ABC') {
+      tempIDFormat <- paste0('fetus_00',tempID)
+      shortAddFrame$shortID[i] <- tempIDFormat
+    } else if(tempProj=='CHD R01') {
+      tempIDFormat <- paste0('fetus_0',tempID)
+      shortAddFrame$shortID[i] <- tempIDFormat
+    } else if(tempProj=='Placenta') {
+      tempIDFormat <- paste0('pl_1',sprintf("%04d", as.numeric(substr(tempID,4,nchar(tempID)))))
+      shortAddFrame$shortID[i] <- tempIDFormat
+    } else {
+      tempRescue <- as.numeric(substr(tempID,5,nchar(tempID)))
+      if(tempRescue < 100) {
+        tempIDFormat <- paste0('rescue_',sprintf("%03d", as.numeric(substr(tempID,5,nchar(tempID)))))
+        shortAddFrame$shortID[i] <- tempIDFormat 
+      } else {
+        tempIDFormat <- paste0('rescue_',sprintf("%04d", as.numeric(substr(tempID,5,nchar(tempID)))))
+        shortAddFrame$shortID[i] <- tempIDFormat 
+      }
+    }
+  }
+  
+  shortAddFrame$scanTimepoint <- as.character(shortAddFrame$scanTimepoint)
+  shortAddFrame$longID <- paste0(shortAddFrame$shortID,'_0', substr(shortAddFrame$scanTimepoint,nchar(shortAddFrame$scanTimepoint),1000))
+  rownames(shortAddFrame) <- shortAddFrame$longID
+  
+  shortAddFrame <- shortAddFrame[shortAddFrame$longID %in% addListFull,]
+
+  #Remove the excluded pl participants
+  fetalMatched <- fetalMatched[!c(fetalMatched$longID %in% removeList),]
+  #Add in the replacements
+  fetalMatched <- rbind(fetalMatched, shortAddFrame)
+}
+
+
+
+#Now drap the bad pl fail scans and their associated controls
+
+dropList <- c('pl_10028_02', 'pl_10149_01', 'pl_10149_02', 'pl_10151_01',
+              'rescue_071_02', 'fetus_02075_01', 'rescue_017_02', 'fetus_02070_02')
+
+fetalMatched <- fetalMatched[!c(fetalMatched$longID %in% dropList),]
+
+
+length(unique(subset(fetalMatched, mchat_result=='Pass')$shortID))
+length(unique(subset(fetalMatched, mchat_result=='Fail')$shortID))
+
+length(subset(fetalMatched, mchat_result=='Pass')$shortID)
+length(subset(fetalMatched, mchat_result=='Fail')$shortID)
+
+t.test(subset(fetalMatched, mchat_result=='Pass')$scanAge,subset(fetalMatched, mchat_result=='Fail')$scanAge)
+mean(subset(fetalMatched, mchat_result=='Pass')$scanAge)
+sd(subset(fetalMatched, mchat_result=='Pass')$scanAge)
+mean(subset(fetalMatched, mchat_result=='Fail')$scanAge)
+sd(subset(fetalMatched, mchat_result=='Fail')$scanAge)
+
+
+demoDataPaper <- merge(fetalMatched, testData[,c('study_id','Sex','BirthGA','X18MLTFAge','birthWeight', 'Race')], all.x=T, all.y=F, by='study_id')
+
+
+
+t.test(subset(demoDataPaper, mchat_result=='Pass')$BirthGA,subset(demoDataPaper, mchat_result=='Fail')$BirthGA)
+mean(subset(demoDataPaper, mchat_result=='Pass')$BirthGA, na.rm=T)
+sd(subset(demoDataPaper, mchat_result=='Pass')$BirthGA, na.rm=T)
+mean(subset(demoDataPaper, mchat_result=='Fail')$BirthGA, na.rm=T)
+sd(subset(demoDataPaper, mchat_result=='Fail')$BirthGA, na.rm=T)
+
+
+
+xiSqTable <- matrix(ncol=2, nrow=2)
+xiSqTable[1,1] <- nrow(subset(demoDataPaper, Sex=='m' & mchat_result=='Pass'))
+xiSqTable[1,2] <- nrow(subset(demoDataPaper, Sex=='f' & mchat_result=='Pass'))
+xiSqTable[2,1] <- nrow(subset(demoDataPaper, Sex=='m' & mchat_result=='Fail'))
+xiSqTable[2,2] <- nrow(subset(demoDataPaper, Sex=='f' & mchat_result=='Fail'))
+chisq.test(xiSqTable)
+
+
+t.test(subset(demoDataPaper, mchat_result=='Pass')$birthWeight,subset(demoDataPaper, mchat_result=='Fail')$birthWeight, paired=F)
+mean(subset(demoDataPaper, mchat_result=='Pass')$birthWeight, na.rm=T)
+sd(subset(demoDataPaper, mchat_result=='Pass')$birthWeight, na.rm=T)
+mean(subset(demoDataPaper, mchat_result=='Fail')$birthWeight, na.rm=T)
+sd(subset(demoDataPaper, mchat_result=='Fail')$birthWeight, na.rm=T)
+
+
+t.test(subset(demoDataPaper, mchat_result=='Pass')$X18MLTFAge,subset(demoDataPaper, mchat_result=='Fail')$X18MLTFAge, paired=F)
+mean(subset(demoDataPaper, mchat_result=='Pass')$X18MLTFAge, na.rm=T)
+sd(subset(demoDataPaper, mchat_result=='Pass')$X18MLTFAge, na.rm=T)
+mean(subset(demoDataPaper, mchat_result=='Fail')$X18MLTFAge, na.rm=T)
+sd(subset(demoDataPaper, mchat_result=='Fail')$X18MLTFAge, na.rm=T)
+
+
+
+contingency_table <- table(demoDataPaper$mchat_result, demoDataPaper$Race)
+contingency_table[1,2] <- 8
+contingency_table[2,1] <- 0
+contingency_table[2,8] <- 3
+contingency_table <- contingency_table[1:2, 2:9]
+chisq.test(contingency_table)
+
+```
+
+### Functional Matching
+
+```{r}
+
+#| echo: false
+
+asdDemo <- read.csv(paste0(baseDir,'/functional/asdDemo_expand.csv'), stringsAsFactors = F)
+tdDemo <- read.csv(paste0(baseDir,'/functional/tdDemo.csv'), stringsAsFactors = F)
+
+asdDemo <- asdDemo[asdDemo$ID!='rescue_0187_01',] #Why is this excluded? Why are 715,748 included?
+rownames(asdDemo) <- 1:nrow(asdDemo)
+
+
+asdDemo$Grp <- 'ASD'
+tdDemo$Grp <- 'TD'
+combDemo <- rbind(asdDemo, tdDemo)
+
+matchFrame <- MatchIt::matchit(as.factor(Grp) ~ ScanGA, data=combDemo)
+
+tdDemoMatch <- tdDemo[matchFrame$match.matrix,]
+tdDemoMatch <- tdDemoMatch[complete.cases(tdDemoMatch),]
+tdDemoMatch <- tdDemoMatch[order(as.numeric(row.names(tdDemoMatch))), ]
+
+dropPtList <- c('none')
+
+keepRows <- as.numeric(rownames(asdDemo[!(asdDemo$ID %in% dropPtList), ]))
+tdDemoFinal <- tdDemoMatch[keepRows,]
+asdDemoFinal <- asdDemo[keepRows,]
+
+
+mean(tdDemoFinal$ScanGA)
+sd(tdDemoFinal$ScanGA)
+mean(asdDemoFinal$ScanGA)
+sd(asdDemoFinal$ScanGA)
+
+t.test(tdDemoFinal$ScanGA, asdDemoFinal$ScanGA)
+
+
+xiSqTable <- matrix(ncol=2, nrow=2)
+xiSqTable[1,1] <- nrow(subset(tdDemoFinal, Sex=='m'))
+xiSqTable[1,2] <- nrow(subset(tdDemoFinal, Sex=='f'))
+xiSqTable[2,1] <- nrow(subset(asdDemoFinal, Sex=='m'))
+xiSqTable[2,2] <- nrow(subset(asdDemoFinal, Sex=='f'))
+chisq.test(xiSqTable)
+
+
+
+tdBirthAge <- c(40.00,39.00,40.29,39.86,39.71,38.71,40.43,39.86,38.88,40.57,38.43,39.71,39.71,38.43,39.43,39.00,40.14,38.14,38.71)
+asdBirthAge <- c(37.71,39.57,38.86,38.86,39.29,38.29,38.14,39.71,38.00,39.00,39.00,41.00,40.86,38.86,38.86,38.00,38.00,39.43,37.29)
+
+t.test(tdBirthAge, asdBirthAge)
+
+mean(tdBirthAge)
+sd(tdBirthAge)
+mean(asdBirthAge)
+sd(asdBirthAge)
+
+# tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00715_02',]
+tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00748_02',]
+tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00556_01',]
+asdDemoFinal <- asdDemoFinal[asdDemoFinal$ID != 'pl_0028_02',]
+
+
+
+
+
+
+
+#DO demos here!
+fcMatchedDataTemp <- rbind(asdDemoFinal, tdDemoFinal)
+
+fcMatchedDataTemp$study_id <- NA
+for(i in 1:nrow(fcMatchedDataTemp)) {
+  
+  tempID <- fcMatchedDataTemp$ID[i]
+  
+  studyAbbrev <- substr(tempID,0,1)
+  
+  if(studyAbbrev == 'f')
+  {
+    
+    fcMatchedDataTemp$study_id[i] <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
+    
+  } else if(studyAbbrev == 'r') {
+    
+    tempNum <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
+    fcMatchedDataTemp$study_id[i] <- paste0('RES-',sprintf("%03d", tempNum))
+    
+  } else {
+    tempNum <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
+    fcMatchedDataTemp$study_id[i] <- paste0('PL-',sprintf("%03d", tempNum))
+
+  }
+}
+
+
+testDataFC <- read.csv(paste0(baseDir,'/functional/combinedASDData.csv'),stringsAsFactors=F)
+demoDataPaperFC <- merge(fcMatchedDataTemp, testDataFC[,c('study_id','Sex','BirthGA','X18MLTFAge','birthWeight', 'Race', 'mchat_result')], all.x=T, all.y=F, by='study_id')
+
+
+
+xiSqTable <- matrix(ncol=2, nrow=2)
+xiSqTable[1,1] <- nrow(subset(demoDataPaperFC, Sex.x=='m' & mchat_result=='Pass'))
+xiSqTable[1,2] <- nrow(subset(demoDataPaperFC, Sex.x=='f' & mchat_result=='Pass'))
+xiSqTable[2,1] <- nrow(subset(demoDataPaperFC, Sex.x=='m' & mchat_result=='Fail'))
+xiSqTable[2,2] <- nrow(subset(demoDataPaperFC, Sex.x=='f' & mchat_result=='Fail'))
+chisq.test(xiSqTable)
+
+
+t.test(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight,subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, paired=F)
+mean(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight, na.rm=T)
+sd(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight, na.rm=T)
+mean(subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, na.rm=T)
+sd(subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, na.rm=T)
+
+
+t.test(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA,subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, paired=F)
+mean(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA, na.rm=T)
+sd(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA, na.rm=T)
+mean(subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, na.rm=T)
+sd(subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, na.rm=T)
+
+
+
+contingency_table <- table(demoDataPaperFC$mchat_result, demoDataPaperFC$Race)
+chisq.test(contingency_table)
+
+
+```
+
+### Functional Data
+
+```{r}
+
+
+#| echo: false
+#| 
+allTDFC <- read.csv(paste0(baseDir,'/functional/UseableData/tdCorrSummary.csv'), row.names = 1)
+allASDFC <- read.csv(paste0(baseDir,'/functional/UseableData/asdCorrSummary_Expand.csv'), row.names = 1)
+
+rownames(allTDFC) <- substr(rownames(allTDFC),0,nchar(rownames(allTDFC))-28)
+#rownames(allASDFC) <- substr(rownames(allASDFC),0,nchar(rownames(allASDFC))-16)
+
+tdFC <- allTDFC[rownames(allTDFC) %in% tdDemoFinal$ID,]
+asdFC <- allASDFC[rownames(allASDFC) %in% asdDemoFinal$ID,]
+
+rm(list=c('allTDFC', 'allASDFC'))
+
+```
+
+### Anatomical-Functional Overlap
+
+```{r}
+
+fetalMatched
+
+asdDemoFinal$ID[!c(asdDemoFinal$ID %in% fetalMatched$longID)]
+
+subset(fetalMatched, mchat_result=='Fail')$longID[!c(subset(fetalMatched, mchat_result=='Fail')$longID %in% asdDemoFinal$ID)]
+
+```
+
+# Anatomical Analyses
+
+## Tissue Volumes
+
+```{r}
+
+tissueDataRaw <- read.csv(paste0(baseDir,'/anatomical/tissueVolumes_12122025_compiled.csv'))
+tissueDataRaw$TBV <- rowSums(tissueDataRaw[,c('CorticalGrayMatter','CorticalWhiteMatter','Cerebellum','SubcorticalGray','Brainstem','AmygdalaHippocampus')], na.rm=T)
+tissueData <- tissueDataRaw[,c('longID','CorticalGrayMatter','CorticalWhiteMatter','Cerebellum','SubcorticalGray','Brainstem','AmygdalaHippocampus')]
+rownames(tissueData) <- tissueData$longID
+tissueData <- subset(tissueData, select = -c(longID))
+
+
+# Analyze trajectories across tissue ROI
+glmTissueVolTable <- as.data.frame(matrix(ncol=9, nrow=ncol(tissueData)))
+colnames(glmTissueVolTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
+
+glmTissueVolTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(tissueData)))
+colnames(glmTissueVolTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
+
+glmTissueNormedVolTable <- as.data.frame(matrix(ncol=9, nrow=ncol(tissueData)))
+colnames(glmTissueNormedVolTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
+
+glmTissueNormedVolTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(tissueData)))
+colnames(glmTissueNormedVolTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
+
+for(i in 1:ncol(tissueData)){
+  
+  tissueVolumeROI <- tissueData[,i, drop=FALSE]
+  colnames(tissueVolumeROI) <- 'Volume'
+  tissueVolumeROI$Volume <- as.numeric(tissueVolumeROI$Volume)
+  
+  tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], tissueVolumeROI, by="row.names")
+  tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+  tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+  tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+  
+  tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+  tempAnalyses <- merge(tempAnalyses,tissueDataRaw, by='longID', all.x=T, all.y=F)
+  tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+  
+  #Raw volume - no interaction
+  tempModel <- lme(data=tempAnalyses, Volume ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmTissueVolTable$ROI[i] <- colnames(tissueData)[i]
+  glmTissueVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
+  glmTissueVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
+  glmTissueVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
+  glmTissueVolTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmTissueVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmTissueVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmTissueVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmTissueVolTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+  #Raw volume - interaction
+  tempModel <- lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmTissueVolTable.Itx$ROI[i] <- colnames(tissueData)[i]
+  glmTissueVolTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
+  glmTissueVolTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
+  glmTissueVolTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
+  glmTissueVolTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmTissueVolTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmTissueVolTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmTissueVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmTissueVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
+  glmTissueVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
+  glmTissueVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+  
+  #Normed volume - no interaction
+  tempModel <- lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmTissueNormedVolTable$ROI[i] <- colnames(tissueData)[i]
+  glmTissueNormedVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)
+  glmTissueNormedVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
+  glmTissueNormedVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
+  glmTissueNormedVolTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmTissueNormedVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmTissueNormedVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmTissueNormedVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmTissueNormedVolTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+  #Normed volume - interaction
+  tempModel <- lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmTissueNormedVolTable.Itx$ROI[i] <- colnames(tissueData)[i]
+  glmTissueNormedVolTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)
+  glmTissueNormedVolTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
+  glmTissueNormedVolTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
+  glmTissueNormedVolTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmTissueNormedVolTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmTissueNormedVolTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmTissueNormedVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmTissueNormedVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
+  glmTissueNormedVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
+  glmTissueNormedVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+}
+
+
+glmTissueVolTable$Grp.p.Adj <- p.adjust(glmTissueVolTable$Grp.p, method='fdr')
+glmTissueVolTable$scanGA.p.Adj <- p.adjust(glmTissueVolTable$scanGA.p, method='fdr')
+
+subset(glmTissueVolTable, Grp.p.Adj < .05)
+
+
+glmTissueVolTable.Itx$Grp.p.Adj <- p.adjust(glmTissueVolTable.Itx$Grp.p, method='fdr')
+glmTissueVolTable.Itx$scanGA.p.Adj <- p.adjust(glmTissueVolTable.Itx$scanGA.p, method='fdr')
+glmTissueVolTable.Itx$Itx.p.Adj <- p.adjust(glmTissueVolTable.Itx$Itx.p, method='fdr')
+
+subset(glmTissueVolTable.Itx, Grp.p.Adj < .05)
+subset(glmTissueVolTable.Itx, Itx.p.Adj < .05)
+
+
+glmTissueNormedVolTable$Grp.p.Adj <- p.adjust(glmTissueNormedVolTable$Grp.p, method='fdr')
+glmTissueNormedVolTable$scanGA.p.Adj <- p.adjust(glmTissueNormedVolTable$scanGA.p, method='fdr')
+
+subset(glmTissueNormedVolTable, Grp.p.Adj < .05)
+
+
+glmTissueNormedVolTable.Itx$Grp.p.Adj <- p.adjust(glmTissueNormedVolTable.Itx$Grp.p, method='fdr')
+glmTissueNormedVolTable.Itx$scanGA.p.Adj <- p.adjust(glmTissueNormedVolTable.Itx$scanGA.p, method='fdr')
+glmTissueNormedVolTable.Itx$Itx.p.Adj <- p.adjust(glmTissueNormedVolTable.Itx$Itx.p, method='fdr')
+
+subset(glmTissueNormedVolTable.Itx, Grp.p.Adj < .05)
+subset(glmTissueNormedVolTable.Itx, Itx.p.Adj < .05)
+
+```
+
+## Regional Volumes
+
+```{r}
+
+#Need to set new WD for this block to see individual anatomical files
+setwd(paste0(baseDir,'/anatomical/regionalVolumes_Individual'))
+
+# Combine the regional volumes into a single data frame
+regionalData <- as.data.frame(matrix(ncol = 87, nrow= nrow(fetalMatched)))
+rownames(regionalData) <- fetalMatched$longID
+regionalLabels<-read.table(paste0(baseDir,'/anatomical/regionalROILabels.txt'))
+colnames(regionalData) <- t(regionalLabels)
+
+for(i in 1:nrow(regionalData)){
+  
+  targetID <- rownames(regionalData)[i]
+  targetFile <- regionalFiles[substr(regionalFiles, 0, nchar(regionalFiles)-18) %in% targetID]
+  if(length(targetFile) == 0) {next}
+  tempData <- read.table(targetFile)
+  ncolData <- ncol(tempData)
+  regionalData[i,1:(ncolData-2)] <- tempData[2,3:ncolData]
+  
+}
+
+# Remove ROI to drop CSF and white matter
+regionalDataRaw <- as.data.frame(lapply(regionalData, function(x) as.numeric(as.character(x))))
+rownames(regionalDataRaw) <- rownames(regionalData)
+regionalDataRaw$TBV <- rowSums(regionalDataRaw[,c(1:48,51:82)], na.rm=T)
+regionalData <- regionalData[,1:82]
+regionalData <- regionalData[,grep('WM',colnames(regionalData), invert = T)]
+regionalData <- regionalData[,grep('LatVen',colnames(regionalData), invert = T)]
+regionalData <- regionalData[,grep('CRB',colnames(regionalData), invert = T)]
+regionalData <- regionalData[,grep('CorpusCallosum',colnames(regionalData), invert = T)]
+regionalDataRaw$longID <- rownames(regionalDataRaw)
+
+
+# FLAG WHETHER TO INCLUDE THE PARCELLATED CEREBELLUM WITHIN THE APPROACH
+
+IncludeCerebellarParcellation <- F
+if(IncludeCerebellarParcellation){
+  
+  
+  regionalData$fullID <- rownames(regionalData)
+  regionalData <- merge(regionalData,vermisVol, all=T, by='fullID')
+  rownames(regionalData) <- regionalData$fullID
+  regionalData$fullID <- NULL
+  
+  regionalDataRaw <- merge(regionalDataRaw,vermisVol, all=T, by.x='longID', by.y='fullID')
+  rownames(regionalDataRaw) <- regionalDataRaw$longID
+  
+}
+
+
+# Analyze trajectories across regional ROI
+library(nlme)
+
+glmRegionalVolTable <- as.data.frame(matrix(ncol=9, nrow=ncol(regionalData)))
+colnames(glmRegionalVolTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
+
+glmRegionalVolTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(regionalData)))
+colnames(glmRegionalVolTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
+
+glmRegionalNormedVolTable <- as.data.frame(matrix(ncol=9, nrow=ncol(regionalData)))
+colnames(glmRegionalNormedVolTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
+
+glmRegionalNormedVolTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(regionalData)))
+colnames(glmRegionalNormedVolTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
+
+
+#NOTE: Multiple Length error is due to the partial eta sq calcualtion -- NOT THE GLM
+for(i in 1:ncol(regionalData)){
+  
+  regionalVolumeROI <- regionalData[,i, drop=FALSE]
+  colnames(regionalVolumeROI) <- 'Volume'
+  regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+  tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+  tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+  tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+  tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+  
+#  tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),] #*Why are these being dropped?????*
+  tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'rescue_0184_01')),] #*Why are these being dropped?????*
+  tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+  tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+  tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+  
+  #Raw volume - no interaction
+  tempModel <- lme(data=tempAnalyses, Volume ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmRegionalVolTable$ROI[i] <- colnames(regionalData)[i]
+  glmRegionalVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
+  glmRegionalVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
+  glmRegionalVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
+  glmRegionalVolTable$Grp.B[i] <- 
+  glmRegionalVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmRegionalVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmRegionalVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmRegionalVolTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+  #Raw volume - interaction
+  tempModel <- lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmRegionalVolTable.Itx$ROI[i] <- colnames(regionalData)[i]
+  glmRegionalVolTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
+  glmRegionalVolTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
+  glmRegionalVolTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
+  glmRegionalVolTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmRegionalVolTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmRegionalVolTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmRegionalVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmRegionalVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
+  glmRegionalVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
+  glmRegionalVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+
+  #Normed volume - no interaction
+  tempModel <- lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmRegionalNormedVolTable$ROI[i] <- colnames(regionalData)[i]
+  glmRegionalNormedVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)
+  glmRegionalNormedVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
+  glmRegionalNormedVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
+  glmRegionalNormedVolTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmRegionalNormedVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmRegionalNormedVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmRegionalNormedVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmRegionalNormedVolTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+  #Normed volume - interaction
+  tempModel <- lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmRegionalNormedVolTable.Itx$ROI[i] <- colnames(regionalData)[i]
+  glmRegionalNormedVolTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)
+  glmRegionalNormedVolTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
+  glmRegionalNormedVolTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
+  glmRegionalNormedVolTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmRegionalNormedVolTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmRegionalNormedVolTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmRegionalNormedVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmRegionalNormedVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
+  glmRegionalNormedVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
+  glmRegionalNormedVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
+  
+}
+
+
+glmRegionalVolTable$Grp.p.Adj <- p.adjust(glmRegionalVolTable$Grp.p, method='fdr')
+glmRegionalVolTable$scanGA.p.Adj <- p.adjust(glmRegionalVolTable$scanGA.p, method='fdr')
+
+subset(glmRegionalVolTable, Grp.p.Adj < .05)
+
+
+glmRegionalVolTable.Itx$Grp.p.Adj <- p.adjust(glmRegionalVolTable.Itx$Grp.p, method='fdr')
+glmRegionalVolTable.Itx$scanGA.p.Adj <- p.adjust(glmRegionalVolTable.Itx$scanGA.p, method='fdr')
+glmRegionalVolTable.Itx$Itx.p.Adj <- p.adjust(glmRegionalVolTable.Itx$Itx.p, method='fdr')
+
+subset(glmRegionalVolTable.Itx, Grp.p.Adj < .05)
+subset(glmRegionalVolTable.Itx, Itx.p.Adj < .05)
+
+
+glmRegionalNormedVolTable$Grp.p.Adj <- p.adjust(glmRegionalNormedVolTable$Grp.p, method='fdr')
+glmRegionalNormedVolTable$scanGA.p.Adj <- p.adjust(glmRegionalNormedVolTable$scanGA.p, method='fdr')
+
+subset(glmRegionalNormedVolTable, Grp.p.Adj < .05)
+
+
+glmRegionalNormedVolTable.Itx$Grp.p.Adj <- p.adjust(glmRegionalNormedVolTable.Itx$Grp.p, method='fdr')
+glmRegionalNormedVolTable.Itx$scanGA.p.Adj <- p.adjust(glmRegionalNormedVolTable.Itx$scanGA.p, method='fdr')
+glmRegionalNormedVolTable.Itx$Itx.p.Adj <- p.adjust(glmRegionalNormedVolTable.Itx$Itx.p, method='fdr')
+
+subset(glmRegionalNormedVolTable.Itx, Grp.p.Adj < .05)
+subset(glmRegionalNormedVolTable.Itx, Itx.p.Adj < .05)
+
+
+
+
+```
+
+#### Regional Figure
+
+```{r}
+
+groupDiffROI <- subset(glmRegionalNormedVolTable.Itx, Grp.p.Adj < .05)$ROI
+intxDiffROI <- subset(glmRegionalNormedVolTable.Itx, Itx.p.Adj < .05)$ROI
+
+
+## HPC LEFT
+
+regionalVolumeROI <- regionalData[,'HPC_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+HPC.L.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.003), breaks=seq(0,.003,.0005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#9cc5ffaa','#ff8080aa')) +
+  scale_color_manual(values=c('#0050bf','#a60000')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`, color=`Autism Risk`), linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Hippocampus (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## HPC RIGHT
+
+regionalVolumeROI <- regionalData[,'HPC_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+HPC.R.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.003), breaks=seq(0,.003,.0005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#9cc5ffaa','#ff8080aa')) +
+  scale_color_manual(values=c('#0050bf','#a60000')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`, color=`Autism Risk`), linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Hippocampus (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+## THAL LEFT
+
+regionalVolumeROI <- regionalData[,'Thalamus_HighIntensity_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+THAL.L.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.021), breaks=seq(0,.03,.005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#9cc5ffaa','#ff8080aa')) +
+  scale_color_manual(values=c('#0050bf','#a60000')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`, color=`Autism Risk`), linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Thalamus (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## THAL RIGHT
+
+regionalVolumeROI <- regionalData[,'Thalamus_HighIntensity_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+THAL.R.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.021), breaks=seq(0,.03,.005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#9cc5ffaa','#ff8080aa')) +
+  scale_color_manual(values=c('#0050bf','#a60000')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`, color=`Autism Risk`), linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Thalamus (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+## CAUD LEFT
+
+regionalVolumeROI <- regionalData[,'Caudate_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+CAUD.L.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.0125), breaks=seq(0,.0125,.0025), expand=c(0,0)) +
+  scale_fill_manual(values=c('#9cc5ffaa','#ff8080aa')) +
+  scale_color_manual(values=c('#0050bf','#a60000')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`, color=`Autism Risk`), linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Caudate (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+## CAUD RIGHT
+
+regionalVolumeROI <- regionalData[,'Caudate_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+
+CAUD.R.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.05), breaks=seq(0,.05,.01), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#9cc5ffaa','#ff8080aa')) +
+  scale_color_manual(values=c('#0050bf','#a60000')) +
+  geom_point(aes(fill=`Autism Risk`, color=`Autism Risk`, shape=`Autism Risk`), size=3, stroke=1) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Caudate (Left) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+## PUT RIGHT
+
+regionalVolumeROI <- regionalData[,'Lentiform_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+PUT.R.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.01105), breaks=seq(0,.0125,.002), expand=c(0,0)) +
+  scale_fill_manual(values=c('#9cc5ffaa','#ff8080aa')) +
+  scale_color_manual(values=c('#0050bf','#a60000')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`, color=`Autism Risk`), linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Putamen (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+#tiff(paste0(figDir,'/regionalVolumePlot.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+ggpubr::ggarrange(HPC.L.Plot, HPC.R.Plot, CAUD.L.Plot, CAUD.R.Plot,
+          THAL.L.Plot, THAL.R.Plot, PUT.R.Plot,
+          nrow=2, ncol=4, legend = 'none')
+#dev.off()
+
+
+```
+
+#### Alt Regional Figure
+
+```{r}
+
+groupDiffROI <- subset(glmRegionalNormedVolTable.Itx, Grp.p.Adj < .05)$ROI
+intxDiffROI <- subset(glmRegionalNormedVolTable.Itx, Itx.p.Adj < .05)$ROI
+
+
+## HPC LEFT
+
+regionalVolumeROI <- regionalData[,'HPC_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+HPC.L.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.003), breaks=seq(0,.003,.0005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Hippocampus (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## HPC RIGHT
+
+regionalVolumeROI <- regionalData[,'HPC_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+HPC.R.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.003), breaks=seq(0,.003,.0005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Hippocampus (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+## THAL LEFT
+
+regionalVolumeROI <- regionalData[,'Thalamus_HighIntensity_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+THAL.L.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.021), breaks=seq(0,.03,.005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Thalamus (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## THAL RIGHT
+
+regionalVolumeROI <- regionalData[,'Thalamus_HighIntensity_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+THAL.R.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.021), breaks=seq(0,.03,.005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Thalamus (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+## CAUD LEFT
+
+regionalVolumeROI <- regionalData[,'Caudate_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+CAUD.L.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.0125), breaks=seq(0,.0125,.0025), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Caudate (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+## CAUD RIGHT
+
+regionalVolumeROI <- regionalData[,'Caudate_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+
+CAUD.R.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.05), breaks=seq(0,.05,.01), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#e09999aa','#a3c0e9aa')) +
+  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+  scale_color_manual(values=c('#e37575','#72a3e8')) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Caudate (Left) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+## PUT RIGHT
+
+regionalVolumeROI <- regionalData[,'Lentiform_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+plotSummary <- Rmisc::summarySE(tempAnalyses, measurevar = 'VolNormed', groupvars = 'mchat_result')
+plotSummary$mchat_result <- c('High Risk', 'Low Risk')
+colnames(plotSummary)[1] <- 'Autism Risk'
+plotSummary$`Autism Risk` <- factor(plotSummary$`Autism Risk`, levels = c('Low Risk','High Risk'))
+
+PUT.R.Plot <- ggplot(data=plotSummary, aes(x=`Autism Risk`, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.01105), breaks=seq(0,.0125,.002), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=VolNormed-se, ymax=VolNormed+se), width=.125, linewidth=2) +
+  ylab('Putamen (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+#tiff(paste0(figDir,'/regionalVolumePlot.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+ggpubr::ggarrange(HPC.L.Plot, HPC.R.Plot, CAUD.L.Plot, CAUD.R.Plot,
+          THAL.L.Plot, THAL.R.Plot, PUT.R.Plot,
+          nrow=2, ncol=4, legend = 'none')
+#dev.off()
+```
+
+#### Alt Regional Figure (Rewrite with new sample)
+
+```{r}
+
+groupDiffROI <- subset(glmRegionalNormedVolTable.Itx, Grp.p.Adj < .05)$ROI
+intxDiffROI <- subset(glmRegionalNormedVolTable.Itx, Itx.p.Adj < .05)$ROI
+
+
+## HPC LEFT
+
+regionalVolumeROI <- regionalData[,'HPC_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+
+meansTablePlot <- summary(meansTable)
+
+colnames(meansTablePlot)[1] <- 'Autism Risk'
+meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+HPC.L.Plot <- ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
+  scale_y_continuous(limits=c(0,.003), breaks=seq(0,.003,.0005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
+  ylab('Hippocampus (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+
+
+
+
+## HPC RIGHT
+
+regionalVolumeROI <- regionalData[,'HPC_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+
+meansTablePlot <- summary(meansTable)
+
+colnames(meansTablePlot)[1] <- 'Autism Risk'
+meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+
+HPC.R.Plot <- ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
+  scale_y_continuous(limits=c(0,.003), breaks=seq(0,.003,.0005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
+  ylab('Hippocampus (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## AMYG Left
+
+regionalVolumeROI <- regionalData[,'Amyg_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+
+meansTablePlot <- summary(meansTable)
+
+colnames(meansTablePlot)[1] <- 'Autism Risk'
+meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+
+Amy.L.Plot <- ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
+  scale_y_continuous(limits=c(0,.002), breaks=seq(0,.003,.0005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
+  ylab('Amygdala (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## Fus Right
+
+regionalVolumeROI <- regionalData[,'FusiformAnt_GM_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+
+meansTablePlot <- summary(meansTable)
+
+colnames(meansTablePlot)[1] <- 'Autism Risk'
+meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+
+FUS.R.Plot <-  ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
+  scale_y_continuous(limits=c(0,.002), breaks=seq(0,.003,.0005), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
+  ylab('Fusiform (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## Caudate Right
+
+regionalVolumeROI <- regionalData[,'Caudate_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+
+meansTablePlot <- summary(meansTable)
+
+colnames(meansTablePlot)[1] <- 'Autism Risk'
+meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+
+CAU.R.Plot <- ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
+  scale_y_continuous(limits=c(0,.01), breaks=seq(0,.03,.002), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
+  ylab('Caudate (Right) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## Subthalamic Left
+
+regionalVolumeROI <- regionalData[,'Subthalamic_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+
+meansTablePlot <- summary(meansTable)
+
+colnames(meansTablePlot)[1] <- 'Autism Risk'
+meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+
+SUBT.L.Plot <-  ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
+  scale_y_continuous(limits=c(0,.0007), breaks=seq(0,.03,.0002), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
+  ylab('Subthalamic (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## Pallidum Left
+
+regionalVolumeROI <- regionalData[,'Lentiform_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+meansTable <- emmeans::emmeans(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')), ~ mchat_result)
+
+meansTablePlot <- summary(meansTable)
+
+colnames(meansTablePlot)[1] <- 'Autism Risk'
+meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+
+PAL.L.Plot <-  ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
+  scale_y_continuous(limits=c(0,.0105), breaks=seq(0,.03,.002), expand=c(0,0)) +
+  scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+  geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
+  ylab('Pallidum (Left) Volume') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+
+#tiff(paste0(figDir,'/regionalVolumePlot.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+ggpubr::ggarrange(HPC.L.Plot, HPC.R.Plot, Amy.L.Plot, FUS.R.Plot, 
+                  CAU.R.Plot, SUBT.L.Plot, PAL.L.Plot,
+          nrow=2, ncol=4, legend = 'none')
+#dev.off()
+```
+
+#### Alt Regional Figures (Only Interactions)
+
+```{r}
+
+## HPC LEFT
+
+regionalVolumeROI <- regionalData[,'HPC_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+HPC.L.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.0047), breaks=seq(0,.005,.001), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+  scale_color_manual(values=c('#72a3e8','#e37575')) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Hippocampus (Left) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+
+
+
+
+## HPC RIGHT
+
+regionalVolumeROI <- regionalData[,'HPC_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+
+HPC.R.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.0047), breaks=seq(0,.005,.001), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+  scale_color_manual(values=c('#72a3e8','#e37575')) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Hippocampus (Right) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## AMYG Left
+
+regionalVolumeROI <- regionalData[,'Amyg_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+
+Amy.L.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.0037), breaks=seq(0,.005,.001), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+  scale_color_manual(values=c('#72a3e8','#e37575')) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Amygdala (Left) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## Fus Right
+
+regionalVolumeROI <- regionalData[,'FusiformAnt_GM_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+
+FUS.R.Plot <-  ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.003), breaks=seq(0,.005,.0005), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+  scale_color_manual(values=c('#72a3e8','#e37575')) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Fusiform (Right) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## Caudate Right
+
+regionalVolumeROI <- regionalData[,'Caudate_R', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+
+CAU.R.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.02), breaks=seq(0,.05,.0025), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+  scale_color_manual(values=c('#72a3e8','#e37575')) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Caudate (Right) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## Subthalamic Left
+
+regionalVolumeROI <- regionalData[,'Subthalamic_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+
+SUBT.L.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.00125), breaks=seq(0,.005,.00025), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+  scale_color_manual(values=c('#72a3e8','#e37575')) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Subthalamic (Left) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+## Pallidum Left
+
+regionalVolumeROI <- regionalData[,'Lentiform_L', drop=FALSE]
+colnames(regionalVolumeROI) <- 'Volume'
+regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
+  
+tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
+tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
+tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
+tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
+colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+
+PAL.L.Plot <-  ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+  scale_y_continuous(limits=c(0,.02), breaks=seq(0,.03,.005), expand=c(0,0)) +
+  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+  scale_shape_manual(values=c(21,23)) +
+  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+  scale_color_manual(values=c('#72a3e8','#e37575')) +
+  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+  ylab('Pallidum (Left) Volume') + xlab('Gestional Age (Weeks)') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+  
+
+
+
+
+#tiff(paste0(figDir,'/regionalVolumePlot_Interactions.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+ggpubr::ggarrange(HPC.L.Plot, HPC.R.Plot, Amy.L.Plot, FUS.R.Plot, 
+                  CAU.R.Plot, SUBT.L.Plot, PAL.L.Plot,
+          nrow=2, ncol=4, legend = 'none')
+#dev.off()
+
+
+
+```
+
+## Cortical Thickness
+
+```{r}
+
+
+ctDataRaw <- read.csv(paste0(baseDir,'/anatomical/CT_Ave_Thickness.csv'), header=F)
+ctIDList <- read.csv(paste0(baseDir,'/anatomical/CT_SubList.1D'), header=F)
+rownames(ctDataRaw) <- substr(ctIDList$V1,0, nchar(ctIDList$V1)-14)
+ctROILabel <- read.csv(paste0(baseDir,'/anatomical/CTROILabels.txt'), header=F)
+colnames(ctDataRaw) <- ctROILabel$V1
+ctData <- ctDataRaw[,c(1:70,79:90)]
+ctData$GlobalCT <- t(read.csv(paste0(baseDir,'/anatomical/CT_Global_Thickness.csv'), header=F))
+
+
+
+
+# Analyze trajectories across CT ROI
+
+glmCTTable <- as.data.frame(matrix(ncol=9, nrow=ncol(ctData)-1))
+colnames(glmCTTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
+
+glmCTTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(ctData)-1))
+colnames(glmCTTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
+
+glmCTNormedTable <- as.data.frame(matrix(ncol=9, nrow=ncol(ctData)-1))
+colnames(glmCTNormedTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
+
+glmCTNormedTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(ctData)-1))
+colnames(glmCTNormedTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
+
+
+
+for(i in 1:(ncol(ctData)-1)){
+  
+  ctVolumeROI <- ctData[,i, drop=FALSE]
+  colnames(ctVolumeROI) <- 'CT'
+  ctVolumeROI$CT <- as.numeric(ctVolumeROI$CT)
+  ctVolumeROI$GlobalCT <- ctData$GlobalCT
+  
+  tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], ctVolumeROI, by="row.names")
+  tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+  tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+  tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+  
+  tempAnalyses$CTNormed <- tempAnalyses$CT/tempAnalyses$GlobalCT
+  
+  #Raw CT - no interaction
+  tempModel <- lme(data=tempAnalyses, CT ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmCTTable$ROI[i] <- colnames(ctData)[i]
+  glmCTTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CT)
+  glmCTTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$CT)
+  glmCTTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CT)-mean(subset(tempAnalyses, mchat_result=='Fail')$CT)
+  glmCTTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmCTTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmCTTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmCTTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmCTTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CT ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+  #Raw CT - interaction
+  tempModel <- lme(data=tempAnalyses, CT ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmCTTable.Itx$ROI[i] <- colnames(ctData)[i]
+  glmCTTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CT)
+  glmCTTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$CT)
+  glmCTTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CT)-mean(subset(tempAnalyses, mchat_result=='Fail')$CT)
+  glmCTTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmCTTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmCTTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmCTTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmCTTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
+  glmCTTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
+  glmCTTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CT ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+  
+  #Normed CT - no interaction
+  tempModel <- lme(data=tempAnalyses, CTNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmCTNormedTable$ROI[i] <- colnames(ctData)[i]
+  glmCTNormedTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CTNormed)
+  glmCTNormedTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$CTNormed)
+  glmCTNormedTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CTNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$CTNormed)
+  glmCTNormedTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmCTNormedTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmCTNormedTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmCTNormedTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmCTNormedTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CTNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  
+  #Normed CT - interaction
+  tempModel <- lme(data=tempAnalyses, CTNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  glmCTNormedTable.Itx$ROI[i] <- colnames(ctData)[i]
+  glmCTNormedTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CTNormed)
+  glmCTNormedTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$CTNormed)
+  glmCTNormedTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CTNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$CTNormed)
+  glmCTNormedTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
+  glmCTNormedTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
+  glmCTNormedTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
+  glmCTNormedTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
+  glmCTNormedTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
+  glmCTNormedTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
+  glmCTNormedTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CTNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+
+}
+
+
+glmCTTable$Grp.p.Adj <- p.adjust(glmCTTable$Grp.p, method='fdr')
+glmCTTable$scanGA.p.Adj <- p.adjust(glmCTTable$scanGA.p, method='fdr')
+
+subset(glmCTTable, Grp.p.Adj < .05)
+
+
+glmCTTable.Itx$Grp.p.Adj <- p.adjust(glmCTTable.Itx$Grp.p, method='fdr')
+glmCTTable.Itx$scanGA.p.Adj <- p.adjust(glmCTTable.Itx$scanGA.p, method='fdr')
+glmCTTable.Itx$Itx.p.Adj <- p.adjust(glmCTTable.Itx$Itx.p, method='fdr')
+
+subset(glmCTTable.Itx, Grp.p.Adj < .05)
+subset(glmCTTable.Itx, Itx.p.Adj < .05)
+
+
+glmCTNormedTable$Grp.p.Adj <- p.adjust(glmCTNormedTable$Grp.p, method='fdr')
+glmCTNormedTable$scanGA.p.Adj <- p.adjust(glmCTNormedTable$scanGA.p, method='fdr')
+
+subset(glmCTNormedTable, Grp.p.Adj < .05)
+
+
+glmCTNormedTable.Itx$Grp.p.Adj <- p.adjust(glmCTNormedTable.Itx$Grp.p, method='fdr')
+glmCTNormedTable.Itx$scanGA.p.Adj <- p.adjust(glmCTNormedTable.Itx$scanGA.p, method='fdr')
+glmCTNormedTable.Itx$Itx.p.Adj <- p.adjust(glmCTNormedTable.Itx$Itx.p, method='fdr')
+
+subset(glmCTNormedTable.Itx, Grp.p.Adj < .05)
+subset(glmCTNormedTable.Itx, Itx.p.Adj < .05)
+
+
+
+```
+
+# Functional Analyses
+
+## Whole Brain Approach
+
+First step is to just do a whole brain search
+
+Here, let's run all 19,900 ROI-ROI connections
+
+It's more exploratory and FDR will kill us for sure
+
+```{r}
+
+##### WHOLE BRAIN LINEAR MODEL APPROACH #####
+
+fcGLM <- as.data.frame(matrix(ncol=8, nrow=ncol(tdFC)))
+colnames(fcGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean','Grp.B','Grp.p','GA.B','GA.p', 'nIncluded')
+
+fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFC)))
+colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean', 'TD.SE', 'ASD.SE','Grp.B','Grp.p','GA.B','GA.p', 'Intx.B','Intx.p', 'nIncluded')
+
+for(i in 1:nrow(fcGLM)){
+ 
+  iteration <- paste("Current iteration: ", i," of ", nrow(fcGLM))
+  print(iteration) 
+  
+  tempTD <- as.data.frame(cbind(rownames(tdFC),tdFC[,i]))
+  colnames(tempTD) <- c('ID','FC')
+  tempTD$Grp <- 'TD'
+  tempTD <- merge(tempTD, tdDemoFinal)
+  
+  tempASD <- as.data.frame(cbind(rownames(asdFC),asdFC[,i]))
+  colnames(tempASD) <- c('ID','FC')
+  tempASD$Grp <- 'ASD'
+  tempASD <- merge(tempASD, asdDemoFinal)
+  
+  glmFrame <- rbind(tempTD, tempASD)
+  glmFrame$FC <- as.numeric(glmFrame$FC)
+  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+  
+  # As an alternative, include the ones that have a missing here or there
+  # Lose three significant connections, but gain two more that are BS to Cun and to FFG
+  # glmFrame <- glmFrame[complete.cases(glmFrame),]
+  
+  if(is.na(sum(glmFrame$FC))) {
+    fcGLM$ROI[i] <- colnames(tdFC)[i]
+    fcIntxGLM$ROI[i] <- colnames(tdFC)[i]
+    next}
+  
+  tempGLM <- lme(data=glmFrame, FC ~ as.factor(Grp) + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  
+  fcGLM$ROI[i] <- colnames(tdFC)[i]
+  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcGLM$nIncluded[i] <- nrow(glmFrame)
+  
+  tempGLM <- lme(data=glmFrame, FC ~ as.factor(Grp) * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  fcIntxGLM$ROI[i] <- colnames(tdFC)[i]
+  fcIntxGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcIntxGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcIntxGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcIntxGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  fcIntxGLM$nIncluded[i] <- nrow(glmFrame)
+  
+}
+
+
+fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
+fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+
+#subset(fcGLM, Grp.p <.001)
+#subset(fcGLM, GA.p <.05)
+subset(fcGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+
+#subset(fcIntxGLM, Grp.p <.001)
+#subset(fcGLM, GA.p <.05)
+subset(fcIntxGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+subset(fcIntxGLM, Intx.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+SigROIList <- subset(fcIntxGLM, Grp.p.adjust <.05)$ROI
+ROIList1 <- vector()
+ROIList2 <- vector()
+for(i in 1:length(SigROIList)) {
+  ROIList1[i] <- strsplit(SigROIList[i], '_')[[1]][1]
+  ROIList2[i] <- strsplit(SigROIList[i], '_')[[1]][2]
+}
+
+ROIListFull <- c(ROIList1, ROIList2)
+# sort(table(ROIListFull))
+
+
+write.table(fcIntxGLM, paste0(baseDir,'/functional/output/WholeBrain_WholeTable.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcIntxGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/WholeBrain_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
+```
+
+### Whole Brain Figures
+
+```{r}
+
+wholeBrainTable <- read.csv(paste0(baseDir,'/functional/output/WholeBrain_WholeTable.csv'))
+wholeBrainTableFDR <- read.csv(paste0(baseDir,'/functional/output/WholeBrain_P05FDR.csv'))
+
+## Connectogram here
+# Create a dataframe for plotting
+fullFCList <- read.csv(paste0(baseDir,'/functional/100PerHemiLabels_Decimal.1D'), header=F)
+
+NetList <- read.csv(paste0(baseDir,'/functional/r200_Net.csv'))
+NetList$LobeColor <- '#000000'
+NetList$LobeColor[NetList$Lobe == "Temporal"]  <- '#a9dd8c'
+NetList$LobeColor[NetList$Lobe == "Frontal"]  <- '#efa973'
+NetList$LobeColor[NetList$Lobe == "Cerebellum"]  <- '#96a5d7'
+NetList$LobeColor[NetList$Lobe == "Parietal"]  <- '#d9c97e'
+NetList$LobeColor[NetList$Lobe == "Occipital"]  <- '#79f09f'
+NetList$LobeColor[NetList$Lobe == "Brainstem"]  <- '#a67de8'
+NetList$LobeColor[NetList$Lobe == "Subcortical"] <- '#89d4c1'
+
+NetListNewOrder <- NetList[order(NetList$OrderNew),] 
+ROIOrder <- NetListNewOrder$Name_Abrv
+ROIColor <- NetListNewOrder$LobeColor
+
+
+ROIColor <- c(ACG.L = '#efa973',
+ACG.L = '#efa973',
+ACG.L = '#efa973',
+IFGtriang.L = '#efa973',
+IFGtriang.L = '#efa973',
+IFGtriang.L = '#efa973',
+MFG.L = '#efa973',
+MFG.L = '#efa973',
+MFG.L = '#efa973',
+MFG.L = '#efa973',
+ORBinf.L = '#efa973',
+ORBinf.L = '#efa973',
+ORBmid.L = '#efa973',
+ORBmid.L = '#efa973',
+ORBsupb.L = '#efa973',
+ORBsupb.L = '#efa973',
+PreCG.L = '#efa973',
+PreCG.L = '#efa973',
+PreCG.L = '#efa973',
+PreCG.L = '#efa973',
+PreCG.L = '#efa973',
+REC.L = '#efa973',
+SFGdor.L = '#efa973',
+SFGdor.L = '#efa973',
+SFGdor.L = '#efa973',
+SFGdor.L = '#efa973',
+SFGdor.L = '#efa973',
+SFGdor.L = '#efa973',
+SFGmed.L = '#efa973',
+SFGmed.L = '#efa973',
+INS.L = '#d9c97e',
+INS.L = '#d9c97e',
+INS.L = '#d9c97e',
+INS.L = '#d9c97e',
+IPL.L = '#d9c97e',
+IPL.L = '#d9c97e',
+IPL.L = '#d9c97e',
+MCG.L = '#d9c97e',
+MCG.L = '#d9c97e',
+MCG.L = '#d9c97e',
+MCG.L = '#d9c97e',
+PCG.L = '#d9c97e',
+PCUN.L = '#d9c97e',
+PCUN.L = '#d9c97e',
+PCUN.L = '#d9c97e',
+PoCG.L = '#d9c97e',
+PoCG.L = '#d9c97e',
+PoCG.L = '#d9c97e',
+SMG.L = '#d9c97e',
+SMG.L = '#d9c97e',
+SPG.L = '#d9c97e',
+SPG.L = '#d9c97e',
+SPG.L = '#d9c97e',
+SPG.L = '#d9c97e',
+FFG.L = '#a9dd8c',
+ITG.L = '#a9dd8c',
+ITG.L = '#a9dd8c',
+ITG.L = '#a9dd8c',
+MTG.L = '#a9dd8c',
+MTG.L = '#a9dd8c',
+MTG.L = '#a9dd8c',
+MTG.L = '#a9dd8c',
+MTG.L = '#a9dd8c',
+STG.L = '#a9dd8c',
+STG.L = '#a9dd8c',
+STG.L = '#a9dd8c',
+STG.L = '#a9dd8c',
+TPOmid.L = '#a9dd8c',
+CAL.L = '#79f09f',
+CAL.L = '#79f09f',
+CUN.L = '#79f09f',
+CUN.L = '#79f09f',
+CUN.L = '#79f09f',
+LING.L = '#79f09f',
+LING.L = '#79f09f',
+IOG.L = '#79f09f',
+IOG.L = '#79f09f',
+MOG.L = '#79f09f',
+MOG.L = '#79f09f',
+MOG.L = '#79f09f',
+SOG.L = '#79f09f',
+AMY.L = '#89d4c1',
+CAU.L = '#89d4c1',
+CAU.L = '#89d4c1',
+CAU.L = '#89d4c1',
+PAL.L = '#89d4c1',
+PHG.L = '#89d4c1',
+PHG.L = '#89d4c1',
+PUT.L = '#89d4c1',
+THA.L = '#89d4c1',
+THA.L = '#89d4c1',
+CRB.L = '#96a5d7',
+CRB.L = '#96a5d7',
+CRB.L = '#96a5d7',
+CRB.L = '#96a5d7',
+CRB.L = '#96a5d7',
+BS = '#a67de8',
+BS = '#a67de8',
+BS = '#a67de8',
+BS = '#a67de8',
+BS = '#a67de8',
+BS = '#a67de8',
+BS = '#a67de8',
+BS = '#a67de8',
+CRB.R = '#96a5d7',
+CRB.R = '#96a5d7',
+CRB.R = '#96a5d7',
+CRB.R = '#96a5d7',
+CRB.R = '#96a5d7',
+THA.R = '#89d4c1',
+THA.R = '#89d4c1',
+THA.R = '#89d4c1',
+PUT.R = '#89d4c1',
+PUT.R = '#89d4c1',
+PUT.R = '#89d4c1',
+PHG.R = '#89d4c1',
+PAL.R = '#89d4c1',
+HIP.R = '#89d4c1',
+AMY.R = '#89d4c1',
+SOG.R = '#79f09f',
+SOG.R = '#79f09f',
+MOG.R = '#79f09f',
+MOG.R = '#79f09f',
+MOG.R = '#79f09f',
+IOG.R = '#79f09f',
+IOG.R = '#79f09f',
+LING.R = '#79f09f',
+LING.R = '#79f09f',
+CUN.R = '#79f09f',
+CUN.R = '#79f09f',
+CAL.R = '#79f09f',
+CAL.R = '#79f09f',
+TPOsup.R = '#a9dd8c',
+TPOmid.R = '#a9dd8c',
+STG.R = '#a9dd8c',
+STG.R = '#a9dd8c',
+STG.R = '#a9dd8c',
+MTG.R = '#a9dd8c',
+MTG.R = '#a9dd8c',
+MTG.R = '#a9dd8c',
+MTG.R = '#a9dd8c',
+ITG.R = '#a9dd8c',
+ITG.R = '#a9dd8c',
+ITG.R = '#a9dd8c',
+FFG.R = '#a9dd8c',
+FFG.R = '#a9dd8c',
+SPG.R = '#d9c97e',
+SPG.R = '#d9c97e',
+SPG.R = '#d9c97e',
+SPG.R = '#d9c97e',
+SMG.R = '#d9c97e',
+PoCG.R = '#d9c97e',
+PoCG.R = '#d9c97e',
+PoCG.R = '#d9c97e',
+PoCG.R = '#d9c97e',
+PoCG.R = '#d9c97e',
+PoCG.R = '#d9c97e',
+PCUN.R = '#d9c97e',
+PCUN.R = '#d9c97e',
+PCUN.R = '#d9c97e',
+PCL.R = '#d9c97e',
+PCL.R = '#d9c97e',
+MCG.R = '#d9c97e',
+MCG.R = '#d9c97e',
+MCG.R = '#d9c97e',
+IPL.R = '#d9c97e',
+IPL.R = '#d9c97e',
+IPL.R = '#d9c97e',
+IPL.R = '#d9c97e',
+INS.R = '#d9c97e',
+INS.R = '#d9c97e',
+HES.R = '#d9c97e',
+SMA.R = '#efa973',
+SMA.R = '#efa973',
+SFGmed.R = '#efa973',
+SFGmed.R = '#efa973',
+SFGdor.R = '#efa973',
+SFGdor.R = '#efa973',
+SFGdor.R = '#efa973',
+SFGdor.R = '#efa973',
+PreCG.R = '#efa973',
+PreCG.R = '#efa973',
+PreCG.R = '#efa973',
+ORBsupb.R = '#efa973',
+ORBsupb.R = '#efa973',
+ORBsupb.R = '#efa973',
+ORBsupb.R = '#efa973',
+ORBmid.R = '#efa973',
+ORBmed.R = '#efa973',
+ORBinf.R = '#efa973',
+ORBinf.R = '#efa973',
+MFG.R = '#efa973',
+MFG.R = '#efa973',
+MFG.R = '#efa973',
+MFG.R = '#efa973',
+IFGtriang.R = '#efa973',
+IFGtriang.R = '#efa973',
+IFGoperc.R = '#efa973',
+ACG.R = '#efa973',
+ACG.R = '#efa973')
+
+
+
+
+
+
+allConnLength <- nrow(fullFCList)*nrow(fullFCList)
+
+chordDiagram.Base <- as.data.frame(matrix(ncol=7, nrow=allConnLength))
+colnames(chordDiagram.Base) <- c('ConnFull', 'ConnAbbrev','ToFull', 'ToAbbrev','FromFull', 'FromAbbrev','MeanDiff')
+
+t<-1
+for(i in 1:nrow(fullFCList)){
+  for(j in 1:nrow(fullFCList)){
+    
+    print(paste0(i,' - ',j))
+    
+    chordDiagram.Base$ConnAbbrev[t] <- paste0(fullFCList[i,],'_',fullFCList[j,])
+    chordDiagram.Base$ConnFull[t] <- paste0(fullFCList[i,],'.',i,'_',fullFCList[j,],'.',j)
+    
+    chordDiagram.Base$ToAbbrev[t] <- fullFCList[i,]
+    chordDiagram.Base$ToFull[t] <- paste0(fullFCList[i,],'.',i)
+    
+    chordDiagram.Base$FromAbbrev[t] <- fullFCList[j,]
+    chordDiagram.Base$FromFull[t] <- paste0(fullFCList[j,],'.',j)
+    
+    targetRow <- subset(wholeBrainTable, ROI == paste0(fullFCList[i,],'.',i,'_',fullFCList[j,],'.',j))
+    
+    if(nrow(targetRow)==1) {
+      chordDiagram.Base$MeanDiff[t] <- targetRow$TD.Mean - targetRow$ASD.Mean 
+    } else {
+      chordDiagram.Base$MeanDiff[t] <- 0
+    }
+    
+    t <- t+1
+  }
+}
+
+chordDiagram.Base$ASDConn <- as.numeric(chordDiagram.Base$MeanDiff < 0)
+chordDiagram.Base$TDConn <- as.numeric(chordDiagram.Base$MeanDiff > 0)
+chordDiagram.Base$MeanDiff[is.na(chordDiagram.Base$MeanDiff)] <- 0
+chordDiagram.Base$ASDConn[is.na(chordDiagram.Base$ASDConn)] <- 0
+chordDiagram.Base$TDConn[is.na(chordDiagram.Base$TDConn)] <- 0
+
+chordDiagram.Base$ASDCol <- '#00000000'
+chordDiagram.Base$ASDCol[chordDiagram.Base$ASDConn==1] <-'#a60000aa'
+chordDiagram.Base$ASDCol[!(chordDiagram.Base$ConnFull %in% wholeBrainTableFDR$ROI)] <- '#00000000'
+
+chordDiagram.Base$TDCol <- '#00000000'
+chordDiagram.Base$TDCol[chordDiagram.Base$TDConn==1] <- '#0050bfaa'
+chordDiagram.Base$TDCol[!(chordDiagram.Base$ConnFull %in% wholeBrainTableFDR$ROI)] <- '#00000000'
+
+
+
+gapSizes <- c(rep(2:2, 9), #L Frontal
+              5,
+              rep(2:2, 7), #L Parietal
+              5,
+              rep(2:2, 4), #L Temporal
+              5,
+              rep(2:2, 5), #L Occipital
+              5,
+              rep(2:2, 5), #L Subcortical
+              5,
+              5,
+              5,
+              5,
+              rep(2:2, 5), #R Subcortical
+              5,
+              rep(2:2, 5), #R Occipital
+              5,
+              rep(2:2, 5), #R Temporal
+              5,
+              rep(2:2, 8), #R Parietal
+              5,
+              rep(2:2, 11), #R Frontal)
+              13) 
+
+
+# tiff(paste0(figDir,'/chordPlot_ASD_newColors.tiff'), units = 'in', height = 8, width = 8, res=600, compression = 'lzw')
+
+circos.clear()
+circos.par(start.degree=81, gap.after=gapSizes)
+chordDiagram(chordDiagram.Base[,c('ToAbbrev','FromAbbrev','ASDConn')],
+             order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
+             col=chordDiagram.Base$ASDCol, symmetric = TRUE, scale=TRUE, 
+             link.border=chordDiagram.Base$ASDCol, link.lwd=3,
+             annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
+circos.track(track.index = 1, panel.fun = function(x, y) {
+  circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
+              facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
+}, bg.border = NA) # here set bg.border to NA is important
+
+# dev.off()
+
+
+
+# tiff(paste0(figDir,'/chordPlot_TD_newColors.tiff'), units = 'in', height = 8, width = 8, res=600, compression = 'lzw')
+
+circos.clear()
+circos.par(start.degree=81, gap.after=gapSizes)
+chordDiagram(chordDiagram.Base[,c('ToAbbrev','FromAbbrev','TDConn')],
+             order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
+             col=chordDiagram.Base$TDCol, symmetric = TRUE, scale=TRUE, 
+             link.border=chordDiagram.Base$TDCol, link.lwd=3,
+             annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
+circos.track(track.index = 1, panel.fun = function(x, y) {
+  circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
+              facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
+}, bg.border = NA) # here set bg.border to NA is important
+
+# dev.off()
+
+
+
+
+asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$TFromAbbrev)
+
+tdConnections <- c(chordDiagram.Base[chordDiagram.Base$TDCol == '#0050bfaa',]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$TDCol == '#0050bfaa',]$TFromAbbrev)
+
+
+sort(table(asdConnections))
+sort(table(tdConnections))
+
+
+
+
+
+
+
+
+
+
+
+
+## DESCRIPTIVE FOR REGIONAL CONNECTIVITY
+
+lobeNames <- c('Frontal','Parietal','Temporal','Occipital','Subcortical','Cerebellum','Brainstem')
+allConnDesc <- as.data.frame(matrix(nrow=7, ncol=7, 0))
+colnames(allConnDesc) <- lobeNames
+rownames(allConnDesc) <-lobeNames
+allConnDescSig <- allConnDesc
+allConnDescSig.TD <- allConnDesc
+allConnDescSig.ASD <- allConnDesc
+
+
+for(i in 1:nrow(wholeBrainTable)){
+  
+  targetConn <- wholeBrainTable$ROI[i]
+  
+  targetROI1 <- strsplit(targetConn,'_',useBytes=T)[[1]][1]
+  targetROI2 <- strsplit(targetConn,'_',useBytes=T)[[1]][2]
+  
+  targetROI1Name <- paste0(strsplit(targetROI1,'.',fixed=T)[[1]][1],'.',strsplit(targetROI1,'.',fixed=T)[[1]][2])
+  targetROI2Name <- paste0(strsplit(targetROI2,'.',fixed=T)[[1]][1],'.',strsplit(targetROI2,'.',fixed=T)[[1]][2])
+  
+  #Need to manually code Brainstem beacause it's not labeled with a L or R
+  if(substr(targetROI1Name,0,2)=='BS') {targetROI1Name <- 'BS'}
+  if(substr(targetROI2Name,0,2)=='BS') {targetROI2Name <- 'BS'}
+  
+  abbrevNet <- NetList[NetList$Name_Abrv %in% targetROI1Name,]
+  lobe1 <-abbrevNet$Lobe[1]
+  abbrevNet <- NetList[NetList$Name_Abrv %in% targetROI2Name,]
+  lobe2 <-abbrevNet$Lobe[1]
+  
+  index1 <- grep(lobe1, lobeNames)
+  index2 <- grep(lobe2, lobeNames)
+  
+  allConnDesc[index1, index2] <- allConnDesc[index1, index2] + 1
+  allConnDesc[index2, index1] <- allConnDesc[index2, index1] + 1
+  
+  # Just include significant for all groups
+  
+  if(wholeBrainTable$ROI[i] %in% wholeBrainTableFDR$ROI){
+   
+    targetRow <- wholeBrainTableFDR[wholeBrainTableFDR$ROI %in% wholeBrainTable$ROI[i],]
+    
+    allConnDescSig[index1, index2] <- allConnDescSig[index1, index2] + 1
+    allConnDescSig[index2, index1] <- allConnDescSig[index2, index1] + 1
+    
+    if(targetRow$TD.Mean > targetRow$ASD.Mean) {
+    
+    allConnDescSig.TD[index1, index2] <- allConnDescSig.TD[index1, index2] + 1
+    allConnDescSig.TD[index2, index1] <- allConnDescSig.TD[index2, index1] + 1
+    
+    } else {
+    
+    allConnDescSig.ASD[index1, index2] <- allConnDescSig.ASD[index1, index2] + 1
+    allConnDescSig.ASD[index2, index1] <- allConnDescSig.ASD[index2, index1] + 1
+      
+    }
+  }
+}
+
+
+meltTDConn <- allConnDescSig.TD
+
+meltTDConn$ROWNAMES <- rownames(allConnDescSig.TD)
+tdConnPlot <- melt(meltTDConn, id.vars='ROWNAMES')
+colnames(tdConnPlot) <- c('Row','Col','Num')
+
+tdConnPlot$Row <- factor(tdConnPlot$Row, levels=lobeNames)
+tdConnPlot$Col <- factor(tdConnPlot$Col, levels=rev(lobeNames))
+
+# tiff(paste0(figDir,'/tdWholeBrainTableFig.tiff'), width=8.95, height=8, units='in', res=600, compression='lzw')
+ggplot(tdConnPlot, aes(x=Row, y=Col)) +
+  scale_fill_gradient(low='#ffffff', high='#0050bf') +
+  geom_tile(aes(fill=Num), color='#000000') +
+  geom_text(aes(label=Num), color='#000000')  +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_blank(),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'Right',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+# dev.off()
+
+
+
+
+meltASDConn <- allConnDescSig.ASD
+meltASDConn$ROWNAMES <- rownames(allConnDescSig.ASD)
+asdConnPlot <- melt(meltASDConn, id.vars='ROWNAMES')
+colnames(asdConnPlot) <- c('Row','Col','Num')
+
+asdConnPlot$Row <- factor(asdConnPlot$Row, levels=lobeNames)
+asdConnPlot$Col <- factor(asdConnPlot$Col, levels=rev(lobeNames))
+
+# tiff(paste0(figDir,'/asdWholeBrainTableFig.tiff'), width=8.95, height=8, units='in', res=600, compression='lzw')
+ggplot(asdConnPlot, aes(x=Row, y=Col)) +
+  scale_fill_gradient(limits=c(0,25), low='#ffffff', high='#a60000') +
+  geom_tile(aes(fill=Num), color='#000000') +
+  geom_text(aes(label=Num), color='#000000')  +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_blank(),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'Right',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+# dev.off()
+
+
+
+
+```
+
+## Smaller Network Approach
+
+Here we are subdividing out into smaller networks
+
+This will (A) help with the crazy FDR correction and (B) more pointedly target questions about connectivity within networks such as the CRB
+
+Biggest job, however, is to define the networks in a rigorous way
+
+```{r}
+## First -- divide out the connections into an ROI1 and ROI2 table
+
+connROIs <- as.data.frame(matrix(ncol=2, nrow=ncol(tdFC)))
+colnames(connROIs) <- c('ROI1','ROI2')
+
+for(i in 1:nrow(connROIs)){
+  tempROI <- colnames(tdFC)[i]
+  
+  connROIs$ROI1[i] <- strsplit(tempROI,'_')[[1]][1]
+  connROIs$ROI2[i] <- strsplit(tempROI,'_')[[1]][2] 
+  
+}
+
+```
+
+### Cerebellar
+
+```{r}
+
+# Cerebellar ROI in both ROI
+ROI1match <- grepl('CRB',connROIs$ROI1)
+ROI2match <- grepl('CRB',connROIs$ROI2)
+bothROIMatch <- ROI1match & ROI2match
+
+tdFCNetwork <- tdFC[,bothROIMatch]
+asdFCNetwork <- asdFC[,bothROIMatch]
+
+fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+
+for(i in 1:nrow(fcGLM)){
+  
+  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+  colnames(tempTD) <- c('ID','FC')
+  tempTD$Grp <- 'TD'
+  tempTD <- merge(tempTD, tdDemoFinal)
+  
+  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+  colnames(tempASD) <- c('ID','FC')
+  tempASD$Grp <- 'ASD'
+  tempASD <- merge(tempASD, asdDemoFinal)
+  
+  glmFrame <- rbind(tempTD, tempASD)
+  glmFrame$FC <- as.numeric(glmFrame$FC)
+  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
+  
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  adjustMeans <- emmeans(tempGLM,'Grp')
+  
+  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
+  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
+  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
+  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
+  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
+  
+  
+}
+
+fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
+fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+
+# subset(fcGLM, Grp.p <.05)
+# subset(fcGLM, Grp.p <.01)
+# subset(fcGLM, Grp.p <.001)
+
+subset(fcGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+
+subset(fcIntxGLM, Grp.p.adjust <.05)
+subset(fcIntxGLM, Intx.p.adjust <.05)
+
+
+write.table(fcGLM, paste0(baseDir,'/functional/output/CRB_WholeTable.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/CRB_P05.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/CRB_P01.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/CRB_P001.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/CRB_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
+write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/CRB_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/CRB_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(fcIntxGLM, paste0(baseDir,'/functional/output/CRB_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
+
+
+
+
+
+# fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+# fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+# fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+# 
+# subset(fcIntxGLM, Grp.p <.001)
+# #subset(fcGLM, GA.p <.05)
+# subset(fcIntxGLM, Grp.p.adjust <.05)
+# #subset(fcGLM, GA.p.adjust <.05)
+# subset(fcIntxGLM, Intx.p.adjust <.05)
+# #subset(fcGLM, GA.p.adjust <.05)
+
+
+effectsize::eta2_to_f2(0.2953587)
+effectsize::eta2_to_f(0.2953587)
+
+
+deltaSS <- mean(fcGLM$TD.Mean) - mean(fcGLM$ASD.Mean)
+sigmaSS <- sd(fcGLM$TD.Mean) - sd(fcGLM$ASD.Mean)
+
+longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
+
+pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
+
+limit05 <- nrow(subset(fcGLM, Grp.p <.05))
+limit01 <- nrow(subset(fcGLM, Grp.p <.01))
+limit001 <- nrow(subset(fcGLM, Grp.p <.001))
+limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
+
+
+ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+  scale_y_continuous(limits=c(0,1.2), breaks=seq(0,2,.2), expand=c(0,0)) +
+  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  geom_hline(yintercept = 0, linewidth=1.5) +
+  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+  ylab('Connectivity Strength') + xlab('Cerebellar Connections') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.y = element_line(color = 'dark gray'),
+        panel.grid.major.x = element_line(color = 'dark gray'),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+```
+
+### Limbic
+
+```{r}
+
+#roiNumeric <- c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200)
+
+# ADD IN PARAHIPPOCAMPAL GYRUS TO SEE WHAT HAPPENS
+roiNumeric <- c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200,
+                43,86,125)
+
+bothROIMatch <- vector()
+
+for(i in 1:nrow(connROIs)){
+  
+  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
+  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
+  
+  match1 <- conn1Num %in% roiNumeric
+  match2 <- conn2Num %in% roiNumeric
+  bothROIMatch[i] <- (match1 & match2)
+}
+
+
+tdFCNetwork <- tdFC[,bothROIMatch]
+asdFCNetwork <- asdFC[,bothROIMatch]
+
+fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+
+for(i in 1:nrow(fcGLM)){
+  
+  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+  colnames(tempTD) <- c('ID','FC')
+  tempTD$Grp <- 'TD'
+  tempTD <- merge(tempTD, tdDemoFinal)
+  
+  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+  colnames(tempASD) <- c('ID','FC')
+  tempASD$Grp <- 'ASD'
+  tempASD <- merge(tempASD, asdDemoFinal)
+  
+  glmFrame <- rbind(tempTD, tempASD)
+  glmFrame$FC <- as.numeric(glmFrame$FC)
+  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
+  
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  adjustMeans <- emmeans(tempGLM,'Grp')
+  
+  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcIntxGLM$TD.Mean[i] <-mean(as.numeric(tempTD$FC), na.rm = T)
+  fcIntxGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcIntxGLM$ASD.Mean[i] <-mean(as.numeric(tempASD$FC), na.rm = T)
+  fcIntxGLM$ASD.SE[i] <-sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
+  
+}
+
+fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
+fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+
+# subset(fcGLM, Grp.p <.05)
+# subset(fcGLM, Grp.p <.01)
+# subset(fcGLM, Grp.p <.001)
+
+subset(fcGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+
+subset(fcIntxGLM, Grp.p.adjust <.05)
+subset(fcIntxGLM, Intx.p.adjust <.05)
+
+
+
+write.table(fcGLM, paste0(baseDir,'/functional/output/Limbic_WholeTable.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/Limbic_P05.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/Limbic_P01.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/Limbic_P001.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/Limbic_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
+write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/Limbic_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/Limbic_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(fcIntxGLM, paste0(baseDir,'/functional/output/Limbic_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
+
+
+longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
+
+pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
+
+limit05 <- nrow(subset(fcGLM, Grp.p <.05))
+limit01 <- nrow(subset(fcGLM, Grp.p <.01))
+limit001 <- nrow(subset(fcGLM, Grp.p <.001))
+limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
+
+ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+  scale_y_continuous(limits=c(-.4,1.4), breaks=seq(-2,2,.2), expand=c(0,0)) +
+  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+  ylab('Connectivity Strength') + xlab('Limbic Connections') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.y = element_line(color = 'dark gray'),
+        panel.grid.major.x = element_line(color = 'dark gray'),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+
+```
+
+### Default Mode
+
+```{r}
+
+#roiNumeric <- c(4,11,18,22,23,34,40,42,43,48,53,70,85,86,88,96,100,102,104,106,123,124,125,128,137,150,152,156,160,163,168,171,176,178)
+
+# REMOVE HIPPOCAMPUS AND PARAHIPPOCAMPAL GYRUS
+roiNumeric <- c(4,11,18,22,23,34,40,42,48,53,70,85,88,96,100,102,104,106,123,124,128,137,150,152,156,163,168,171,176,178)
+
+
+bothROIMatch <- vector()
+
+for(i in 1:nrow(connROIs)){
+  
+  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
+  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
+  
+  match1 <- conn1Num %in% roiNumeric
+  match2 <- conn2Num %in% roiNumeric
+  bothROIMatch[i] <- (match1 & match2)
+}
+
+
+tdFCNetwork <- tdFC[,bothROIMatch]
+asdFCNetwork <- asdFC[,bothROIMatch]
+
+fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+
+for(i in 1:nrow(fcGLM)){
+  
+  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+  colnames(tempTD) <- c('ID','FC')
+  tempTD$Grp <- 'TD'
+  tempTD <- merge(tempTD, tdDemoFinal)
+  
+  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+  colnames(tempASD) <- c('ID','FC')
+  tempASD$Grp <- 'ASD'
+  tempASD <- merge(tempASD, asdDemoFinal)
+  
+  glmFrame <- rbind(tempTD, tempASD)
+  glmFrame$FC <- as.numeric(glmFrame$FC)
+  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
+  
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  adjustMeans <- emmeans(tempGLM,'Grp')
+  
+  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
+  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
+  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
+  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
+  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
+  
+}
+
+fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
+fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+
+# subset(fcGLM, Grp.p <.05)
+# subset(fcGLM, Grp.p <.01)
+# subset(fcGLM, Grp.p <.001)
+
+subset(fcGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+
+subset(fcIntxGLM, Grp.p.adjust <.05)
+subset(fcIntxGLM, Intx.p.adjust <.05)
+
+
+
+write.table(fcGLM, paste0(baseDir,'/functional/output/DMN_WholeTable.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/DMN_P05.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/DMN_P01.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/DMN_P001.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/DMN_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
+write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/DMN_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/DMN_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(fcIntxGLM, paste0(baseDir,'/functional/output/DMN_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
+
+
+longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
+
+pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
+
+limit05 <- nrow(subset(fcGLM, Grp.p <.05))
+limit01 <- nrow(subset(fcGLM, Grp.p <.01))
+limit001 <- nrow(subset(fcGLM, Grp.p <.001))
+limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
+
+ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+  scale_y_continuous(limits=c(-.6,1), breaks=seq(-2,2,.2), expand=c(0,0)) +
+  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+  ylab('Connectivity Strength') + xlab('Default Mode Connections') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.y = element_line(color = 'dark gray'),
+        panel.grid.major.x = element_line(color = 'dark gray'),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+
+
+```
+
+### Somatomotor
+
+```{r}
+ROI1match <- grepl('PreCG',connROIs$ROI1) |
+ grepl('PoCG',connROIs$ROI1) | grepl('SMA',connROIs$ROI1)
+ROI2match <- grepl('PreCG',connROIs$ROI2) |
+ grepl('PoCG',connROIs$ROI2) | grepl('SMA',connROIs$ROI2)
+bothROIMatch <- ROI1match & ROI2match
+
+tdFCNetwork <- tdFC[,bothROIMatch]
+asdFCNetwork <- asdFC[,bothROIMatch]
+
+fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+
+for(i in 1:nrow(fcGLM)){
+  
+  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+  colnames(tempTD) <- c('ID','FC')
+  tempTD$Grp <- 'TD'
+  tempTD <- merge(tempTD, tdDemoFinal)
+  
+  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+  colnames(tempASD) <- c('ID','FC')
+  tempASD$Grp <- 'ASD'
+  tempASD <- merge(tempASD, asdDemoFinal)
+  
+  glmFrame <- rbind(tempTD, tempASD)
+  glmFrame$FC <- as.numeric(glmFrame$FC)
+  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
+  
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  adjustMeans <- emmeans(tempGLM,'Grp')
+  
+  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
+  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
+  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
+  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
+  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
+  
+}
+
+fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
+fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+
+# subset(fcGLM, Grp.p <.05)
+# subset(fcGLM, Grp.p <.01)
+# subset(fcGLM, Grp.p <.001)
+
+subset(fcGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+
+subset(fcIntxGLM, Grp.p.adjust <.05)
+subset(fcIntxGLM, Intx.p.adjust <.05)
+
+
+write.table(fcGLM, paste0(baseDir,'/functional/output/SomMot_WholeTable.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/SomMot_P05.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/SomMot_P01.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/SomMot_P001.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/SomMot_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
+write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/SomMot_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/SomMot_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(fcIntxGLM, paste0(baseDir,'/functional/output/SomMot_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
+
+
+longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
+
+pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
+
+limit05 <- nrow(subset(fcGLM, Grp.p <.05))
+limit01 <- nrow(subset(fcGLM, Grp.p <.01))
+limit001 <- nrow(subset(fcGLM, Grp.p <.001))
+limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
+
+ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+  scale_y_continuous(limits=c(-.3,1.1), breaks=seq(-2,2,.2), expand=c(0,0)) +
+  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+  ylab('Connectivity Strength') + xlab('Sensorimotor Connections') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.y = element_line(color = 'dark gray'),
+        panel.grid.major.x = element_line(color = 'dark gray'),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+
+```
+
+### Subcortical
+
+```{r}
+
+roiNumeric <- c(31,32,39,51,80,92,97,107,111,134,139,145,151)
+bothROIMatch <- vector()
+
+for(i in 1:nrow(connROIs)){
+  
+  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
+  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
+  
+  match1 <- conn1Num %in% roiNumeric
+  match2 <- conn2Num %in% roiNumeric
+  bothROIMatch[i] <- (match1 & match2)
+}
+
+
+tdFCNetwork <- tdFC[,bothROIMatch]
+asdFCNetwork <- asdFC[,bothROIMatch]
+
+fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+
+for(i in 1:nrow(fcGLM)){
+  
+  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+  colnames(tempTD) <- c('ID','FC')
+  tempTD$Grp <- 'TD'
+  tempTD <- merge(tempTD, tdDemoFinal)
+  
+  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+  colnames(tempASD) <- c('ID','FC')
+  tempASD$Grp <- 'ASD'
+  tempASD <- merge(tempASD, asdDemoFinal)
+  
+  glmFrame <- rbind(tempTD, tempASD)
+  glmFrame$FC <- as.numeric(glmFrame$FC)
+  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
+  
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  adjustMeans <- emmeans(tempGLM,'Grp')
+  
+  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
+  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
+  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
+  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
+  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
+  
+}
+
+fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
+fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+
+# subset(fcGLM, Grp.p <.05)
+# subset(fcGLM, Grp.p <.01)
+# subset(fcGLM, Grp.p <.001)
+
+subset(fcGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+
+subset(fcIntxGLM, Grp.p.adjust <.05)
+subset(fcIntxGLM, Intx.p.adjust <.05)
+
+
+
+write.table(fcGLM, paste0(baseDir,'/functional/output/SubCort_WholeTable.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/SubCort_P05.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/SubCort_P01.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/SubCort_P001.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/SubCort_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
+write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/SubCort_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/SubCort_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(fcIntxGLM, paste0(baseDir,'/functional/output/SubCort_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
+
+
+longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
+
+pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
+
+limit05 <- nrow(subset(fcGLM, Grp.p <.05))
+limit01 <- nrow(subset(fcGLM, Grp.p <.01))
+limit001 <- nrow(subset(fcGLM, Grp.p <.001))
+limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
+
+ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+  scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
+  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+  ylab('Connectivity Strength') + xlab('Subcortical Connections') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.y = element_line(color = 'dark gray'),
+        panel.grid.major.x = element_line(color = 'dark gray'),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+
+```
+
+### Auditory
+
+```{r}
+
+roiNumeric <- c(88,94,2,12,48,
+                171,107,139,152,185)
+bothROIMatch <- vector()
+
+for(i in 1:nrow(connROIs)){
+
+  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
+  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
+
+  match1 <- conn1Num %in% roiNumeric
+  match2 <- conn2Num %in% roiNumeric
+  bothROIMatch[i] <- (match1 & match2)
+}
+
+
+tdFCNetwork <- tdFC[,bothROIMatch]
+asdFCNetwork <- asdFC[,bothROIMatch]
+
+fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+
+for(i in 1:nrow(fcGLM)){
+  
+  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+  colnames(tempTD) <- c('ID','FC')
+  tempTD$Grp <- 'TD'
+  tempTD <- merge(tempTD, tdDemoFinal)
+  
+  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+  colnames(tempASD) <- c('ID','FC')
+  tempASD$Grp <- 'ASD'
+  tempASD <- merge(tempASD, asdDemoFinal)
+  
+  glmFrame <- rbind(tempTD, tempASD)
+  glmFrame$FC <- as.numeric(glmFrame$FC)
+  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
+  
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  adjustMeans <- emmeans(tempGLM,'Grp')
+  
+  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
+  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
+  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
+  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
+  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
+  
+}
+
+fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
+fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+
+# subset(fcGLM, Grp.p <.05)
+# subset(fcGLM, Grp.p <.01)
+# subset(fcGLM, Grp.p <.001)
+
+subset(fcGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+
+subset(fcIntxGLM, Grp.p.adjust <.05)
+subset(fcIntxGLM, Intx.p.adjust <.05)
+
+
+
+
+
+write.table(fcGLM, paste0(baseDir,'/functional/output/Auditory_WholeTable.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/Auditory_P05.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/Auditory_P01.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/Auditory_P001.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/Auditory_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
+write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/Auditory_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/Auditory_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(fcIntxGLM, paste0(baseDir,'/functional/output/Auditory_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
+
+
+
+
+ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+  #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
+  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+  ylab('Connectivity Strength') + xlab('Subcortical Connections') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.y = element_line(color = 'dark gray'),
+        panel.grid.major.x = element_line(color = 'dark gray'),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+```
+
+### Visual
+
+```{r}
+
+roiNumeric <- c(181,174,153,114,149,195,167,105,116,194,197,162,131,186,135,
+                72,60,19,52,35,75,25,15,42,30,91,87,98,57)
+bothROIMatch <- vector()
+
+for(i in 1:nrow(connROIs)){
+
+  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
+  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
+
+  match1 <- conn1Num %in% roiNumeric
+  match2 <- conn2Num %in% roiNumeric
+  bothROIMatch[i] <- (match1 & match2)
+}
+
+
+tdFCNetwork <- tdFC[,bothROIMatch]
+asdFCNetwork <- asdFC[,bothROIMatch]
+
+fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+
+for(i in 1:nrow(fcGLM)){
+  
+  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+  colnames(tempTD) <- c('ID','FC')
+  tempTD$Grp <- 'TD'
+  tempTD <- merge(tempTD, tdDemoFinal)
+  
+  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+  colnames(tempASD) <- c('ID','FC')
+  tempASD$Grp <- 'ASD'
+  tempASD <- merge(tempASD, asdDemoFinal)
+  
+  glmFrame <- rbind(tempTD, tempASD)
+  glmFrame$FC <- as.numeric(glmFrame$FC)
+  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
+  
+  
+  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  
+  adjustMeans <- emmeans(tempGLM,'Grp')
+  
+  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
+  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
+  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
+  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
+  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
+  
+}
+
+fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
+fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+
+# subset(fcGLM, Grp.p <.05)
+# subset(fcGLM, Grp.p <.01)
+# subset(fcGLM, Grp.p <.001)
+
+subset(fcGLM, Grp.p.adjust <.05)
+#subset(fcGLM, GA.p.adjust <.05)
+
+
+
+fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
+fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
+fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+
+subset(fcIntxGLM, Grp.p.adjust <.05)
+subset(fcIntxGLM, Intx.p.adjust <.05)
+
+
+
+
+
+
+write.table(fcGLM, paste0(baseDir,'/functional/output/Visual_WholeTable.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/Visual_P05.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/Visual_P01.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/Visual_P001.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/Visual_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
+write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/Visual_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/Visual_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
+write.table(fcIntxGLM, paste0(baseDir,'/functional/output/Visual_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
+
+
+
+
+ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+  #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
+  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+  ylab('Connectivity Strength') + xlab('Subcortical Connections') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.y = element_line(color = 'dark gray'),
+        panel.grid.major.x = element_line(color = 'dark gray'),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+```
+
+#### Network Connectivity Figures
+
+```{r}
+
+# Read in the output of the above analyses for plotting
+FCTable.AllConn.DMN <- read.csv(paste0(baseDir,'/functional/output/DMN_Intx_Wholebrain.csv'), stringsAsFactors=F)
+FCTable.AllConn.Limbic <- read.csv(paste0(baseDir,'/functional/output/Limbic_Intx_Wholebrain.csv'), stringsAsFactors=F)
+FCTable.AllConn.Subcort <- read.csv(paste0(baseDir,'/functional/output/SubCort_Intx_Wholebrain.csv'), stringsAsFactors=F)
+FCTable.AllConn.CRB <- read.csv(paste0(baseDir,'/functional/output/CRB_Intx_Wholebrain.csv'), stringsAsFactors=F)
+
+FCTable.TrendOnly.DMN <- read.csv(paste0(baseDir,'/functional/output/DMN_Intx_P10FDR.csv'), stringsAsFactors=F)
+FCTable.TrendOnly.Limbic <- read.csv(paste0(baseDir,'/functional/output/Limbic_Intx_P10FDR.csv'), stringsAsFactors=F)
+FCTable.TrendOnly.Subcort <- read.csv(paste0(baseDir,'/functional/output/SubCort_Intx_P10FDR.csv'), stringsAsFactors=F)
+FCTable.TrendOnly.CRB <- read.csv(paste0(baseDir,'/functional/output/CRB_Intx_P10FDR.csv'), stringsAsFactors=F)
+
+FCTable.TrendOnly.DMN$Net <- 'DMN'
+FCTable.TrendOnly.Limbic$Net <- 'Limbic'
+FCTable.TrendOnly.Subcort$Net <- 'Subcort'
+FCTable.TrendOnly.CRB$Net <- 'CRB'
+
+FCTable.TrendOnly.All <- rbind(rbind(rbind(FCTable.TrendOnly.DMN, FCTable.TrendOnly.Limbic),
+                                    FCTable.TrendOnly.Subcort),
+                              FCTable.TrendOnly.CRB)
+
+
+# Plots
+
+plotOrder <- c('CAU.L.39_THA.R.139',
+  'PAL.L.97_PUT.R.111',
+  'CAU.L.39_THA.L.80',
+  'THA.L.51_PUT.L.92',
+  'PAL.L.97_PAL.R.107',
+  'PAL.L.97_THA.R.139',
+  'PAL.R.107_PUT.R.145',
+  'TPOmid.L.9_ITG.R.188',
+  'REC.L.20_TPOmid.R.108',
+  'REC.L.20_ORBsupb.R.155',
+  'ITG.L.56_ITG.R.188',
+  'SFGdor.L.67_AMY.R.133',
+  'SFGdor.L.67_ORBsupb.R.196',
+  'ORBsupb.R.143_ITG.R.188',
+  'ITG.R.188_ORBsupb.R.196',
+  'ITG.R.188_ORBsupb.R.198',
+  'SFGmed.L.18_ACG.R.123',
+  'MTG.L.22_ACG.L.34',
+  'MTG.L.22_ACG.R.156',
+  'PCUN.L.23_STG.L.88',
+  'MTG.L.96_STG.R.102',
+  'SFGmed.R.128_MTG.R.150',
+  'PHG.L.43_PCUN.R.178',
+  'CRB.L.13_CRB.R.142',
+  'CRB.L.13_CRB.R.192',
+  'CRB.L.17_CRB.L.99',
+  'CRB.L.17_CRB.R.192',
+  'CRB.L.54_CRB.R.192',
+  'CRB.L.99_CRB.R.142',
+  'CRB.L.99_CRB.R.192',
+  'CRB.R.129_CRB.R.192')
+
+
+
+plotFrame.TD <- FCTable.TrendOnly.All[,c('ROI','TD.Mean', 'TD.SE')]
+colnames(plotFrame.TD) <- c('Connection','Mean','SE')
+plotFrame.ASD <- FCTable.TrendOnly.All[,c('ROI','ASD.Mean', 'ASD.SE')]
+colnames(plotFrame.ASD) <- c('Connection','Mean','SE')
+plotFrame.TD$Grp <- 'Low Risk'
+plotFrame.ASD$Grp <- 'High Risk'
+
+plotFrame <- as.data.frame(rbind(plotFrame.TD, plotFrame.ASD))
+plotFrame$Connection <- factor(plotFrame$Connection, levels=plotOrder)
+plotFrame$Grp <- factor(plotFrame$Grp, levels=c('Low Risk', 'High Risk'))
+plotFrame$Mean <- as.numeric(plotFrame$Mean)
+plotFrame$SE <- as.numeric(plotFrame$SE)
+
+##plot ggeffects maybe ggprdict?
+##need marginal means? -- emmeans? Give the SE from the model itself
+
+ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
+  #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
+  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  geom_hline(yintercept = 0, lwd=1) +
+  geom_bar(stat='identity', position=position_dodge2(0.2), aes(color=Grp,fill=Grp)) +
+  # geom_errorbar(position=position_dodge2(0.2), aes(ymin=Mean-SE, ymax=Mean+SE), size=.2) +
+  ylab('Connectivity Strength') + xlab('Subcortical Connections') +
+  theme(axis.title.x = element_text(color = 'black', size = 16),
+        axis.text.x = element_text(color = 'black', size = 4, angle=90),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.y = element_line(color = '#aaaaaa'),
+        panel.grid.major.x = element_line(color = '#aaaaaa'),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'right',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+
+
+
+
+```
