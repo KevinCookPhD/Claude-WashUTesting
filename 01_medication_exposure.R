@@ -221,3 +221,61 @@ cat("\nMinimum detectable correlation at 80% power:\n")
 for (n in c(n_infants, 310)) {
   cat(" N =", n, " r =", round(pwr.r.test(n = n, power = 0.8, sig.level = 0.05)$r, 2), "\n")
 }
+
+# ---- 8. Co-administration ----------------------------------------------
+# 8a. Exact combinations of drug classes (each infant appears in exactly one row)
+classes <- tibble(Opioid          = meds$any_opioid,
+                  Benzodiazepine  = meds$any_benzo,
+                  Dexmedetomidine = flag(meds$dexmedetomidine),
+                  Caffeine        = flag(meds$caffeine),
+                  Acetaminophen   = flag(meds$acetaminophen))
+
+combo_counts <- classes |>
+  mutate(pattern = pmap_chr(across(everything()), function(...) {
+    x <- c(...)
+    if (!any(x)) "None" else paste(names(x)[x], collapse = " + ")
+  })) |>
+  count(pattern) |>
+  mutate(n_classes = if_else(pattern == "None", 0L, str_count(pattern, fixed("+")) + 1L),
+         pct = 100 * n / n_infants,
+         pattern = if_else(n_classes == 1L, paste(pattern, "only"), pattern)) |>
+  arrange(n_classes, desc(n))
+print(combo_counts, n = Inf)
+write_csv(combo_counts, out_path("tables", "coadministration_combinations.csv"))
+
+combo_counts |>
+  transmute(`Drug class combination` = pattern,
+            `n (%)` = sprintf("%d (%.1f%%)", n, pct)) |>
+  gt() |>
+  tab_header(title = sprintf("Medication class combinations (N = %d)", n_infants)) |>
+  gtsave(out_path("tables", "coadministration_combinations.docx"))
+
+# 8b. Drug-by-drug overlap. Diagonal: n (% of all infants) receiving that drug.
+# Off-diagonal: n (% of the ROW drug's recipients who also received the COLUMN drug).
+drug_set <- c("caffeine", "fentanyl", "morphine", "hydromorphone",
+              "midazolam", "lorazepam", "dexmedetomidine", "acetaminophen")
+mat <- sapply(drug_set, function(d) flag(meds[[d]]))
+co  <- crossprod(mat)                       # counts of infants receiving both
+only_this <- sapply(drug_set, function(d) sum(mat[, d] & rowSums(mat) == 1))
+
+fmt <- matrix(NA_character_, nrow = length(drug_set), ncol = length(drug_set),
+              dimnames = list(drug_set, drug_set))
+for (i in seq_along(drug_set)) {
+  for (j in seq_along(drug_set)) {
+    fmt[i, j] <- if (i == j) {
+      sprintf("%d (%.1f%%)", co[i, i], 100 * co[i, i] / n_infants)
+    } else {
+      sprintf("%d (%.0f%%)", co[i, j], 100 * co[i, j] / co[i, i])
+    }
+  }
+}
+overlap_tbl <- data.frame(Drug = drug_set, `Only this drug` = only_this, fmt,
+                          check.names = FALSE, row.names = NULL)
+print(overlap_tbl)
+write_csv(overlap_tbl, out_path("tables", "coadministration_pairwise.csv"))
+
+overlap_tbl |>
+  gt() |>
+  tab_header(title = "Pairwise co-administration",
+             subtitle = "Diagonal: n (% of all infants). Off-diagonal: n (% of row drug's recipients also receiving column drug)") |>
+  gtsave(out_path("tables", "coadministration_pairwise.docx"))
