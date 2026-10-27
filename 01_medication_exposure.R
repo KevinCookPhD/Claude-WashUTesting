@@ -14,7 +14,7 @@ cat("Unique IDs:", n_distinct(meds_raw$ID),
     "| duplicated IDs:", sum(duplicated(meds_raw$ID)), "\n")
 glimpse(meds_raw)
 
-if (nrow(meds_raw) != 195) warning("Expected 195 participants, found ", nrow(meds_raw))
+if (nrow(meds_raw) != 194) warning("Expected 194 participants, found ", nrow(meds_raw))
 
 non_numeric <- meds_raw |> select(-ID) |> select(where(~ !is.numeric(.x))) |> names()
 if (length(non_numeric)) warning("Non-numeric drug columns: ", paste(non_numeric, collapse = ", "))
@@ -138,3 +138,42 @@ cat("\nInfants with any opioid exposure:", sum(meds$any_opioid), "of", n_infants
     sprintf("(%.1f%%)\n", 100 * mean(meds$any_opioid)))
 cat("Number of distinct opioids per infant:\n")
 print(count(meds, n_opioids))
+
+# ---- 6. Counts and percentages table ----------------------------------
+# Exposure = any administration (dose > 0). 95% CIs are exact (Clopper-Pearson).
+flag <- function(x) !is.na(x) & x > 0
+nb <- "  "   # non-breaking spaces to indent sub-rows in Word
+
+meds <- meds |>
+  mutate(multi_opioid = n_opioids > 1,
+         any_benzo    = flag(midazolam) | flag(lorazepam))
+
+flags <- list(
+  "Any opioid"                              = meds$any_opioid,
+  paste0(nb, "Fentanyl")                    = flag(meds$fentanyl),
+  paste0(nb, "Morphine")                    = flag(meds$morphine),
+  paste0(nb, "Hydromorphone")               = flag(meds$hydromorphone),
+  "More than one opioid"                    = meds$multi_opioid,
+  "Any benzodiazepine"                      = meds$any_benzo,
+  paste0(nb, "Midazolam")                   = flag(meds$midazolam),
+  paste0(nb, "Lorazepam")                   = flag(meds$lorazepam),
+  "Dexmedetomidine"                         = flag(meds$dexmedetomidine),
+  "Caffeine"                                = flag(meds$caffeine),
+  "Acetaminophen"                           = flag(meds$acetaminophen)
+)
+
+exposure_counts <- imap_dfr(flags, function(x, nm) {
+  ci <- binom.test(sum(x), length(x))$conf.int
+  tibble(medication = nm, n = sum(x), N = length(x),
+         pct = 100 * mean(x), ci_low = 100 * ci[1], ci_high = 100 * ci[2])
+})
+print(exposure_counts, n = Inf)
+write_csv(exposure_counts, out_path("tables", "exposure_counts.csv"))
+
+exposure_counts |>
+  transmute(Medication = medication,
+            `n (%)`    = sprintf("%d (%.1f%%)", n, pct),
+            `95% CI`   = sprintf("%.1f–%.1f", ci_low, ci_high)) |>
+  gt() |>
+  tab_header(title = sprintf("Medication exposure, birth to term-equivalent MRI (N = %d)", n_infants)) |>
+  gtsave(out_path("tables", "exposure_counts.docx"))
