@@ -179,3 +179,45 @@ exposure_counts |>
   gt() |>
   tab_header(title = sprintf("Medication exposure, birth to term-equivalent MRI (N = %d)", n_infants)) |>
   gtsave(out_path("tables", "exposure_counts.docx"))
+
+# ---- 7. Feasibility of non-opioid exposures ---------------------------
+# 7a. Co-exposure: can a drug's effect be separated from the opioids'?
+cat("\nOpioid x benzodiazepine co-exposure:\n")
+print(count(meds, any_opioid, any_benzo))
+cat("\nOpioid x acetaminophen co-exposure:\n")
+print(count(meds, any_opioid, acetaminophen_exposed = flag(acetaminophen)))
+cat("\nBenzodiazepine or dexmedetomidine (any sedative):\n")
+print(count(meds, any_sedative = any_benzo | flag(dexmedetomidine)))
+
+# Spearman correlations of cumulative per-kg dose across all infants
+cat("\nSpearman correlations, cumulative per-kg dose:\n")
+meds |>
+  select(caffeine = caffeine_byWgt, fentanyl = fentanyl_byWgt, morphine = morphine_byWgt,
+         midazolam = midazolam_byWgt, acetaminophen = acetaminophen_byWgt) |>
+  cor(method = "spearman") |>
+  round(2) |>
+  print()
+
+# 7b. Minimum detectable effect (Cohen's d, exposed vs unexposed) at 80% power.
+# Assumes the full sample (310) keeps the current exposure prevalence.
+# Second alpha = 0.05 / 5 drugs, a Bonferroni correction for testing five drugs.
+mde_tbl <- expand_grid(medication = names(flags), N_total = c(n_infants, 310)) |>
+  mutate(p = map_dbl(medication, ~ mean(flags[[.x]])),
+         n_exposed = round(p * N_total),
+         n_unexposed = N_total - n_exposed) |>
+  filter(n_exposed >= 2, n_unexposed >= 2) |>
+  rowwise() |>
+  mutate(mde_d_alpha05 = pwr.t2n.test(n1 = n_exposed, n2 = n_unexposed,
+                                      power = 0.8, sig.level = 0.05)$d,
+         mde_d_alpha01 = pwr.t2n.test(n1 = n_exposed, n2 = n_unexposed,
+                                      power = 0.8, sig.level = 0.01)$d) |>
+  ungroup() |>
+  mutate(across(starts_with("mde"), ~ round(.x, 2)), p = round(100 * p, 1))
+print(mde_tbl, n = Inf)
+write_csv(mde_tbl, out_path("tables", "minimum_detectable_effects.csv"))
+
+# Dose-response across all infants (continuous cumulative dose): detectable correlation
+cat("\nMinimum detectable correlation at 80% power:\n")
+for (n in c(n_infants, 310)) {
+  cat(" N =", n, " r =", round(pwr.r.test(n = n, power = 0.8, sig.level = 0.05)$r, 2), "\n")
+}
