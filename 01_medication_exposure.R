@@ -32,9 +32,9 @@ meds |>
   count(fentanyl, fentanyl_alt) |>
   print()
 
-# DECISION: set TRUE only after confirming the two columns are the same drug
-# under two spellings. Row-wise sum; stays NA only if both are NA.
-combine_fentanyl <- FALSE
+# fentaNYL is the tall-man spelling of fentanyl. Only 1 of 194 infants has both,
+# so the columns are treated as one drug. Row-wise sum; NA only if both are NA.
+combine_fentanyl <- TRUE
 if (combine_fentanyl) {
   both_na <- function(a, b) is.na(a) & is.na(b)
   meds <- meds |>
@@ -99,6 +99,16 @@ implied_wt <- map_dfr(drugs, function(d) {
 }) |> filter(n > 0)
 cat("\nImplied weight (kg) per drug among exposed infants:\n")
 print(implied_wt, n = Inf)
+
+# Infant-drug pairs with implausible implied weight (term-equivalent infants are
+# under ~4 kg): likely entry errors in total dose or per-kg dose. Check at source.
+implausible_wt <- map_dfr(drugs, function(d) {
+  tibble(ID = meds$ID, drug = d, dose = meds[[d]], perkg = meds[[paste0(d, "_byWgt")]]) |>
+    filter(dose > 0, perkg > 0, dose / perkg > 4) |>
+    mutate(implied_wt_kg = dose / perkg)
+})
+cat("\nInfant-drug pairs with implied weight > 4 kg:\n")
+print(implausible_wt, n = Inf)
 
 # Within-infant spread across drugs; large values support the per-administration idea
 within_infant <- meds |>
