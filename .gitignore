@@ -1,0 +1,14 @@
+# Never commit study data or outputs derived from it
+data_raw/
+data_clean/
+output/
+*.csv
+*.xlsx
+*.xls
+*.sav
+*.dta
+*.sas7bdat
+*.rds
+*.RData
+.Rhistory
+.Rproj.user/
