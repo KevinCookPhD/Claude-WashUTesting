@@ -149,22 +149,24 @@ meds <- meds |>
          any_benzo    = flag(midazolam) | flag(lorazepam))
 
 flags <- list(
-  "Any opioid"                              = meds$any_opioid,
-  paste0(nb, "Fentanyl")                    = flag(meds$fentanyl),
-  paste0(nb, "Morphine")                    = flag(meds$morphine),
-  paste0(nb, "Hydromorphone")               = flag(meds$hydromorphone),
-  "More than one opioid"                    = meds$multi_opioid,
-  "Any benzodiazepine"                      = meds$any_benzo,
-  paste0(nb, "Midazolam")                   = flag(meds$midazolam),
-  paste0(nb, "Lorazepam")                   = flag(meds$lorazepam),
-  "Dexmedetomidine"                         = flag(meds$dexmedetomidine),
-  "Caffeine"                                = flag(meds$caffeine),
-  "Acetaminophen"                           = flag(meds$acetaminophen)
+  "Any opioid"           = meds$any_opioid,
+  "Fentanyl"             = flag(meds$fentanyl),
+  "Morphine"             = flag(meds$morphine),
+  "Hydromorphone"        = flag(meds$hydromorphone),
+  "More than one opioid" = meds$multi_opioid,
+  "Any benzodiazepine"   = meds$any_benzo,
+  "Midazolam"            = flag(meds$midazolam),
+  "Lorazepam"            = flag(meds$lorazepam),
+  "Dexmedetomidine"      = flag(meds$dexmedetomidine),
+  "Caffeine"             = flag(meds$caffeine),
+  "Acetaminophen"        = flag(meds$acetaminophen)
 )
+indented <- c("Fentanyl", "Morphine", "Hydromorphone", "Midazolam", "Lorazepam")
 
 exposure_counts <- imap_dfr(flags, function(x, nm) {
   ci <- binom.test(sum(x), length(x))$conf.int
-  tibble(medication = nm, n = sum(x), N = length(x),
+  tibble(medication = if (nm %in% indented) paste0(nb, nm) else nm,
+         n = sum(x), N = length(x),
          pct = 100 * mean(x), ci_low = 100 * ci[1], ci_high = 100 * ci[2])
 })
 print(exposure_counts, n = Inf)
