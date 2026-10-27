@@ -279,3 +279,36 @@ overlap_tbl |>
   tab_header(title = "Pairwise co-administration",
              subtitle = "Diagonal: n (% of all infants). Off-diagonal: n (% of row drug's recipients also receiving column drug)") |>
   gtsave(out_path("tables", "coadministration_pairwise.docx"))
+
+# ---- 9. Polypharmacy count ---------------------------------------------
+# Number of distinct drug classes received (0-5): opioid, benzodiazepine,
+# dexmedetomidine, caffeine, acetaminophen. Uses `classes` from section 8a.
+meds <- meds |>
+  mutate(n_drug_classes = rowSums(classes),
+         polypharmacy_3plus = n_drug_classes >= 3)
+
+polypharmacy_counts <- meds |>
+  count(n_drug_classes) |>
+  mutate(pct = 100 * n / n_infants,
+         cum_pct = cumsum(pct))
+print(polypharmacy_counts)
+cat("\nSummary of n_drug_classes:\n")
+print(summary(meds$n_drug_classes))
+cat("Infants receiving 3+ classes:", sum(meds$polypharmacy_3plus),
+    sprintf("(%.1f%%)\n", 100 * mean(meds$polypharmacy_3plus)))
+write_csv(polypharmacy_counts, out_path("tables", "polypharmacy_counts.csv"))
+
+polypharmacy_counts |>
+  transmute(`Drug classes received` = n_drug_classes,
+            `n (%)`                 = sprintf("%d (%.1f%%)", n, pct),
+            `Cumulative %`          = sprintf("%.1f%%", cum_pct)) |>
+  gt() |>
+  tab_header(title = sprintf("Number of drug classes received (N = %d)", n_infants),
+             subtitle = "Classes: opioid, benzodiazepine, dexmedetomidine, caffeine, acetaminophen") |>
+  gtsave(out_path("tables", "polypharmacy_counts.docx"))
+
+# Analysis-ready exposure file for merging with demographics/outcomes on ID
+meds |>
+  select(ID, any_opioid, n_opioids, multi_opioid, any_benzo, n_drug_classes,
+         polypharmacy_3plus, all_of(drugs), ends_with("_byWgt")) |>
+  write_csv(out_path("clean", "medication_exposures_clean.csv"))
