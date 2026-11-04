@@ -2701,7 +2701,7 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   Connectivity is the Fisher z of the correlation across the usable volumes. Two versions are analysed: the truncated
 #   values as they are (scanner is a covariate in the model, as in 9h, where harmonization changed nothing for the
 #   fetal-vs-preterm contrast) and the truncated values after the same LongComBat harmonization as in section 2
-#   ("Harmonized, 80 volumes per scan"; results to be added to the comments after the first run).
+#   ("Harmonized, 80 volumes per scan").
 # CHECKS built in: the time series are first used in full to reproduce the stored (unharmonized) connectivity of a few
 #   scans, which would reveal a wrong column order or different preprocessing; usable-volume counts are compared with
 #   finalVol; for every scan, the truncated connectivity is correlated with the full-data connectivity (fidelity).
@@ -2724,6 +2724,10 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   unharmonized, 80 volumes per scan ...... 1,248 (1,002 / 246); 1,206 (85.9%) primary edges still significant;
 #                                           same direction 1,404 (100%); r = 0.99, rho = 0.984, slope 1.000,
 #                                           median beta ratio 0.996
+#   harmonized, 80 volumes per scan ...... 1,226 (985 / 241); 1,189 (84.7%) primary edges still significant; same
+#                                           direction 1,404 (100%); r = 0.99, rho = 0.984, slope 0.999, median beta
+#                                           ratio 0.994 (the same LongComBat model as section 2 applied to the
+#                                           truncated connectivity; essentially identical to the unharmonized 80-volume result)
 # INTERPRETATION: the fetal-vs-preterm difference does not depend on the number of volumes. With every scan cut to 80
 #   volumes the direction is preserved for all 1,404 primary edges, the betas keep their rank order (rho = 0.984) and
 #   their size (regression slope 1.00, median ratio 0.996), so effects are not attenuated by using less data. The 14% of
@@ -2741,7 +2745,9 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   preterm scans at TR 2 s), the fetal-preterm differences were unchanged: 1,248 edges were significant, 1,206 of the
 #   1,404 primary edges (85.9%) remained significant, and all 1,404 had the same direction. Effect sizes were
 #   preserved (Pearson r = 0.99 and Spearman rho = 0.98 with the primary betas; regression slope 1.00; median beta ratio
-#   0.996). Before truncation, fetal scans had 129.9 (SD 47.8) usable volumes and preterm scans 216.7 (SD 53.7). The
+#   0.996). Harmonizing the truncated data with the same LongComBat model gave the same result (1,226 significant edges; 1,189
+#   of the 1,404 primary edges, 84.7%, remained significant; all 1,404 in the same direction; Pearson r = 0.99; slope 0.999).
+#   Before truncation, fetal scans had 129.9 (SD 47.8) usable volumes and preterm scans 216.7 (SD 53.7). The
 #   truncated connectivity correlated 0.93 (fetal) and 0.84 (preterm) with the full-data connectivity within scans."
 vol_equal_n    <- 80          # volumes per scan after truncation (the fetal minimum)
 vol_equal_mode <- "first"     # "first": the first n usable volumes; "random": a random set of n usable volumes (seeded)
