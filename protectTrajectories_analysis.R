@@ -2547,14 +2547,13 @@ if (RUN_DISTANCE_CONTROL) {
 
   ## ---- Figures ----
   dd <- data.frame(dist = edge_dist, beta = fetalRes$scanTypeb)
-  dd$bin <- cut(dd$dist, breaks = unique(quantile(dd$dist, seq(0, 1, 0.1))), include.lowest = TRUE)
-  bin_df <- do.call(rbind, lapply(split(dd, dd$bin), function(g) data.frame(dist = mean(g$dist), mean = mean(g$beta), se = sd(g$beta) / sqrt(nrow(g)))))
+  r0 <- dist_tab[dist_tab$Outcome == names(outcomes)[1] & dist_tab$Edges == "All edges", ]                   # Spearman rho and permutation p for all edges
   p_dist <- ggplot(dd, aes(dist, beta)) +
     geom_hline(yintercept = 0, linewidth = 0.4) +
-    geom_point(color = "#8a8a8a", alpha = 0.18, size = 0.5, stroke = 0) +
-    geom_errorbar(data = bin_df, aes(x = dist, y = mean, ymin = mean - 1.96 * se, ymax = mean + 1.96 * se), width = 0, color = col_preterm, linewidth = 0.6) +
-    geom_line(data = bin_df, aes(x = dist, y = mean), color = col_preterm, linewidth = 0.6) +
-    geom_point(data = bin_df, aes(x = dist, y = mean), color = col_preterm, size = 1.6) +
+    geom_point(color = "#8a8a8a", alpha = 0.25, size = 0.5, stroke = 0) +
+    geom_smooth(method = "lm", formula = y ~ x, color = col_preterm, fill = col_preterm, alpha = 0.2, linewidth = 0.9) +   # straight-line fit with 95% band
+    annotate("text", x = Inf, y = Inf, hjust = 1.05, vjust = 1.6, size = 2.8,
+             label = sprintf("Spearman rho = %.3f\npermutation p = %.2f", r0$rho, r0$p_perm)) +
     labs(x = paste0("Distance between ROIs (GA ", dist_ga, " template units)"), y = "Preterm - fetal difference (Fisher z)") +
     theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4))
   si_fig("distance", "groupDifferenceByDistance", 3.4, 3.0, function() print(p_dist))
