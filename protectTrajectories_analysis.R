@@ -2549,15 +2549,19 @@ if (RUN_DISTANCE_CONTROL) {
 
   ## ---- Figures ----
   dd <- data.frame(dist = edge_dist, beta = fetalRes$scanTypeb)
-  r0 <- dist_tab[dist_tab$Outcome == names(outcomes)[1] & dist_tab$Edges == "All edges", ]                   # Spearman rho and permutation p for all edges
   p_dist <- ggplot(dd, aes(dist, beta)) +
     geom_hline(yintercept = 0, linewidth = 0.4) +
     geom_point(color = "#8a8a8a", alpha = 0.25, size = 0.5, stroke = 0) +
-    geom_smooth(method = "lm", formula = y ~ x, color = col_preterm, fill = col_preterm, alpha = 0.2, linewidth = 0.9) +   # straight-line fit with 95% band
-    annotate("text", x = Inf, y = Inf, hjust = 1.05, vjust = 1.6, size = 2.8,
-             label = sprintf("Spearman rho = %.3f\npermutation p = %.2f", r0$rho, r0$p_perm)) +
-    labs(x = paste0("Distance between ROIs (GA ", dist_ga, " template units)"), y = "Preterm - fetal difference (Fisher z)") +
-    theme_classic(base_size = 9) + theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4))
+    geom_smooth(method = "lm", formula = y ~ x, color = col_preterm, fill = col_preterm, alpha = 0.2, linewidth = 0.9) +   # straight-line fit with 95% band (statistics are in the text)
+    scale_x_continuous(breaks = seq(0, 100, 20)) +
+    scale_y_continuous(breaks = seq(-0.6, 0.6, 0.2), minor_breaks = seq(-0.5, 0.5, 0.2)) +           # major ticks every 0.2, minor lines halfway between
+    coord_cartesian(xlim = c(0, 100), ylim = c(-0.6, 0.6), expand = FALSE) +
+    labs(x = "Distance between ROI's (mm)", y = "Group Differences in Connectivity (Preterm - Fetal)") +
+    theme_classic(base_size = 9) +
+    theme(axis.line = element_line(linewidth = 0.4), axis.ticks = element_line(linewidth = 0.4),
+          panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(),                     # no grid lines on the x axis
+          panel.grid.major.y = element_line(color = "#e6e6e6", linewidth = 0.3),                          # light horizontal lines (major and minor)
+          panel.grid.minor.y = element_line(color = "#f0f0f0", linewidth = 0.25))
   si_fig("distance", "groupDifferenceByDistance", 3.4, 3.0, function() print(p_dist))
 
   dc <- scanInfo; dc$coupling <- coupling(subsets[["All edges"]])
