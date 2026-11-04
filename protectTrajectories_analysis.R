@@ -2698,9 +2698,10 @@ if (RUN_QC_COVARIATE_CONTROL) {
 #   PMA x prematurity analysis is not repeated here: volumes are not capped within the preterm group.)
 # DATA: one tab-separated .1D file per scan ("<fullID>_ts.1D"; rows = volumes, columns = the 111 ROIs in label-key
 #   order, censored volumes are all-zero rows) in data/rawTS and/or data/rawRS (subfolders fetal and preterm).
-#   Connectivity is the Fisher z of the correlation across the usable volumes. The truncated values are NOT
-#   re-harmonized: scanner is a covariate in the model (as in 9h, where harmonization changed nothing for the
-#   fetal-vs-preterm contrast).
+#   Connectivity is the Fisher z of the correlation across the usable volumes. Two versions are analysed: the truncated
+#   values as they are (scanner is a covariate in the model, as in 9h, where harmonization changed nothing for the
+#   fetal-vs-preterm contrast) and the truncated values after the same LongComBat harmonization as in section 2
+#   ("Harmonized, 80 volumes per scan"; results to be added to the comments after the first run).
 # CHECKS built in: the time series are first used in full to reproduce the stored (unharmonized) connectivity of a few
 #   scans, which would reveal a wrong column order or different preprocessing; usable-volume counts are compared with
 #   finalVol; for every scan, the truncated connectivity is correlated with the full-data connectivity (fidelity).
@@ -2788,6 +2789,25 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
     ## fetal vs. preterm on the truncated connectivity (scanner is a covariate; values are not harmonized)
     res_eq_fp <- with_fc(truncFC, run_fetal(scanInfo, paste0("equalVol", vol_equal_n, vol_equal_mode)), paste0("truncFC", vol_equal_n))
     print(cmp_fetal(res_eq_fp, n_scans = nrow(scanInfo)))
+
+    ## Harmonized version: the same LongComBat call as section 2 (batch = scanner; protected: group + PMA; random effects per infant and
+    ## for the preterm birth subgroup) applied to the truncated connectivity, then the same fetal-vs-preterm scan on the harmonized values.
+    ## goodData still holds the harmonization design (group, preterm, subgroup_pt, scanPMA, scanner, shortID, scanNo) from section 2.
+    hd_cols <- setdiff(names(goodData), c("finalVol", "scanDate", "kidokoro", "birthPMA"))
+    hd_in   <- goodData[goodData$fullID %in% rownames(truncFC), hd_cols]
+    hd_dat  <- merge(hd_in, truncFC, by.x = "fullID", by.y = "row.names")
+    stopifnot(nrow(hd_dat) == nrow(scanInfo), all(allConn %in% names(hd_dat)))
+    hd_feat <- match(allConn, names(hd_dat))
+    comb_t  <- cached("longCombat_trunc", key = paste(trunc_key, "harm", table_key(hd_dat[, -hd_feat]), sum(as.matrix(hd_dat[, hd_feat]))),
+                      longCombat(idvar = "shortID", timevar = "scanNo", batchvar = "scanner", features = hd_feat,
+                                 formula = "group + scanPMA", ranef = "(1|shortID) + (0 + preterm | subgroup_pt)", data = hd_dat, verbose = FALSE))
+    hd_out  <- comb_t$data_combat
+    fc_trunc_h <- hd_out[, paste0(allConn, ".combat")]; colnames(fc_trunc_h) <- allConn
+    rownames(fc_trunc_h) <- paste0(hd_out$shortID, "_0", hd_out$scanNo)
+    stopifnot(all(scanInfo$longID %in% rownames(fc_trunc_h)))
+    fc_trunc_h <- fc_trunc_h[scanInfo$longID, , drop = FALSE]
+    res_eq_fp_h <- with_fc(fc_trunc_h, run_fetal(scanInfo, paste0("equalVolHarm", vol_equal_n, vol_equal_mode)), paste0("truncFCHarm", vol_equal_n))
+    print(cmp_fetal(res_eq_fp_h, n_scans = nrow(scanInfo)))
     if (exists("fetalRes_raw")) print(c(r_beta_with_unharmonized_full = round(cor(fetalRes_raw$scanTypeb, res_eq_fp$scanTypeb, use = "complete.obs"), 3)))
 
     ## ---- Tables for the supplement ----
@@ -2811,11 +2831,12 @@ if (RUN_EQUAL_VOLUME_CONTROL) {
     #     (beta in this analysis / primary beta); slope = regression slope of this analysis' betas on the primary betas.
     table_s_equal <- rbind(ctrl_row(fetalRes, "Primary: harmonized, all volumes"),
                            if (exists("fetalRes_raw")) ctrl_row(fetalRes_raw, "Unharmonized, all volumes"),
-                           ctrl_row(res_eq_fp, paste0("Unharmonized, ", vol_equal_n, " volumes per scan")))
+                           ctrl_row(res_eq_fp, paste0("Unharmonized, ", vol_equal_n, " volumes per scan")),
+                           ctrl_row(res_eq_fp_h, paste0("Harmonized, ", vol_equal_n, " volumes per scan")))
     print(t(table_s_equal), quote = FALSE)                                    # transposed for reading in the console
     si_table(table_s_equal,      "equal_volume", "equalVolume_results")
     si_table(table_s_equal_desc, "equal_volume", "equalVolume_descriptives")
-    eq_list <- c(list(`Unharmonized, all volumes` = if (exists("fetalRes_raw")) fetalRes_raw), setNames(list(res_eq_fp), paste0("Unharmonized, ", vol_equal_n, " volumes")))
+    eq_list <- c(list(`Unharmonized, all volumes` = if (exists("fetalRes_raw")) fetalRes_raw), setNames(list(res_eq_fp, res_eq_fp_h), c(paste0("Unharmonized, ", vol_equal_n, " volumes"), paste0("Harmonized, ", vol_equal_n, " volumes"))))
     eq_list <- eq_list[!vapply(eq_list, is.null, NA)]
     d_fid <- data.frame(scanType = scanInfo$scanType, fidelity = tr$fidelity)
     dm <- facet_dims(length(eq_list))
