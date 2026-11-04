@@ -88,7 +88,9 @@ N_CORES                   <- 8      # cores for the edge-wise loops (this machin
 USE_CACHE                 <- TRUE   # reuse saved results of slow steps (see `cached()`); FALSE = always recompute
 
 ## ---- Paths -----------------------------------------------------------------
-mainDirs <- c("C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/Projects/Active Projects/Protect Trajectories",
+mainDirs <- c("C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/04_Projects/01_Active/PROTECT_ProtectTrajectories",
+              "C:/Users/kmcook/OneDrive - Childrens National Hospital/ComputerSyncing/04_Projects/01_Active/PROTECT_ProtectTrajectories",
+              "C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/Projects/Active Projects/Protect Trajectories",      # old locations, kept as fallbacks
               "C:/Users/kmcook/OneDrive - Childrens National Hospital/ComputerSyncing/Projects/Active Projects/Protect Trajectories")
 mainDir   <- mainDirs[dir.exists(mainDirs)][1]
 stopifnot(!is.na(mainDir))
