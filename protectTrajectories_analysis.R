@@ -1480,7 +1480,7 @@ draw_pt_legend <- function(w_in, h_in, x0_in = 0, y0_in = 0, first_col = 3, ncol
 # frame (B and C stay stacked, C below B) and the plots are shifted right by pad_in; the legend then sits inside B's frame,
 # centered in the empty block to the right of the last row of plots. With pad_in = 0 the layout is as before (legend centered
 # on the boundary between B's last row and C).
-hl_scheme <- "black"        # box style for highlighted panels: "black", "linestyle", "green" or "magenta" (see draw_panels_bc)
+hl_scheme <- "green"        # box style for highlighted panels: "black", "linestyle", "green" or "magenta" (see draw_panels_bc)
 # highlight (optional): list(status = named vector edge -> "sig" / "trend" (NA = no box), edgesB, edgesC = the edges of the two panels in
 # plotting order). A box is drawn around each flagged panel (solid vermillion = significant, dashed amber = trending) and a small key is
 # added to the right of Panel C.
@@ -1518,7 +1518,7 @@ draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel
       nm <- c("sig", "trend")[i]; yy <- ky + (2 - i) * 0.30
       grid::grid.rect(x = grid::unit(kx, "in"), y = grid::unit(yy, "in"), width = grid::unit(kw, "in"), height = grid::unit(kh, "in"), just = c("left", "bottom"),
                       gp = grid::gpar(col = hl_col[[nm]], fill = NA, lwd = hl_lwd, lty = hl_lty[[nm]]))
-      grid::grid.text(c("FDR p < .05", "FDR p = .05 - .10 (trending)")[i], x = grid::unit(kx + kw + 0.08, "in"), y = grid::unit(yy + kh / 2, "in"),
+      grid::grid.text(c("FDR p < .05", "FDR p < .10")[i], x = grid::unit(kx + kw + 0.08, "in"), y = grid::unit(yy + kh / 2, "in"),
                       just = "left", gp = grid::gpar(fontsize = 8))
     }
   }
