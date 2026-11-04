@@ -2551,8 +2551,8 @@ if (RUN_DISTANCE_CONTROL) {
   dd <- data.frame(dist = edge_dist, beta = fetalRes$scanTypeb)
   p_dist <- ggplot(dd, aes(dist, beta)) +
     geom_hline(yintercept = 0, linewidth = 0.4) +
-    geom_point(color = "#8a8a8a", alpha = 0.25, size = 0.5, stroke = 0) +
-    geom_smooth(method = "lm", formula = y ~ x, color = col_preterm, fill = col_preterm, alpha = 0.2, linewidth = 0.9) +   # straight-line fit with 95% band (statistics are in the text)
+    geom_point(color = "#5c5c5c", alpha = 0.35, size = 0.5, stroke = 0) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = col_preterm, linewidth = 0.9) +   # straight-line fit, no band (statistics are in the text)
     scale_x_continuous(breaks = seq(0, 80, 20)) +
     scale_y_continuous(breaks = c(-0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6), minor_breaks = c(-0.5, -0.3, -0.1, 0.1, 0.3, 0.5),
                        labels = scales::number_format(accuracy = 0.1)) +           # major ticks every 0.2, minor lines halfway between
