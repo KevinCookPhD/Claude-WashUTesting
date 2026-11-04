@@ -1416,7 +1416,7 @@ ylab_for <- function(cn) {                                            # two line
 }
 
 # data: scan table to plot/fit (default: all preterm scans); xlim/xbreaks: PMA axis
-make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24, 49), xbreaks = seq(25, 45, 5)) {
+make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24, 49), xbreaks = seq(25, 45, 5), pad_pt = 0) {   # pad_pt: blank margin around each panel (room for boxes)
   pd        <- lapply(edges, panel_data, d0 = data)
   lab_order <- sub("_", " \u2013 ", gsub("\\.", "-", edges))
   pts       <- do.call(rbind, lapply(pd, `[[`, "pts"));       pts$label       <- factor(pts$label, levels = lab_order)
@@ -1446,7 +1446,7 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
             axis.text = element_text(size = axis_text_size, color = "#000000"),
             axis.title.x = element_text(size = axis_title_size, color = "#000000"),
             axis.title.y = element_text(size = axis_title_size, color = "#000000"),
-            plot.margin = margin(3, panelB_margin_r_pt, 1, 1),
+            plot.margin = margin(3 + pad_pt, panelB_margin_r_pt + pad_pt, 1 + pad_pt, 1 + pad_pt),
             panel.grid.major.y = element_line(color = "#e6e6e6", linewidth = .3),
             legend.position = "none")                                        # the legend is drawn separately (pt_legend_plot)
   }
@@ -1480,6 +1480,7 @@ draw_pt_legend <- function(w_in, h_in, x0_in = 0, y0_in = 0, first_col = 3, ncol
 # frame (B and C stay stacked, C below B) and the plots are shifted right by pad_in; the legend then sits inside B's frame,
 # centered in the empty block to the right of the last row of plots. With pad_in = 0 the layout is as before (legend centered
 # on the boundary between B's last row and C).
+hl_scheme <- "black"        # box style for highlighted panels: "black", "linestyle", "green" or "magenta" (see draw_panels_bc)
 # highlight (optional): list(status = named vector edge -> "sig" / "trend" (NA = no box), edgesB, edgesC = the edges of the two panels in
 # plotting order). A box is drawn around each flagged panel (solid vermillion = significant, dashed amber = trending) and a small key is
 # added to the right of Panel C.
@@ -1489,13 +1490,19 @@ draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel
   vp  <- function(y, h) grid::viewport(x = grid::unit(x0_in + p, "in"), y = grid::unit(y, "in"), width = grid::unit(bw, "in"),
                                        height = grid::unit(h, "in"), just = c("left", "bottom"))
   print(pB$fig, vp = vp(yb, b_h)); print(pC$fig, vp = vp(yc, c_h))
-  if (p > 0) draw_pt_legend(bw, panelB_row_h_in, x0_in = x0_in + p, y0_in = yb)
+  if (p > 0 || !is.null(highlight)) draw_pt_legend(bw, panelB_row_h_in, x0_in = x0_in + p, y0_in = yb)   # legend in the empty cells beside the last row of B
   else       draw_pt_legend(bw, 2 * panelB_row_h_in, x0_in = x0_in, y0_in = y0_in + c_h - panelB_row_h_in)
   lab <- function(txt, y_top) grid::grid.text(txt, x = grid::unit(bn_letter_in + 0.6 * p, "in"), y = grid::unit(y_top - 0.4 * p, "in") - grid::unit(0.02, "in"),
                                               just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
   lab(letters[1], y0_in + c_h + b_h + 4 * p); lab(letters[2], y0_in + c_h + 2 * p)      # tops of the B and C frames
   if (!is.null(highlight)) {
-    hl_col <- c(sig = "#D55E00", trend = "#E69F00"); hl_lty <- c(sig = "solid", trend = "22"); hl_lwd <- 1.6
+    # Box styles: set hl_scheme to "black" (black solid / gray dashed), "linestyle" (black solid / black dashed), "green" (dark / light green)
+    # or "magenta" (dark / light magenta).
+    hl_sch <- list(black     = list(col = c(sig = "#000000", trend = "#7a7a7a"), lty = c(sig = "solid", trend = "22")),
+                   linestyle = list(col = c(sig = "#000000", trend = "#000000"), lty = c(sig = "solid", trend = "22")),
+                   green     = list(col = c(sig = "#1b7f3b", trend = "#7fc593"), lty = c(sig = "solid", trend = "22")),
+                   magenta   = list(col = c(sig = "#a4126b", trend = "#e58bc2"), lty = c(sig = "solid", trend = "22")))[[hl_scheme]]
+    hl_col <- hl_sch$col; hl_lty <- hl_sch$lty; hl_lwd <- 1.6
     cell_w <- bw / panel_ncol_split; ins <- 0.03
     box_cells <- function(edges, y_bottom, h, nr) for (k in seq_along(edges)) {
       st <- highlight$status[[edges[k]]]; if (is.na(st)) next
@@ -1506,7 +1513,7 @@ draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel
     }
     box_cells(highlight$edgesB, yb, b_h, pB$nrow); box_cells(highlight$edgesC, yc, c_h, pC$nrow)
     # key: to the right of Panel C, below the group legend
-    kx <- x0_in + p + 3.35 * cell_w; ky <- yc + 0.30 * panelB_row_h_in; kw <- 0.34; kh <- 0.17
+    kw <- 0.34; kh <- 0.17; kx <- x0_in + p + 3.35 * cell_w; ky <- yc + (c_h - 0.47) / 2                        # centered in the empty cells beside Panel C
     for (i in 1:2) {
       nm <- c("sig", "trend")[i]; yy <- ky + (2 - i) * 0.30
       grid::grid.rect(x = grid::unit(kx, "in"), y = grid::unit(yy, "in"), width = grid::unit(kw, "in"), height = grid::unit(kh, "in"), just = c("left", "bottom"),
@@ -1962,8 +1969,8 @@ if (RUN_SENSITIVITY) {
   # Status of each of the 16 edges in this analysis: significant (FDR p < .05), trending (FDR p between .05 and .10), or neither
   st32 <- setNames(ifelse(cmp_gt32$primary_edges$pAdj < .05, "sig", ifelse(cmp_gt32$primary_edges$pAdj < .10, "trend", NA_character_)), cmp_gt32$primary_edges$Connection)
   print(table(st32, useNA = "ifany"))
-  pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
-  pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
+  pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5), pad_pt = 8)
+  pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5), pad_pt = 8)
   si_fig("gt32", "After32wk_Trajectories", panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
            function() { grid::grid.newpage()
              draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B"),
