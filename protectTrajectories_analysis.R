@@ -1480,7 +1480,10 @@ draw_pt_legend <- function(w_in, h_in, x0_in = 0, y0_in = 0, first_col = 3, ncol
 # frame (B and C stay stacked, C below B) and the plots are shifted right by pad_in; the legend then sits inside B's frame,
 # centered in the empty block to the right of the last row of plots. With pad_in = 0 the layout is as before (legend centered
 # on the boundary between B's last row and C).
-draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel_left_in, y0_in = 0, pad_in = 0) {
+# highlight (optional): list(status = named vector edge -> "sig" / "trend" (NA = no box), edgesB, edgesC = the edges of the two panels in
+# plotting order). A box is drawn around each flagged panel (solid vermillion = significant, dashed amber = trending) and a small key is
+# added to the right of Panel C.
+draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel_left_in, y0_in = 0, pad_in = 0, highlight = NULL) {
   b_h <- panelB_row_h_in * pB$nrow; c_h <- panelB_row_h_in * pC$nrow; bw <- w_in - x0_in; p <- pad_in
   yc <- y0_in + p; yb <- y0_in + c_h + 3 * p                       # bottoms of the plot areas of C and B
   vp  <- function(y, h) grid::viewport(x = grid::unit(x0_in + p, "in"), y = grid::unit(y, "in"), width = grid::unit(bw, "in"),
@@ -1491,6 +1494,27 @@ draw_panels_bc <- function(pB, pC, w_in, letters = c("B", "C"), x0_in = bn_panel
   lab <- function(txt, y_top) grid::grid.text(txt, x = grid::unit(bn_letter_in + 0.6 * p, "in"), y = grid::unit(y_top - 0.4 * p, "in") - grid::unit(0.02, "in"),
                                               just = c("left", "top"), gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
   lab(letters[1], y0_in + c_h + b_h + 4 * p); lab(letters[2], y0_in + c_h + 2 * p)      # tops of the B and C frames
+  if (!is.null(highlight)) {
+    hl_col <- c(sig = "#D55E00", trend = "#E69F00"); hl_lty <- c(sig = "solid", trend = "22"); hl_lwd <- 1.6
+    cell_w <- bw / panel_ncol_split; ins <- 0.03
+    box_cells <- function(edges, y_bottom, h, nr) for (k in seq_along(edges)) {
+      st <- highlight$status[[edges[k]]]; if (is.na(st)) next
+      r <- (k - 1) %/% panel_ncol_split; cc <- (k - 1) %% panel_ncol_split
+      grid::grid.rect(x = grid::unit(x0_in + p + cc * cell_w + ins, "in"), y = grid::unit(y_bottom + h - (r + 1) * h / nr + ins, "in"),
+                      width = grid::unit(cell_w - 2 * ins, "in"), height = grid::unit(h / nr - 2 * ins, "in"), just = c("left", "bottom"),
+                      gp = grid::gpar(col = hl_col[[st]], fill = NA, lwd = hl_lwd, lty = hl_lty[[st]]))
+    }
+    box_cells(highlight$edgesB, yb, b_h, pB$nrow); box_cells(highlight$edgesC, yc, c_h, pC$nrow)
+    # key: to the right of Panel C, below the group legend
+    kx <- x0_in + p + 3.35 * cell_w; ky <- yc + 0.30 * panelB_row_h_in; kw <- 0.34; kh <- 0.17
+    for (i in 1:2) {
+      nm <- c("sig", "trend")[i]; yy <- ky + (2 - i) * 0.30
+      grid::grid.rect(x = grid::unit(kx, "in"), y = grid::unit(yy, "in"), width = grid::unit(kw, "in"), height = grid::unit(kh, "in"), just = c("left", "bottom"),
+                      gp = grid::gpar(col = hl_col[[nm]], fill = NA, lwd = hl_lwd, lty = hl_lty[[nm]]))
+      grid::grid.text(c("FDR p < .05", "FDR p = .05 - .10 (trending)")[i], x = grid::unit(kx + kw + 0.08, "in"), y = grid::unit(yy + kh / 2, "in"),
+                      just = "left", gp = grid::gpar(fontsize = 8))
+    }
+  }
 }
 
 # Panel B = the connections where MPT differs from VPT and EPT (which look alike); Panel C = the three oddballs (listed
@@ -1935,10 +1959,15 @@ if (RUN_SENSITIVITY) {
   si_intx("gt32", "after32wk", list(`Scans after 32 wk PMA` = res_gt32), list(`Scans after 32 wk PMA` = cmp_gt32))
   si_table(slopes_gt32_wide, "gt32", "after32wk_slopes")
   # Supplemental figure: the Fig. 3 B/C trajectories refit on these scans only (same connections, order and layout).
+  # Status of each of the 16 edges in this analysis: significant (FDR p < .05), trending (FDR p between .05 and .10), or neither
+  st32 <- setNames(ifelse(cmp_gt32$primary_edges$pAdj < .05, "sig", ifelse(cmp_gt32$primary_edges$pAdj < .10, "trend", NA_character_)), cmp_gt32$primary_edges$Connection)
+  print(table(st32, useNA = "ifany"))
   pB32 <- make_panel_b(edgesB,       data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
   pC32 <- make_panel_b(panelC_edges, data = pt32, xlim = c(32, 49), xbreaks = seq(35, 45, 5))
   si_fig("gt32", "After32wk_Trajectories", panelB_w_in, panelB_row_h_in * (pB32$nrow + pC32$nrow),
-           function() { grid::grid.newpage(); draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B")) },
+           function() { grid::grid.newpage()
+             draw_panels_bc(pB32, pC32, panelB_w_in, letters = c("A", "B"),
+                            highlight = list(status = st32, edgesB = edgesB, edgesC = panelC_edges)) },
            save = TRUE)                                                   # always written to figureDir (the plot pane shows blank space above it: the pane is taller than the figure)
 
   ## ---- 9d. Within- vs. between-infant PMA effects ---------------------------
