@@ -3800,7 +3800,7 @@ if (RUN_GLOBAL_LEVEL_CONTROL) {
 
 if (RUN_TWO_GROUP_INTERACTION) {
   si_2 <- scanInfo; si_2$PMAc <- si_2$ScanPMA - 36
-  ages2 <- c(30, 34, 38)
+  ages2 <- c(30, 34, 36, 38)                                            # ages at which the preterm - fetal difference is tested (36 = the group coefficient)
   pr2 <- lapply(split(scanInfo$ScanPMA, scanInfo$scanType), range)
   lo2 <- max(sapply(pr2, `[`, 1)); hi2 <- min(sapply(pr2, `[`, 2))
   si_2ov <- droplevels(si_2[si_2$ScanPMA >= lo2 & si_2$ScanPMA <= hi2, ])
@@ -3808,7 +3808,7 @@ if (RUN_TWO_GROUP_INTERACTION) {
 
   two_edge <- function(cn, data, ages) {
     nm <- c("int_b", "int_se", "int_p", "slope_fetal", "slope_fetal_se", "slope_preterm", "slope_preterm_se",
-            paste0("diff", ages, "_b"), paste0("diff", ages, "_se"))
+            paste0("diff", ages, "_b"), paste0("diff", ages, "_se"), "df")
     d <- data; d$FC <- as.numeric(goodFCData[d$longID, cn])
     tryCatch({
       m <- lme(FC ~ PMAc + scanner + scanType + PMAc:scanType, random = ~ 1 | shortID, data = d, control = ctrl)
@@ -3818,16 +3818,21 @@ if (RUN_TWO_GROUP_INTERACTION) {
       sf <- ci(w(c(PMAc = 1))); sp <- ci(w(c(PMAc = 1, `PMAc:scanTypePreterm` = 1)))
       dd <- lapply(ages, function(a) ci(w(c(scanTypePreterm = 1, `PMAc:scanTypePreterm` = a - 36))))
       setNames(c(tt["PMAc:scanTypePreterm", "Value"], tt["PMAc:scanTypePreterm", "Std.Error"], tt["PMAc:scanTypePreterm", "p-value"],
-                 sf, sp, sapply(dd, `[`, 1), sapply(dd, `[`, 2)), nm)
+                 sf, sp, sapply(dd, `[`, 1), sapply(dd, `[`, 2), min(m$fixDF$X[c("scanTypePreterm", "PMAc:scanTypePreterm")])), nm)
     }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
   }
   run_two <- function(d, tag) {
     res <- cached(paste0("twoGroupInt_", tag), key = paste(data_key, "twoGroupInt", tag, table_key(d)),
                   data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, two_edge, data = d, ages = ages2)), row.names = NULL))
-    res$int_pAdj <- p.adjust(res$int_p, "fdr"); res
+    res$int_pAdj <- p.adjust(res$int_p, "fdr")
+    for (a in ages2) {                                                  # test of the preterm - fetal difference at each age (t with the model's df), FDR across edges
+      res[[paste0("diff", a, "_p")]]    <- 2 * pt(-abs(res[[paste0("diff", a, "_b")]] / res[[paste0("diff", a, "_se")]]), res$df)
+      res[[paste0("diff", a, "_pAdj")]] <- p.adjust(res[[paste0("diff", a, "_p")]], "fdr")
+    }
+    res
   }
-  res_two    <- run_two(si_2,   "all")
-  res_two_ov <- run_two(si_2ov, "overlap")
+  res_two    <- run_two(si_2,   "allv2")
+  res_two_ov <- run_two(si_2ov, "overlapv2")
 
   two_sum <- function(res, d, label) {
     s <- !is.na(res$int_pAdj) & res$int_pAdj < .05
@@ -3843,6 +3848,14 @@ if (RUN_TWO_GROUP_INTERACTION) {
   }
   two_tab <- rbind(two_sum(res_two, si_2, "All scans"), two_sum(res_two_ov, si_2ov, sprintf("Shared PMA range (%.1f-%.1f wk)", lo2, hi2)))
   print(t(two_tab), quote = FALSE)
+  # Group difference (preterm - fetal) at each age: edges FDR-significant, by direction, and how many are among the 1,404 primary edges
+  age_tab <- do.call(rbind, lapply(list(`All scans` = res_two, `Shared PMA range` = res_two_ov), function(res) do.call(rbind, lapply(ages2, function(a) {
+    s_a <- !is.na(res[[paste0("diff", a, "_pAdj")]]) & res[[paste0("diff", a, "_pAdj")]] < .05; b_a <- res[[paste0("diff", a, "_b")]]
+    data.frame(`PMA, wk` = a, `FDR p < .05` = sum(s_a), `Preterm > fetal` = sum(s_a & b_a > 0), `Fetal > preterm` = sum(s_a & b_a < 0),
+               `Of the 1,404 primary edges, significant` = sum(s_a & sigFetal), check.names = FALSE) }))))
+  age_tab <- cbind(Data = rep(c("All scans", sprintf("Shared PMA range (%.1f-%.1f wk)", lo2, hi2)), each = length(ages2)), age_tab); rownames(age_tab) <- NULL
+  print(age_tab, row.names = FALSE)
+  si_table(age_tab, "two_group_interaction", "GroupByPma_GroupDifferenceByAge")
   top_two <- res_two[order(res_two$int_p), c("Connection", "int_b", "int_se", "int_p", "int_pAdj", "slope_fetal", "slope_preterm")][1:20, ]
   top_two[-1] <- lapply(top_two[-1], signif, 3); print(top_two, row.names = FALSE)
 
