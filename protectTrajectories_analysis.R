@@ -4043,6 +4043,9 @@ if (RUN_TWO_GROUP_INTERACTION) {
     labs(fill = "Slope"))
   dir_cols4 <- c("Preterm slope steeper" = col_preterm, "Fetal slope steeper" = col_fetal)
   lim_s <- ceiling(max(abs(c(res_two$slope_fetal, res_two$slope_preterm)), na.rm = TRUE) * 100) / 100
+  fig4B_xlim <- c(-0.05, 0.04); fig4B_ylim <- c(-0.03, 0.06)      # axis limits of panel B (Fisher z per week); same span on both axes so the plot stays square. Data: fetal slopes -0.047 to 0.028, preterm -0.018 to 0.051
+  if (any(res_two$slope_fetal < fig4B_xlim[1] | res_two$slope_fetal > fig4B_xlim[2] | res_two$slope_preterm < fig4B_ylim[1] | res_two$slope_preterm > fig4B_ylim[2], na.rm = TRUE))
+    message("Fig. 4B: some slopes fall outside fig4B_xlim / fig4B_ylim and are cut off; widen the limits")
   dd <- res_two[sig4, ]; dd$dir <- factor(ifelse(dd$int_b > 0, "Preterm slope steeper", "Fetal slope steeper"), names(dir_cols4))
   print(table(fetal = sign(dd$slope_fetal), preterm = sign(dd$slope_preterm)))                         # quadrant counts of the significant edges, for the text
   pD <- ggplot(res_two, aes(slope_fetal, slope_preterm)) +
@@ -4050,7 +4053,8 @@ if (RUN_TWO_GROUP_INTERACTION) {
     geom_point(color = "#d9d9d9", size = 0.5, alpha = 0.6, stroke = 0) +
     geom_point(data = dd, aes(fill = dir), shape = 21, color = "#000000", stroke = 0.15, size = 1.9, alpha = 0.9) +
     scale_fill_manual(values = dir_cols4, guide = "none") +
-    coord_fixed(xlim = c(-lim_s, lim_s), ylim = c(-lim_s, lim_s)) +
+    scale_x_continuous(breaks = seq(-0.06, 0.06, 0.03)) + scale_y_continuous(breaks = seq(-0.06, 0.06, 0.03)) +
+    coord_fixed(xlim = fig4B_xlim, ylim = fig4B_ylim) +
     labs(x = "Fetal Connectivity Change (per week)", y = "Preterm Connectivity Change (per week)") + theme_classic(base_size = 9)
   fig4 <- ggpubr::ggarrange(pM, pD, ncol = 2, nrow = 1, labels = c("A", "B"))
   show_fig("Fig4_GroupByPma", 9, 4.5, function() print(fig4))
