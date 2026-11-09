@@ -1834,6 +1834,22 @@ si_posthoc_counts <- sapply(c(`MPT - EPT` = "MPT_vs_EPT", `MPT - VPT` = "MPT_vs_
   p <- slopesMain$p[slopesMain$term == k]; c(`p < .05` = sum(p < .05), `FDR p < .05 (across 16)` = sum(p.adjust(p, "fdr") < .05), Edges = length(p)) })
 si_posthoc_counts
 
+# Same table in the journal layout (SI Table 4): plain slopes for EPT, VPT and MPT, then Coef and p for MPT - EPT, MPT - VPT and VPT - EPT;
+# p-values in the journal format; * = FDR p < .05, corrected across the 16 edges separately for each contrast.
+si_posthoc_journal <- local({
+  tl <- slopesMain; g <- function(k) tl[tl$term == k, ]
+  e  <- g("slope_EPT")$Connection; pp <- strsplit(e, "_", fixed = TRUE)
+  out <- data.frame(`Region 1` = sapply(sapply(pp, `[`, 1), full_name), `Region 2` = sapply(sapply(pp, `[`, 2), full_name),
+                    EPT = fmt3(g("slope_EPT")$est), VPT = fmt3(g("slope_VPT")$est), MPT = fmt3(g("slope_MPT")$est),
+                    check.names = FALSE, row.names = NULL, stringsAsFactors = FALSE)
+  for (k in c("MPT_vs_EPT", "MPT_vs_VPT", "VPT_vs_EPT")) {
+    r <- g(k); lab <- sub("_vs_", " - ", k)
+    out[[paste0(lab, ", Coef")]] <- fmt3(r$est)
+    out[[paste0(lab, ", p")]]    <- paste0(fmt_p(r$p), ifelse(p.adjust(r$p, "fdr") < .05, "*", ""))
+  }
+  out
+})
+
 
 ###############################################################################
 # 9. SENSITIVITY ANALYSES AND CONTROLS
@@ -1927,6 +1943,7 @@ si_intx <- function(key, name, res_list, cmp_list) {
 }
 
 si_table(si_posthoc, "posthoc", "pmaByPrematurity_posthocSlopeContrasts")
+si_table(si_posthoc_journal, "posthoc", "pmaByPrematurity_posthocSlopeContrasts_JournalLayout")
 si_table(data.frame(Contrast = colnames(si_posthoc_counts), t(si_posthoc_counts), check.names = FALSE), "posthoc", "pmaByPrematurity_posthocCounts")
 
 if (RUN_SENSITIVITY) {
