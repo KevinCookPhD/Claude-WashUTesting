@@ -3856,6 +3856,26 @@ if (RUN_TWO_GROUP_INTERACTION) {
   age_tab <- cbind(Data = rep(c("All scans", sprintf("Shared PMA range (%.1f-%.1f wk)", lo2, hi2)), each = length(ages2)), age_tab); rownames(age_tab) <- NULL
   print(age_tab, row.names = FALSE)
   si_table(age_tab, "two_group_interaction", "GroupByPma_GroupDifferenceByAge")
+
+  # Hierarchical summary (the earlier mixed models with the interaction added): (1) edges with a significant PMA x group interaction;
+  # (2) among the edges WITHOUT one, how many still have a main effect of group, taken from the additive model (PMA + scanner + group;
+  # FDR across all 3,003 edges, as in the primary analysis; for the shared range, the additive model fit on those scans only).
+  si_ov0 <- droplevels(scanInfo[scanInfo$ScanPMA >= lo2 & scanInfo$ScanPMA <= hi2, ])
+  res_add_ov <- run_fetal(si_ov0, "ageRange")                                    # same call as 9f (loaded from the cache when 9f has run)
+  hier_row <- function(res_int, res_add, label, nscans) {
+    s_int <- !is.na(res_int$int_pAdj) & res_int$int_pAdj < .05
+    s_grp <- !is.na(res_add$scanTypep.Adj) & res_add$scanTypep.Adj < .05; b_grp <- res_add$scanTypeb
+    ni <- !s_int
+    data.frame(Data = label, Scans = nscans,
+               `(1) Significant PMA x group interaction` = sum(s_int), `   preterm slope steeper` = sum(s_int & res_int$int_b > 0), `   fetal slope steeper` = sum(s_int & res_int$int_b < 0),
+               `Edges without a significant interaction` = sum(ni),
+               `(2) ...with a significant group main effect` = sum(ni & s_grp), `   preterm > fetal` = sum(ni & s_grp & b_grp > 0), `   fetal > preterm` = sum(ni & s_grp & b_grp < 0),
+               `...with neither` = sum(ni & !s_grp), `Interaction or group effect (total)` = sum(s_int | s_grp), check.names = FALSE)
+  }
+  hier_tab <- rbind(hier_row(res_two, fetalRes, "All scans", nrow(si_2)),
+                    hier_row(res_two_ov, res_add_ov, sprintf("Shared PMA range (%.1f-%.1f wk)", lo2, hi2), nrow(si_2ov)))
+  print(t(hier_tab), quote = FALSE)
+  si_table(hier_tab, "two_group_interaction", "GroupByPma_InteractionThenGroupEffect")
   top_two <- res_two[order(res_two$int_p), c("Connection", "int_b", "int_se", "int_p", "int_pAdj", "slope_fetal", "slope_preterm")][1:20, ]
   top_two[-1] <- lapply(top_two[-1], signif, 3); print(top_two, row.names = FALSE)
 
