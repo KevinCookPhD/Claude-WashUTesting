@@ -3217,7 +3217,8 @@ if (RUN_FOUR_GROUP) {
 
   four_group_edge <- function(cn, data) {
     cts <- c("EPT_vs_Fetal", "VPT_vs_Fetal", "MPT_vs_Fetal", "VPT_vs_EPT", "MPT_vs_EPT", "MPT_vs_VPT")
-    nm  <- c(unlist(lapply(cts, function(k) paste0(k, c("_b", "_se", "_p")))), "omni_chi", "omni_p", "pmaXgrp_chi", "pmaXgrp_p")
+    nm  <- c(unlist(lapply(cts, function(k) paste0(k, c("_b", "_se", "_p")))), "omni_chi", "omni_p", "pmaXgrp_chi", "pmaXgrp_p",
+             unlist(lapply(cts, function(k) paste0("slope_", k, c("_b", "_se", "_p")))), paste0("slope_", c("Fetal", "EPT", "VPT", "MPT")))
     d <- data; d$FC <- as.numeric(goodFCData[d$longID, cn])
     tryCatch({
       m <- lme(FC ~ ScanPMA + scanner + grp, random = ~ 1 | shortID, data = d, control = ctrl)
@@ -3232,13 +3233,23 @@ if (RUN_FOUR_GROUP) {
       omni <- wald3(b, V, cf)
       m2 <- lme(FC ~ scanner + ScanPMA * grp, random = ~ 1 | shortID, data = d, control = ctrl)
       ix <- wald3(nlme::fixef(m2), vcov(m2), paste0("ScanPMA:grp", c("EPT", "VPT", "MPT")))
-      setNames(c(ct, omni, ix), nm)
+      # slope contrasts from the interaction model (each group's PMA slope = ScanPMA + ScanPMA:grp<group>; 1 df each, t-tests)
+      b2 <- nlme::fixef(m2); V2 <- vcov(m2); icf <- paste0("ScanPMA:grp", c("EPT", "VPT", "MPT"))
+      w2 <- function(a) { x <- setNames(numeric(length(b2)), names(b2)); x[names(a)] <- a; x }
+      Ls <- list(EPT_vs_Fetal = w2(c(`ScanPMA:grpEPT` = 1)), VPT_vs_Fetal = w2(c(`ScanPMA:grpVPT` = 1)), MPT_vs_Fetal = w2(c(`ScanPMA:grpMPT` = 1)),
+                 VPT_vs_EPT = w2(c(`ScanPMA:grpVPT` = 1, `ScanPMA:grpEPT` = -1)), MPT_vs_EPT = w2(c(`ScanPMA:grpMPT` = 1, `ScanPMA:grpEPT` = -1)),
+                 MPT_vs_VPT = w2(c(`ScanPMA:grpMPT` = 1, `ScanPMA:grpVPT` = -1)))
+      dfs <- min(m2$fixDF$X[c("ScanPMA", icf)])
+      sc  <- unlist(lapply(cts, function(k) { x <- Ls[[k]]; est <- sum(x * b2); se <- sqrt(drop(t(x) %*% V2 %*% x)); c(est, se, 2 * pt(-abs(est / se), dfs)) }))
+      gs  <- c(Fetal = unname(b2["ScanPMA"]), sapply(c("EPT", "VPT", "MPT"), function(g) unname(b2["ScanPMA"] + b2[paste0("ScanPMA:grp", g)])))
+      setNames(c(ct, omni, ix, sc, gs), nm)
     }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
   }
-  res4 <- cached("fourGroup", key = paste(data_key, "fourGroup", table_key(si_4)),
+  res4 <- cached("fourGroup", key = paste(data_key, "fourGroup", "slopes", table_key(si_4)),
                  data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, four_group_edge, data = si_4)), row.names = NULL))
   cts4 <- c("EPT_vs_Fetal", "VPT_vs_Fetal", "MPT_vs_Fetal", "VPT_vs_EPT", "MPT_vs_EPT", "MPT_vs_VPT")
   for (k in c(cts4, "omni", "pmaXgrp")) res4[[paste0(k, "_pAdj")]] <- p.adjust(res4[[paste0(k, "_p")]], "fdr")
+  for (k in cts4) res4[[paste0("slope_", k, "_pAdj")]] <- p.adjust(res4[[paste0("slope_", k, "_p")]], "fdr")      # PMA-slope contrasts, FDR across edges
 
   lab4 <- c(omni = "Omnibus group effect (3 df)", EPT_vs_Fetal = "EPT vs. fetal", VPT_vs_Fetal = "VPT vs. fetal", MPT_vs_Fetal = "MPT vs. fetal",
             VPT_vs_EPT = "VPT vs. EPT", MPT_vs_EPT = "MPT vs. EPT", MPT_vs_VPT = "MPT vs. VPT", pmaXgrp = "PMA x group (3 df)")
@@ -3269,6 +3280,31 @@ if (RUN_FOUR_GROUP) {
   si_table(gr4,  "four_group", "fourGroup_departureFromFetal")
   si_table(e16,  "four_group", "fourGroup_on16PrimaryEdges")
   si_table(res4, "four_group", "fourGroup_allEdges")
+
+  # PMA-slope contrasts among the four groups (interaction model; 1 df each; FDR across the 3,003 edges per contrast). "First group steeper" =
+  # the first-named group has the larger PMA slope (e.g., MPT vs EPT: MPT steeper). Fig3_16 = how many of the 16 preterm-only PMA x prematurity
+  # edges are significant for the contrast; primary = how many of the 1,404 fetal-vs-preterm edges are significant.
+  sl_lab <- c(EPT_vs_Fetal = "EPT vs. fetal", VPT_vs_Fetal = "VPT vs. fetal", MPT_vs_Fetal = "MPT vs. fetal",
+              VPT_vs_EPT = "VPT vs. EPT", MPT_vs_EPT = "MPT vs. EPT", MPT_vs_VPT = "MPT vs. VPT")
+  in16 <- res4$Connection %in% sigEdges
+  slope4_tab <- do.call(rbind, lapply(names(sl_lab), function(k) {
+    p <- res4[[paste0("slope_", k, "_p")]]; pa <- res4[[paste0("slope_", k, "_pAdj")]]; b <- res4[[paste0("slope_", k, "_b")]]; sg4 <- !is.na(pa) & pa < .05
+    data.frame(Contrast = sl_lab[[k]], `Raw p < .05` = sum(p < .05, na.rm = TRUE), `FDR p < .05` = sum(sg4),
+               `First group steeper` = sum(sg4 & b > 0), `Second group steeper` = sum(sg4 & b < 0),
+               `Of the 16 Fig. 3 edges, significant (FDR)` = sum(sg4 & in16), `Of the 16 Fig. 3 edges, raw p < .05` = sum(p < .05 & in16, na.rm = TRUE),
+               `Of the 1,404 primary edges, significant` = sum(sg4 & sigFetal), check.names = FALSE) }))
+  print(slope4_tab, row.names = FALSE)
+  si_table(slope4_tab, "four_group", "fourGroup_SlopeContrasts")
+  # The three preterm contrasts on the 16 Fig. 3 edges: this model (fetal included) vs. the preterm-only model of section 8
+  cmp16 <- do.call(rbind, lapply(c("MPT_vs_EPT", "MPT_vs_VPT", "VPT_vs_EPT"), function(k) {
+    i4 <- match(sigEdges, res4$Connection); io <- slopesMain[slopesMain$term == k, ]; j <- match(sigEdges, io$Connection)
+    data.frame(Contrast = sl_lab[[k]], Connection = sigEdges, `Four-group model: estimate` = round(res4[[paste0("slope_", k, "_b")]][i4], 4),
+               `Four-group model: p` = signif(res4[[paste0("slope_", k, "_p")]][i4], 3), `Preterm-only model: estimate` = round(io$est[j], 4),
+               `Preterm-only model: p` = signif(io$p[j], 3), check.names = FALSE) }))
+  print(do.call(rbind, lapply(split(cmp16, cmp16$Contrast), function(g) data.frame(Contrast = g$Contrast[1],
+        `Correlation of estimates, 16 edges` = round(cor(g[[3]], g[[5]]), 3), `Edges with p < .05 in the four-group model` = sum(g[[4]] < .05),
+        `Edges with p < .05 in the preterm-only model` = sum(g[[6]] < .05), check.names = FALSE))), row.names = FALSE)
+  si_table(cmp16, "four_group", "fourGroup_SlopeContrasts_16Edges_vs_PretermOnly")
 
   # Figure: A. FDR-significant edges per test, split by direction; B. each preterm group's beta vs. fetal against the primary beta
   d_cnt <- do.call(rbind, lapply(cts4, function(k) { sg <- !is.na(res4[[paste0(k, "_pAdj")]]) & res4[[paste0(k, "_pAdj")]] < .05; bb <- res4[[paste0(k, "_b")]]
