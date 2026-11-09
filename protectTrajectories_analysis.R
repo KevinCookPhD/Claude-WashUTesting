@@ -251,7 +251,8 @@ SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03"
 si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
-  for (j in seq_along(df)) if (is_pcol(names(df)[j], df[[j]])) df[[j]] <- fmt_p(df[[j]])          # p-value columns: 2 significant figures, <0.0001
+  if (!grepl("AllEdges", name))                                                                    # the full edge-wise files keep numeric p-values (they are data files)
+    for (j in seq_along(df)) if (is_pcol(names(df)[j], df[[j]])) df[[j]] <- fmt_p(df[[j]])      # other tables: p-values to 2 significant figures, <0.0001
   if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", si_name(name), ".csv")), row.names = FALSE)
   invisible(df)
 }
