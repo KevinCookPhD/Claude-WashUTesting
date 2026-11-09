@@ -3795,12 +3795,20 @@ if (RUN_GLOBAL_LEVEL_CONTROL) {
 #     Two runs: all scans, and only scans in the PMA range both groups share (so slopes are compared where both have data).
 #     CAUTION: fetal scans are all 1.5T and cover younger ages than most preterm scans; the fetal slope rests on a different
 #     age range than the preterm slope.
+#     Co-primary analyses (from a critique of the two-step approach; both the all-scans and the shared-range runs are reported):
+#       (a) a single interaction model for every edge, with a JOINT 2-df Wald test of group + group x PMA ("any difference between
+#           the groups at any age"; invariant to where PMA is centered) and contrasts at ages with data in both groups (30, 33, 36 wk;
+#           38 wk is at the edge of the fetal data and shown for reference);
+#       (b) the shared PMA range as co-primary: the fall from 346 to 63 significant interactions plausibly reflects both lost
+#           power and linear extrapolation beyond each group's own age range;
+#       (c) SENSITIVITY ONLY: natural cubic splines (3 df) of PMA by group within the shared range, with a joint Wald test of every
+#           group term (group + group x spline terms, 4 df): do the curves differ between groups when linearity is not assumed?
 #     Output number: "two_group_interaction" in SI_ID.
 ###############################################################################
 
 if (RUN_TWO_GROUP_INTERACTION) {
   si_2 <- scanInfo; si_2$PMAc <- si_2$ScanPMA - 36
-  ages2 <- c(30, 34, 36, 38)                                            # ages at which the preterm - fetal difference is tested (36 = the group coefficient)
+  ages2 <- c(30, 33, 36, 38)                                            # ages at which the preterm - fetal difference is tested (36 = the group coefficient)
   pr2 <- lapply(split(scanInfo$ScanPMA, scanInfo$scanType), range)
   lo2 <- max(sapply(pr2, `[`, 1)); hi2 <- min(sapply(pr2, `[`, 2))
   si_2ov <- droplevels(si_2[si_2$ScanPMA >= lo2 & si_2$ScanPMA <= hi2, ])
@@ -3808,7 +3816,7 @@ if (RUN_TWO_GROUP_INTERACTION) {
 
   two_edge <- function(cn, data, ages) {
     nm <- c("int_b", "int_se", "int_p", "slope_fetal", "slope_fetal_se", "slope_preterm", "slope_preterm_se",
-            paste0("diff", ages, "_b"), paste0("diff", ages, "_se"), "df")
+            paste0("diff", ages, "_b"), paste0("diff", ages, "_se"), "joint_chi", "joint_p", "df")
     d <- data; d$FC <- as.numeric(goodFCData[d$longID, cn])
     tryCatch({
       m <- lme(FC ~ PMAc + scanner + scanType + PMAc:scanType, random = ~ 1 | shortID, data = d, control = ctrl)
@@ -3817,22 +3825,25 @@ if (RUN_TWO_GROUP_INTERACTION) {
       ci <- function(x) c(sum(x * b), sqrt(drop(t(x) %*% V %*% x)))
       sf <- ci(w(c(PMAc = 1))); sp <- ci(w(c(PMAc = 1, `PMAc:scanTypePreterm` = 1)))
       dd <- lapply(ages, function(a) ci(w(c(scanTypePreterm = 1, `PMAc:scanTypePreterm` = a - 36))))
+      jx <- match(c("scanTypePreterm", "PMAc:scanTypePreterm"), names(b)); Lj <- diag(length(b))[jx, , drop = FALSE]   # joint test: group and group x PMA both zero (2 df)
+      jb <- Lj %*% b; jchi <- drop(t(jb) %*% solve(Lj %*% V %*% t(Lj)) %*% jb)
       setNames(c(tt["PMAc:scanTypePreterm", "Value"], tt["PMAc:scanTypePreterm", "Std.Error"], tt["PMAc:scanTypePreterm", "p-value"],
-                 sf, sp, sapply(dd, `[`, 1), sapply(dd, `[`, 2), min(m$fixDF$X[c("scanTypePreterm", "PMAc:scanTypePreterm")])), nm)
+                 sf, sp, sapply(dd, `[`, 1), sapply(dd, `[`, 2), jchi, pchisq(jchi, 2, lower.tail = FALSE),
+                 min(m$fixDF$X[c("scanTypePreterm", "PMAc:scanTypePreterm")])), nm)
     }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
   }
   run_two <- function(d, tag) {
     res <- cached(paste0("twoGroupInt_", tag), key = paste(data_key, "twoGroupInt", tag, table_key(d)),
                   data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, two_edge, data = d, ages = ages2)), row.names = NULL))
-    res$int_pAdj <- p.adjust(res$int_p, "fdr")
+    res$int_pAdj <- p.adjust(res$int_p, "fdr"); res$joint_pAdj <- p.adjust(res$joint_p, "fdr")
     for (a in ages2) {                                                  # test of the preterm - fetal difference at each age (t with the model's df), FDR across edges
       res[[paste0("diff", a, "_p")]]    <- 2 * pt(-abs(res[[paste0("diff", a, "_b")]] / res[[paste0("diff", a, "_se")]]), res$df)
       res[[paste0("diff", a, "_pAdj")]] <- p.adjust(res[[paste0("diff", a, "_p")]], "fdr")
     }
     res
   }
-  res_two    <- run_two(si_2,   "allv2")
-  res_two_ov <- run_two(si_2ov, "overlapv2")
+  res_two    <- run_two(si_2,   "allv3")
+  res_two_ov <- run_two(si_2ov, "overlapv3")
 
   two_sum <- function(res, d, label) {
     s <- !is.na(res$int_pAdj) & res$int_pAdj < .05
@@ -3842,9 +3853,12 @@ if (RUN_TWO_GROUP_INTERACTION) {
                `Of the 1,404 primary edges, significant` = sum(s & sigFetal),
                `Median fetal slope, primary edges` = round(median(res$slope_fetal[sigFetal], na.rm = TRUE), 4),
                `Median preterm slope, primary edges` = round(median(res$slope_preterm[sigFetal], na.rm = TRUE), 4),
+               `Joint 2-df test (group + group x PMA), FDR p < .05` = sum(!is.na(res$joint_pAdj) & res$joint_pAdj < .05),
+               `   of the 1,404 primary edges, significant in the joint test` = sum(!is.na(res$joint_pAdj) & res$joint_pAdj < .05 & sigFetal),
+               `   significant in the joint test but not among the 1,404` = sum(!is.na(res$joint_pAdj) & res$joint_pAdj < .05 & !sigFetal),
                `Median preterm - fetal at 30 wk, primary edges` = round(median(res$diff30_b[sigFetal], na.rm = TRUE), 3),
-               `Median preterm - fetal at 34 wk, primary edges` = round(median(res$diff34_b[sigFetal], na.rm = TRUE), 3),
-               `Median preterm - fetal at 38 wk, primary edges` = round(median(res$diff38_b[sigFetal], na.rm = TRUE), 3), check.names = FALSE)
+               `Median preterm - fetal at 33 wk, primary edges` = round(median(res$diff33_b[sigFetal], na.rm = TRUE), 3),
+               `Median preterm - fetal at 36 wk, primary edges` = round(median(res$diff36_b[sigFetal], na.rm = TRUE), 3), check.names = FALSE)
   }
   two_tab <- rbind(two_sum(res_two, si_2, "All scans"), two_sum(res_two_ov, si_2ov, sprintf("Shared PMA range (%.1f-%.1f wk)", lo2, hi2)))
   print(t(two_tab), quote = FALSE)
@@ -3876,6 +3890,29 @@ if (RUN_TWO_GROUP_INTERACTION) {
                     hier_row(res_two_ov, res_add_ov, sprintf("Shared PMA range (%.1f-%.1f wk)", lo2, hi2), nrow(si_2ov)))
   print(t(hier_tab), quote = FALSE)
   si_table(hier_tab, "two_group_interaction", "GroupByPma_InteractionThenGroupEffect")
+  # (c) Sensitivity within the shared range: splines. Per edge, FC ~ scanner + ns(PMA, 3 df) * group (random intercept per infant); the test
+  # is the joint Wald chi-square of every group term (group and its 3 spline interactions, 4 df).
+  spline_edge <- function(cn, data) {
+    nm <- c("spl_chi", "spl_p", "spl_df")
+    d <- data; d$FC <- as.numeric(goodFCData[d$longID, cn])
+    tryCatch({
+      m <- lme(FC ~ scanner + splines::ns(ScanPMA, df = 3) * scanType, random = ~ 1 | shortID, data = d, control = ctrl)
+      b <- nlme::fixef(m); V <- vcov(m); ix <- grep("scanTypePreterm", names(b)); L <- diag(length(b))[ix, , drop = FALSE]
+      lb <- L %*% b; chi <- drop(t(lb) %*% solve(L %*% V %*% t(L)) %*% lb)
+      setNames(c(chi, pchisq(chi, length(ix), lower.tail = FALSE), length(ix)), nm)
+    }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
+  }
+  res_spl <- cached("twoGroupSpline_overlap", key = paste(data_key, "twoGroupSpline", table_key(si_2ov)),
+                    data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, spline_edge, data = si_2ov)), row.names = NULL))
+  res_spl$spl_pAdj <- p.adjust(res_spl$spl_p, "fdr")
+  s_spl <- !is.na(res_spl$spl_pAdj) & res_spl$spl_pAdj < .05; s_jt <- !is.na(res_two_ov$joint_pAdj) & res_two_ov$joint_pAdj < .05
+  spl_tab <- data.frame(Analysis = c("Linear joint test (2 df), shared range", "Spline joint test (4 df), shared range"),
+                        `FDR p < .05` = c(sum(s_jt), sum(s_spl)), `Of the 1,404 primary edges, significant` = c(sum(s_jt & sigFetal), sum(s_spl & sigFetal)),
+                        `Not among the 1,404` = c(sum(s_jt & !sigFetal), sum(s_spl & !sigFetal)), check.names = FALSE)
+  spl_tab$`Agreement with the linear joint test (both significant)` <- c(sum(s_jt), sum(s_jt & s_spl))
+  print(spl_tab, row.names = FALSE)
+  si_table(spl_tab, "two_group_interaction", "GroupByPma_SplineSensitivity")
+  si_table(res_spl, "two_group_interaction", "GroupByPma_SplineSensitivity_AllEdges")
   top_two <- res_two[order(res_two$int_p), c("Connection", "int_b", "int_se", "int_p", "int_pAdj", "slope_fetal", "slope_preterm")][1:20, ]
   top_two[-1] <- lapply(top_two[-1], signif, 3); print(top_two, row.names = FALSE)
 
