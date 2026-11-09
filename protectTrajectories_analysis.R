@@ -4053,8 +4053,8 @@ if (RUN_TWO_GROUP_INTERACTION) {
     geom_point(color = "#d9d9d9", size = 0.5, alpha = 0.6, stroke = 0) +
     geom_point(data = dd, aes(fill = dir), shape = 21, color = "#000000", stroke = 0.15, size = 1.9, alpha = 0.9) +
     scale_fill_manual(values = dir_cols4, guide = "none") +
-    scale_x_continuous(breaks = seq(-0.06, 0.06, 0.01), labels = function(x) sprintf("%.2f", x)) +     # ticks every 0.01 on both axes
-    scale_y_continuous(breaks = seq(-0.06, 0.06, 0.01), labels = function(x) sprintf("%.2f", x)) +
+    scale_x_continuous(breaks = seq(-0.06, 0.06, 0.02), labels = function(x) sprintf("%.2f", x)) +     # ticks every 0.02 on both axes
+    scale_y_continuous(breaks = seq(-0.06, 0.06, 0.02), labels = function(x) sprintf("%.2f", x)) +
     coord_fixed(xlim = fig4B_xlim, ylim = fig4B_ylim) +
     labs(x = "Fetal Connectivity Change (per week)", y = "Preterm Connectivity Change (per week)") + theme_classic(base_size = 9)
   fig4 <- ggpubr::ggarrange(pM, pD, ncol = 2, nrow = 1, labels = c("A", "B"))
