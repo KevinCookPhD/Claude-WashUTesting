@@ -4228,6 +4228,35 @@ if (RUN_TWO_GROUP_INTERACTION) {
       var_tab$`Motion x PMA terms FDR p < .05` <- c(NA, NA, NA, sum(p.adjust(res_m2$fdageB_p, "fdr") < .05, na.rm = TRUE))
       print(var_tab, row.names = FALSE); si_table(var_tab, "two_group_interaction", "GroupByPma_MotionVariants")
       si_table(res_m2, "two_group_interaction", "GroupByPma_MotionVariants_AllEdges")
+
+      # Size of the change from the motion covariate (the interaction coefficients barely move: that is why the distance correlation does not change)
+      d_b <- abs(res_two$int_b - res_m$int1_b)
+      print(c(r = cor(res_two$int_b, res_m$int1_b), max_abs_diff = max(d_b, na.rm = TRUE), median_abs_diff = median(d_b, na.rm = TRUE),
+              median_abs_coef = median(abs(res_two$int_b))))
+
+      # Edge-level partial Spearman: |interaction coef| vs. distance, controlling for each edge's sensitivity to motion (|motion coef| from the meanFD
+      # model), for the edge's mean FC, and for both. Permutation p: ROI labels shuffled (5,000 permutations; floor 0.0002), as above.
+      if (exists("Dmat")) {
+        nodesR <- sort(unique(c(cmL$ROI1, cmL$ROI2))); r1 <- match(cmL$ROI1, nodesR); r2 <- match(cmL$ROI2, nodesR); DmR <- Dmat[nodesR, nodesR]
+        stopifnot(identical(res_m$Connection, res_two$Connection), isTRUE(all.equal(unname(DmR[cbind(r1, r2)]), unname(edge_dist))))
+        y_e <- abs(res_two$int_b); z_mot <- abs(res_m$fd_b); z_fc <- meanFC
+        pres <- function(dist, idx, Z) {                                                    # partial Spearman: rank residuals after regressing out the ranked controls
+          d <- rank(dist[idx]); yy <- rank(y_e[idx])
+          if (is.null(Z)) return(cor(d, yy))
+          Zr <- sapply(Z, function(z) rank(z[idx])); cor(resid(lm(d ~ Zr)), resid(lm(yy ~ Zr)))
+        }
+        specs <- list(`No control (|Coef| vs. distance)` = NULL, `Controlling for |motion coef|` = list(z_mot),
+                      `Controlling for mean FC` = list(z_fc), `Controlling for |motion coef| and mean FC` = list(z_mot, z_fc))
+        set.seed(2026); nP <- 5000
+        perm_nodes <- replicate(nP, sample(length(nodesR)), simplify = FALSE)
+        pc_tab <- do.call(rbind, lapply(names(subsL), function(g) do.call(rbind, lapply(names(specs), function(s) {
+          ix <- subsL[[g]]; obs <- pres(edge_dist, ix, specs[[s]])
+          pm <- sapply(perm_nodes, function(p) pres(DmR[cbind(p[r1], p[r2])], ix, specs[[s]]))
+          pv <- (1 + sum(abs(pm) >= abs(obs))) / (1 + nP)
+          data.frame(Edges = g, Control = s, rho = round(obs, 2), `Permutation p` = ifelse(pv <= 1.001 / (nP + 1), "<0.0002", fmt_p(pv)), check.names = FALSE) }))))
+        print(pc_tab, row.names = FALSE)
+        si_table(pc_tab, "two_group_interaction", "GroupByPma_PartialCorrelations")
+      }
     } else message("Motion check skipped: scan_fd (motion summary) not found.")
 
     # Which group produces the distance pattern? Each group's own PMA slope (fetal and preterm, Fisher z per week) against edge distance, all 3,003 edges.
