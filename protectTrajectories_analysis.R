@@ -4146,6 +4146,50 @@ if (RUN_TWO_GROUP_INTERACTION) {
       print(rho_tab, row.names = FALSE)
       si_table(rho_tab, "two_group_interaction", "GroupByPma_SizeVsDistance_Pvalues")
     } else message("Permutation p-values skipped: Dmat (section 9i) not found.")
+
+    # Motion check on the distance pattern. Head motion inflates short-range correlations, so a pattern that is larger for near connections could
+    # reflect motion. Group-level motion cannot be adjusted for (meanFD is almost collinear with group, r = -0.93; see 9j), so this uses meanFD
+    # centered WITHIN each group (as in 9j D2), which removes the within-group motion variation (motion falls with PMA in both groups) without
+    # touching the group difference. Each edge is fitted twice on the same scans: FC ~ scanner + PMA*group  and  + meanFD_c.
+    #   (1) do the interaction coefficients and the |coef|-vs-distance correlations change with the motion covariate?
+    #   (2) the motion coefficient itself, per edge: is it distance-dependent, and does it resemble the interaction pattern? If motion drove the
+    #       near-versus-far pattern, the motion coefficients would line up with the interaction coefficients across edges.
+    if (exists("scan_fd")) {
+      si_m <- si_2; si_m$meanFD <- scan_fd[match(si_m$longID, scanInfo$longID)]
+      si_m <- droplevels(si_m[!is.na(si_m$meanFD), ]); si_m$meanFD_c <- si_m$meanFD - ave(si_m$meanFD, si_m$scanType)
+      message("Motion check: ", nrow(si_m), " of ", nrow(si_2), " scans have a meanFD value")
+      motion_edge <- function(cn, data) {
+        nm <- c("int0_b", "int1_b", "int1_p", "slope_fetal1", "slope_preterm1", "fd_b", "fd_p")
+        d <- data; d$FC <- as.numeric(goodFCData[d$longID, cn])
+        tryCatch({
+          m0 <- lme(FC ~ PMAc + scanner + scanType + PMAc:scanType, random = ~ 1 | shortID, data = d, control = ctrl)
+          m1 <- lme(FC ~ PMAc + scanner + scanType + PMAc:scanType + meanFD_c, random = ~ 1 | shortID, data = d, control = ctrl)
+          t0 <- summary(m0)$tTable; t1 <- summary(m1)$tTable; b1 <- nlme::fixef(m1)
+          setNames(c(t0["PMAc:scanTypePreterm", "Value"], t1["PMAc:scanTypePreterm", "Value"], t1["PMAc:scanTypePreterm", "p-value"],
+                     b1[["PMAc"]], b1[["PMAc"]] + b1[["PMAc:scanTypePreterm"]], t1["meanFD_c", "Value"], t1["meanFD_c", "p-value"]), nm)
+        }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
+      }
+      res_m <- cached("twoGroupMotion_v1", key = paste(data_key, "twoGroupMotion", table_key(si_m)),
+                      data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, motion_edge, data = si_m)), row.names = NULL))
+      stopifnot(identical(res_m$Connection, res_two$Connection))
+      res_m$int1_pAdj <- p.adjust(res_m$int1_p, "fdr")
+      s_m <- !is.na(res_m$int1_pAdj) & res_m$int1_pAdj < .05
+      print(c(`Significant interactions, original (all scans)` = sum(sigL), `Significant with meanFD (within group) as a covariate` = sum(s_m),
+              `Both` = sum(sigL & s_m), `Same direction among all edges` = sum(sign(res_m$int0_b) == sign(res_m$int1_b), na.rm = TRUE),
+              `r, interaction coef without vs. with meanFD` = round(cor(res_m$int0_b, res_m$int1_b, use = "complete.obs"), 3),
+              `Median motion coef (z per mm)` = round(median(res_m$fd_b, na.rm = TRUE), 3)))
+      rho <- function(x, y, idx) unname(cor(x[idx], y[idx], method = "spearman", use = "complete.obs"))
+      mot_tab <- do.call(rbind, lapply(names(subsL), function(g) { ix <- subsL[[g]]
+        data.frame(Edges = g, N = sum(ix),
+                   `|Coef| vs. distance, without meanFD` = round(rho(abs(res_m$int0_b), edge_dist, ix), 2),
+                   `|Coef| vs. distance, with meanFD` = round(rho(abs(res_m$int1_b), edge_dist, ix), 2),
+                   `Motion coef vs. distance` = round(rho(res_m$fd_b, edge_dist, ix), 2),
+                   `Motion coef vs. interaction coef (across edges)` = round(rho(res_m$fd_b, res_m$int0_b, ix), 2),
+                   `|Motion coef| vs. |interaction coef|` = round(rho(abs(res_m$fd_b), abs(res_m$int0_b), ix), 2), check.names = FALSE) }))
+      print(mot_tab, row.names = FALSE)
+      si_table(mot_tab, "two_group_interaction", "GroupByPma_MotionCheck")
+      si_table(res_m, "two_group_interaction", "GroupByPma_MotionCheck_AllEdges")
+    } else message("Motion check skipped: scan_fd (motion summary) not found.")
   } else message("Section 16 lobe/distance summary skipped: run section 9i first (it defines edge_dist).")
 }
 
