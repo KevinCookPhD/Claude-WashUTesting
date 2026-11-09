@@ -4043,7 +4043,7 @@ if (RUN_TWO_GROUP_INTERACTION) {
     labs(fill = "Slope"))
   dir_cols4 <- c("Preterm slope steeper" = col_preterm, "Fetal slope steeper" = col_fetal)
   lim_s <- ceiling(max(abs(c(res_two$slope_fetal, res_two$slope_preterm)), na.rm = TRUE) * 100) / 100
-  fig4B_xlim <- c(-0.05, 0.04); fig4B_ylim <- c(-0.03, 0.06)      # axis limits of panel B (Fisher z per week); same span on both axes so the plot stays square. Data: fetal slopes -0.047 to 0.028, preterm -0.018 to 0.051
+  fig4B_xlim <- c(-0.05, 0.035); fig4B_ylim <- c(-0.03, 0.055)      # axis limits of panel B (Fisher z per week); same span on both axes so the plot stays square. Data: fetal slopes -0.047 to 0.028, preterm -0.018 to 0.051
   if (any(res_two$slope_fetal < fig4B_xlim[1] | res_two$slope_fetal > fig4B_xlim[2] | res_two$slope_preterm < fig4B_ylim[1] | res_two$slope_preterm > fig4B_ylim[2], na.rm = TRUE))
     message("Fig. 4B: some slopes fall outside fig4B_xlim / fig4B_ylim and are cut off; widen the limits")
   dd <- res_two[sig4, ]; dd$dir <- factor(ifelse(dd$int_b > 0, "Preterm slope steeper", "Fetal slope steeper"), names(dir_cols4))
