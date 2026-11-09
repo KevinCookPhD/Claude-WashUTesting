@@ -3881,6 +3881,11 @@ if (RUN_TWO_GROUP_INTERACTION) {
 
   si_table(two_tab, "two_group_interaction", "GroupByPma_Summary")
   si_table(top_two, "two_group_interaction", "GroupByPma_TopEdges")
+  sig_two <- function(res) { r <- res[!is.na(res$int_pAdj) & res$int_pAdj < .05, c("Connection", "int_b", "int_se", "int_p", "int_pAdj", "slope_fetal", "slope_preterm")]
+    r <- r[order(r$int_p), ]; r[-1] <- lapply(r[-1], signif, 3); r$Direction <- ifelse(r$int_b > 0, "Preterm slope steeper", "Fetal slope steeper")
+    r$`In the 1,404 primary edges` <- r$Connection %in% allConn[sigFetal]; r }
+  si_table(sig_two(res_two),    "two_group_interaction", "GroupByPma_SignificantEdges_AllScans")      # every edge with a significant interaction (FDR p < .05)
+  si_table(sig_two(res_two_ov), "two_group_interaction", "GroupByPma_SignificantEdges_SharedRange")
   si_table(res_two, "two_group_interaction", "GroupByPma_AllEdges_AllScans")
   si_table(res_two_ov, "two_group_interaction", "GroupByPma_AllEdges_SharedRange")
   # Figure: A. interaction coefficient vs. significance for every edge; B. each edge's fetal vs. preterm slope
