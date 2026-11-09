@@ -3942,6 +3942,40 @@ if (RUN_TWO_GROUP_INTERACTION) {
     labs(x = "Fetal slope (Fisher z per week)", y = "Preterm slope (Fisher z per week)") + si_theme()
   si_fig("two_group_interaction", "GroupByPma", 7.6, 3.6, function()
     print(ggpubr::ggarrange(p16a, p16b, nrow = 1, labels = c("A", "B"), common.legend = TRUE, legend = "bottom")))
+
+  # Main-text figure (candidate): where the significant interactions are and what they look like.
+  # A. lobe-ordered triangular matrix in the Fig. 2 style (same tri_heat function): the slope difference (preterm slope - fetal slope), per 10 weeks of
+  #    PMA, for every edge with a significant PMA x group interaction (FDR p < .05); blue = preterm slope steeper, red = fetal slope steeper; the colour
+  #    scale is capped at +/- fig4_cap and saturates beyond it.
+  # B. every edge's fetal slope against its preterm slope (square axes, same limits); significant edges are outlined and coloured by direction, with
+  #    the number of significant edges in each quadrant.
+  fig4_cap <- 0.6                                                                  # cap of the colour scale in A (slope difference per 10 weeks)
+  sig4 <- !is.na(res_two$int_pAdj) & res_two$int_pAdj < .05
+  stopifnot(identical(cp$Conn, res_two$Connection))                                # cp (section 4b) and res_two share the edge order
+  cp_int <- cp; cp_int$B <- res_two$int_b * 10; cp_int$pAdj <- res_two$int_pAdj
+  tri_int <- tri_heat                                                              # tri_heat, reading the signed interaction coefficients (abs() switched off in this copy)
+  environment(tri_int) <- list2env(list(cp = cp_int, abs = function(x) x), parent = environment(tri_heat))
+  pM <- suppressMessages(tri_int(sig4, pal$heat_preterm, lim = fig4_cap) +
+    scale_fill_gradient2(low = col_fetal, mid = "white", high = col_preterm, midpoint = 0, limits = c(-fig4_cap, fig4_cap), oob = scales::squish,
+                         breaks = seq(-fig4_cap, fig4_cap, length.out = 5), labels = function(x) sprintf("%.1f", x)) +
+    labs(fill = "Slope"))
+  dir_cols4 <- c("Preterm slope steeper" = col_preterm, "Fetal slope steeper" = col_fetal)
+  lim_s <- ceiling(max(abs(c(res_two$slope_fetal, res_two$slope_preterm)), na.rm = TRUE) * 100) / 100
+  dd <- res_two[sig4, ]; dd$dir <- factor(ifelse(dd$int_b > 0, "Preterm slope steeper", "Fetal slope steeper"), names(dir_cols4))
+  q4 <- table(factor(sign(dd$slope_fetal), c(-1, 1)), factor(sign(dd$slope_preterm), c(-1, 1)))     # rows: fetal slope sign; columns: preterm slope sign
+  pD <- ggplot(res_two, aes(slope_fetal, slope_preterm)) +
+    geom_hline(yintercept = 0, linewidth = 0.3) + geom_vline(xintercept = 0, linewidth = 0.3) + geom_abline(linetype = "dashed", linewidth = 0.3) +
+    geom_point(color = "#d9d9d9", size = 0.5, alpha = 0.6, stroke = 0) +
+    geom_point(data = dd, aes(fill = dir), shape = 21, color = "#000000", stroke = 0.15, size = 1.9, alpha = 0.9) +
+    scale_fill_manual(values = dir_cols4, guide = "none") +
+    coord_fixed(xlim = c(-lim_s, lim_s), ylim = c(-lim_s, lim_s)) +
+    annotate("text", x = -0.9 * lim_s, y =  0.9 * lim_s, label = paste0("n = ", q4["-1", "1"]),  hjust = 0, vjust = 1, size = 3) +
+    annotate("text", x =  0.9 * lim_s, y =  0.9 * lim_s, label = paste0("n = ", q4["1", "1"]),   hjust = 1, vjust = 1, size = 3) +
+    annotate("text", x = -0.9 * lim_s, y = -0.9 * lim_s, label = paste0("n = ", q4["-1", "-1"]), hjust = 0, vjust = 0, size = 3) +
+    annotate("text", x =  0.9 * lim_s, y = -0.9 * lim_s, label = paste0("n = ", q4["1", "-1"]),  hjust = 1, vjust = 0, size = 3) +
+    labs(x = "Fetal slope (Fisher z per week)", y = "Preterm slope (Fisher z per week)") + theme_classic(base_size = 9)
+  fig4 <- ggpubr::ggarrange(pM, pD, ncol = 2, nrow = 1, labels = c("A", "B"))
+  show_fig("Fig4_GroupByPma", 9, 4.5, function() print(fig4))
 }
 
 sessionInfo()
