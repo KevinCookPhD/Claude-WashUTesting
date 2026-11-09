@@ -4139,7 +4139,8 @@ if (RUN_TWO_GROUP_INTERACTION) {
         c(unlist(s, use.names = FALSE), unname(s[[2]][1] - s[[3]][1]))                          # 12 values, then within minus between (|Coef|)
       }
       obs  <- all_stats(edge_dist)
-      perm <- replicate(n_permL, { p <- sample(length(nodesP)); all_stats(Dm[cbind(p[j1], p[j2])]) })
+      perm <- cached("sizePerm_v1", key = paste(data_key, "sizePerm", n_permL, sum(aB), sum(bS), sum(meanFC), sum(sdFC), sum(edge_dist), sum(sameH)),
+                     replicate(n_permL, { p <- sample(length(nodesP)); all_stats(Dm[cbind(p[j1], p[j2])]) }))      # slow: cached
       p_perm <- (1 + rowSums(abs(perm) >= abs(obs))) / (1 + n_permL)
       nn <- rep(sapply(subsL, sum), each = 4); dfn <- nn - 2 - rep(c(0, 1, 0, 0), 3)           # the partial correlation loses one df
       p_naive <- 2 * pt(-abs(obs[1:12] * sqrt(dfn / (1 - obs[1:12]^2))), dfn)
@@ -4252,12 +4253,14 @@ if (RUN_TWO_GROUP_INTERACTION) {
         specs <- list(`No control (|Coef| vs. distance)` = NULL, `Controlling for |motion coef|` = list(z_mot),
                       `Controlling for mean FC` = list(z_fc), `Controlling for |motion coef| and mean FC` = list(z_mot, z_fc))
         set.seed(2026); nP <- 5000
-        perm_nodes <- replicate(nP, sample(length(nodesR)), simplify = FALSE)
-        pc_tab <- do.call(rbind, lapply(names(subsL), function(g) do.call(rbind, lapply(names(specs), function(s) {
-          ix <- subsL[[g]]; obs <- pres(edge_dist, ix, specs[[s]])
-          pm <- sapply(perm_nodes, function(p) pres(DmR[cbind(p[r1], p[r2])], ix, specs[[s]]))
-          pv <- (1 + sum(abs(pm) >= abs(obs))) / (1 + nP)
-          data.frame(Edges = g, Control = s, rho = round(obs, 2), `Permutation p` = ifelse(pv <= 1.001 / (nP + 1), "<0.0002", fmt_p(pv)), check.names = FALSE) }))))
+        pc_tab <- cached("partialPerm_v1", key = paste(data_key, "partialPerm", nP, sum(y_e), sum(z_mot), sum(z_fc), sum(edge_dist), sum(sameH)), {      # slow: cached
+          perm_nodes <- replicate(nP, sample(length(nodesR)), simplify = FALSE)
+          do.call(rbind, lapply(names(subsL), function(g) do.call(rbind, lapply(names(specs), function(s) {
+            ix <- subsL[[g]]; obs <- pres(edge_dist, ix, specs[[s]])
+            pm <- sapply(perm_nodes, function(p) pres(DmR[cbind(p[r1], p[r2])], ix, specs[[s]]))
+            pv <- (1 + sum(abs(pm) >= abs(obs))) / (1 + nP)
+            data.frame(Edges = g, Control = s, rho = round(obs, 2), `Permutation p` = ifelse(pv <= 1.001 / (nP + 1), "<0.0002", fmt_p(pv)), check.names = FALSE) }))))
+        })
         print(pc_tab, row.names = FALSE)
         si_table(pc_tab, "two_group_interaction", "GroupByPma_PartialCorrelations")
       }
@@ -4272,7 +4275,8 @@ if (RUN_TWO_GROUP_INTERACTION) {
       dec_fun <- function(dist) unlist(lapply(subsQ, function(ix) c(cor(res_two$slope_fetal[ix], dist[ix], method = "spearman", use = "complete.obs"),
                                                                     cor(res_two$slope_preterm[ix], dist[ix], method = "spearman", use = "complete.obs"))))
       obsQ  <- dec_fun(edge_dist)
-      permQ <- replicate(n_permQ, { p <- sample(length(nodesQ)); dec_fun(DmQ[cbind(p[q1], p[q2])]) })
+      permQ <- cached("slopePerm_v1", key = paste(data_key, "slopePerm", n_permQ, sum(res_two$slope_fetal), sum(res_two$slope_preterm), sum(edge_dist), sum(sameH)),
+                      replicate(n_permQ, { p <- sample(length(nodesQ)); dec_fun(DmQ[cbind(p[q1], p[q2])]) }))   # slow: cached
       pQ    <- (1 + rowSums(abs(permQ) >= abs(obsQ))) / (1 + n_permQ)
       dec_tab <- data.frame(Edges = rep(names(subsQ), each = 2), Slope = rep(c("Fetal slope vs. distance", "Preterm slope vs. distance"), 3),
                             rho = round(unname(obsQ), 2), `Permutation p` = ifelse(pQ <= 1.001 / (n_permQ + 1), "<0.0002", fmt_p(pQ)), check.names = FALSE)
