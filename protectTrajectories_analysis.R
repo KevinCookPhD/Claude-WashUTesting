@@ -3976,6 +3976,24 @@ if (RUN_TWO_GROUP_INTERACTION) {
     r$`In the 1,404 primary edges` <- r$Connection %in% allConn[sigFetal]; r }
   si_table(sig_two(res_two),    "two_group_interaction", "GroupByPma_SignificantEdges_AllScans")      # every edge with a significant interaction (FDR p < .05)
   si_table(sig_two(res_two_ov), "two_group_interaction", "GroupByPma_SignificantEdges_SharedRange")
+  # Publication-style table (same layout as the post hoc table for the preterm groups): one row per edge with a significant PMA x cohort interaction,
+  # full region names, ROIs in lobe order, each group's PMA slope (Fisher z per week) and the interaction coefficient (preterm slope - fetal slope)
+  # with its p-value and FDR-adjusted p-value. Every row is FDR-significant by construction, so there are no asterisks.
+  int_table <- function(res, res_other, other_label) {
+    g  <- res[!is.na(res$int_pAdj) & res$int_pAdj < .05, ]
+    pp <- strsplit(g$Connection, "_", fixed = TRUE); r1 <- sapply(pp, `[`, 1); r2 <- sapply(pp, `[`, 2)
+    i1 <- match(r1, roi_levels); i2 <- match(r2, roi_levels)
+    o  <- order(pmin(i1, i2), pmax(i1, i2)); g <- g[o, ]; r1 <- r1[o]; r2 <- r2[o]               # lobe order, as in the Fig. 4 matrix
+    other <- res_other$Connection[!is.na(res_other$int_pAdj) & res_other$int_pAdj < .05]
+    out <- data.frame(`Region 1` = sapply(r1, full_name), `Region 2` = sapply(r2, full_name),
+                      `Slope over PMA, fetal` = fmt3(g$slope_fetal), `Slope over PMA, preterm` = fmt3(g$slope_preterm),
+                      `Coef (preterm - fetal)` = fmt3(g$int_b), p = fmt_p(g$int_p), `FDR p` = fmt_p(g$int_pAdj),
+                      `Among the 1,404 primary edges` = ifelse(g$Connection %in% allConn[sigFetal], "Yes", "No"),
+                      check.names = FALSE, row.names = NULL, stringsAsFactors = FALSE)
+    out[[other_label]] <- ifelse(g$Connection %in% other, "Yes", "No"); out
+  }
+  si_table(int_table(res_two, res_two_ov, "Significant in the shared PMA range"), "two_group_interaction", "GroupByPma_InteractionTable")
+  si_table(int_table(res_two_ov, res_two, "Significant in the all-scans analysis"), "two_group_interaction", "GroupByPma_InteractionTable_SharedRange")
   si_table(res_two, "two_group_interaction", "GroupByPma_AllEdges_AllScans")
   si_table(res_two_ov, "two_group_interaction", "GroupByPma_AllEdges_SharedRange")
   # Figure: A. interaction coefficient vs. significance for every edge; B. each edge's fetal vs. preterm slope
