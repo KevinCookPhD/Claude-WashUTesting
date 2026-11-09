@@ -4189,7 +4189,62 @@ if (RUN_TWO_GROUP_INTERACTION) {
       print(mot_tab, row.names = FALSE)
       si_table(mot_tab, "two_group_interaction", "GroupByPma_MotionCheck")
       si_table(res_m, "two_group_interaction", "GroupByPma_MotionCheck_AllEdges")
+
+      # (1) Is motion tied to age within each cohort? meanFD vs. PMA at scan (Pearson and Spearman, scan level; infants contribute several scans, so descriptive).
+      fd_age <- do.call(rbind, lapply(split(si_m, si_m$scanType), function(g) { ct <- cor.test(g$meanFD, g$ScanPMA)
+        data.frame(Group = g$scanType[1], Scans = nrow(g), `meanFD (mm), mean (SD)` = sprintf("%.3f (%.3f)", mean(g$meanFD), sd(g$meanFD)),
+                   `r with PMA` = round(unname(ct$estimate), 2), p = fmt_p(ct$p.value), `Spearman rho with PMA` = round(cor(g$meanFD, g$ScanPMA, method = "spearman"), 2),
+                   check.names = FALSE) }))
+      rownames(fd_age) <- NULL; print(fd_age, row.names = FALSE); si_table(fd_age, "two_group_interaction", "GroupByPma_MotionVsPma")
+
+      # (2) Does the result depend on assuming one motion effect for both groups and all ages? Variant A adds motion x group; variant B adds motion x group
+      #     and motion x PMA. The interaction coefficient is still the preterm - fetal slope difference.
+      motion_edge2 <- function(cn, data) {
+        nm <- c("intA_b", "intA_p", "fdgrpA_b", "fdgrpA_p", "intB_b", "intB_p", "fdgrpB_p", "fdageB_p")
+        d <- data; d$FC <- as.numeric(goodFCData[d$longID, cn])
+        tryCatch({
+          mA <- lme(FC ~ PMAc + scanner + scanType + PMAc:scanType + meanFD_c + meanFD_c:scanType, random = ~ 1 | shortID, data = d, control = ctrl)
+          mB <- lme(FC ~ PMAc + scanner + scanType + PMAc:scanType + meanFD_c + meanFD_c:scanType + meanFD_c:PMAc, random = ~ 1 | shortID, data = d, control = ctrl)
+          tA <- summary(mA)$tTable; tB <- summary(mB)$tTable
+          gA <- grep("meanFD_c.*scanType|scanType.*meanFD_c", rownames(tA)); gB <- grep("meanFD_c.*scanType|scanType.*meanFD_c", rownames(tB))
+          aB_ <- grep("PMAc.*meanFD_c|meanFD_c.*PMAc", rownames(tB))
+          setNames(c(tA["PMAc:scanTypePreterm", "Value"], tA["PMAc:scanTypePreterm", "p-value"], tA[gA, "Value"], tA[gA, "p-value"],
+                     tB["PMAc:scanTypePreterm", "Value"], tB["PMAc:scanTypePreterm", "p-value"], tB[gB, "p-value"], tB[aB_, "p-value"]), nm)
+        }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
+      }
+      res_m2 <- cached("twoGroupMotion2_v1", key = paste(data_key, "twoGroupMotion2", table_key(si_m)),
+                       data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, motion_edge2, data = si_m)), row.names = NULL))
+      stopifnot(identical(res_m2$Connection, res_two$Connection))
+      var_row <- function(label, b, p, extra = NULL) { s <- p.adjust(p, "fdr") < .05; s[is.na(s)] <- FALSE
+        data.frame(Model = label, `Significant interactions` = sum(s), `Also in the original 346` = sum(s & sigL),
+                   `r with original coef` = round(cor(b, res_two$int_b, use = "complete.obs"), 3),
+                   `|Coef| vs. distance rho (all / within / between)` = paste(sprintf("%.2f", sapply(subsL, function(ix) rho(abs(b), edge_dist, ix))), collapse = " / "),
+                   check.names = FALSE) }
+      var_tab <- rbind(var_row("No motion covariate (original)", res_two$int_b, res_two$int_p),
+                       var_row("+ meanFD (within group)", res_m$int1_b, res_m$int1_p),
+                       var_row("+ meanFD + meanFD x group", res_m2$intA_b, res_m2$intA_p),
+                       var_row("+ meanFD + meanFD x group + meanFD x PMA", res_m2$intB_b, res_m2$intB_p))
+      var_tab$`Motion x group terms FDR p < .05` <- c(NA, NA, sum(p.adjust(res_m2$fdgrpA_p, "fdr") < .05, na.rm = TRUE), sum(p.adjust(res_m2$fdgrpB_p, "fdr") < .05, na.rm = TRUE))
+      var_tab$`Motion x PMA terms FDR p < .05` <- c(NA, NA, NA, sum(p.adjust(res_m2$fdageB_p, "fdr") < .05, na.rm = TRUE))
+      print(var_tab, row.names = FALSE); si_table(var_tab, "two_group_interaction", "GroupByPma_MotionVariants")
+      si_table(res_m2, "two_group_interaction", "GroupByPma_MotionVariants_AllEdges")
     } else message("Motion check skipped: scan_fd (motion summary) not found.")
+
+    # Which group produces the distance pattern? Each group's own PMA slope (fetal and preterm, Fisher z per week) against edge distance, all 3,003 edges.
+    # Opposite signs mean the pattern is a divergence (fetal falling and preterm rising more on short edges). Permutation p: ROI labels shuffled as above.
+    if (exists("Dmat")) {
+      nodesQ <- sort(unique(c(cmL$ROI1, cmL$ROI2))); q1 <- match(cmL$ROI1, nodesQ); q2 <- match(cmL$ROI2, nodesQ); DmQ <- Dmat[nodesQ, nodesQ]
+      set.seed(2026); n_permQ <- 5000
+      subsQ <- list(`All edges` = rep(TRUE, nrow(cmL)), `Within hemisphere` = sameH, `Between hemispheres` = !sameH)
+      dec_fun <- function(dist) unlist(lapply(subsQ, function(ix) c(cor(res_two$slope_fetal[ix], dist[ix], method = "spearman", use = "complete.obs"),
+                                                                    cor(res_two$slope_preterm[ix], dist[ix], method = "spearman", use = "complete.obs"))))
+      obsQ  <- dec_fun(edge_dist)
+      permQ <- replicate(n_permQ, { p <- sample(length(nodesQ)); dec_fun(DmQ[cbind(p[q1], p[q2])]) })
+      pQ    <- (1 + rowSums(abs(permQ) >= abs(obsQ))) / (1 + n_permQ)
+      dec_tab <- data.frame(Edges = rep(names(subsQ), each = 2), Slope = rep(c("Fetal slope vs. distance", "Preterm slope vs. distance"), 3),
+                            rho = round(unname(obsQ), 2), `Permutation p` = ifelse(pQ <= 1.001 / (n_permQ + 1), "<0.0002", fmt_p(pQ)), check.names = FALSE)
+      print(dec_tab, row.names = FALSE); si_table(dec_tab, "two_group_interaction", "GroupByPma_SlopesVsDistance")
+    }
   } else message("Section 16 lobe/distance summary skipped: run section 9i first (it defines edge_dist).")
 }
 
