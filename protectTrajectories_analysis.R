@@ -223,7 +223,16 @@ trim_white <- function(im, m = 6, thr = .99) {
 }
 
 # p-value formatting for tables: "<.001" or ".034"
-fmt_p <- function(p) ifelse(p < .001, "<.001", sub("^0", "", sprintf("%.3f", p)))
+# p-values in tables: two significant figures, and "<0.0001" below that (journal format); NA stays NA
+fmt_p <- function(p) ifelse(is.na(p), NA_character_, ifelse(p < 0.0001, "<0.0001", formatC(signif(p, 2), format = "fg", digits = 2, flag = "#")))
+# TRUE for a numeric column of p-values, judged by its name ("p", "pAdj", "FDR p", "int_p", "joint_pAdj", "Holm p", ...) and range [0, 1];
+# counts such as "FDR p < .05" are excluded.
+is_pcol <- function(nm, x) {
+  t <- trimws(nm)
+  is.numeric(x) && !grepl("<|>|%|edges|scans|count|chance", t, ignore.case = TRUE) &&
+    (grepl("(^|[ _:(.])p(adj|\\.adj| value|-value)?\\)?$", t, ignore.case = TRUE, perl = TRUE) || grepl("(_|\\.)p(adj)?$|p\\.adj$|padj$", t, ignore.case = TRUE, perl = TRUE)) &&
+    all(x[!is.na(x)] >= 0 & x[!is.na(x)] <= 1)
+}
 # 3-decimal formatting that never prints a negative zero ("-0.000" -> "0.000")
 fmt3 <- function(x) sub("^-(0\\.000)$", "\\1", sprintf("%.3f", x))
 
@@ -242,6 +251,7 @@ SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03"
 si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
+  for (j in seq_along(df)) if (is_pcol(names(df)[j], df[[j]])) df[[j]] <- fmt_p(df[[j]])          # p-value columns: 2 significant figures, <0.0001
   if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", si_name(name), ".csv")), row.names = FALSE)
   invisible(df)
 }
