@@ -42,7 +42,8 @@
 #  12  Four-group model (Fetal, EPT, VPT, MPT)
 #  13  Group comparisons for the Table 1 variables
 #  14  Preterm scans re-run through the fetal pipeline (control)
-#  15  Fetal vs. preterm with each scan's global level removed, session info
+#  15  Fetal vs. preterm with each scan's global level removed
+#  16  Fetal vs. preterm x PMA interaction (two groups), session info
 #
 # NOTES FROM THE ORIGINAL SCRIPT
 #   * onesie_1z065_03 is removed from the connectivity data (extreme outlier).
@@ -81,6 +82,7 @@ RUN_QC_COVARIATE_CONTROL  <- TRUE   # section 9e: finalVol and motion (framewise
 RUN_SEX_ANALYSES          <- TRUE   # section 11: sex differences (fetal vs. preterm and within preterm; exploratory)
 RUN_FETAL_PIPELINE_CONTROL <- TRUE  # section 14: preterm scans re-run through the fetal pipeline (data/preemieFetalPipeline)
 RUN_GLOBAL_LEVEL_CONTROL  <- TRUE   # section 15: fetal vs. preterm after removing each scan's global connectivity level
+RUN_TWO_GROUP_INTERACTION  <- TRUE   # section 16: fetal vs. preterm x PMA interaction (two groups)
 RUN_TABLE1_TESTS          <- TRUE   # section 13: group comparisons for the Table 1 variables (preterm vs. fetal; EPT / VPT / MPT)
 RUN_FOUR_GROUP            <- TRUE   # section 12: four-group model (Fetal, EPT, VPT, MPT)
 RUN_EQUAL_VOLUME_CONTROL <- TRUE   # section 9k: fetal vs. preterm with every scan cut to the same number of volumes (needs data/rawTS or data/rawRS)
@@ -236,7 +238,7 @@ SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03"
            clinical = "SI05", continuous_GA = "SI06", gt32 = "SI07", within_between = "SI08",
            volumes = "SI09", motion_covariate = "SI10", age_matched = "SI11", postnatal = "SI12",
            unharmonized = "SI13", distance = "SI14", motion_followup = "SI15", equal_volume = "SI16",
-           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20", fetal_pipeline = "SI21", global_level = "SI22")
+           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20", fetal_pipeline = "SI21", global_level = "SI22", two_group_interaction = "SI23")
 si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
@@ -1834,7 +1836,7 @@ si_posthoc_counts
 #      SI05 clinical cutoffs (9a)   SI06 continuous birth GA (9b)     SI07 scans > 32 wk (9c)    SI08 within/between (9d)
 #      SI09 usable volumes (9e A-C) SI10 motion as covariate (9e D-F) SI11 age-matched (9f)      SI12 postnatal age (9g)
 #      SI13 unharmonized (9h)       SI14 distance (9i)                SI15 motion follow-up (9j) SI16 equal volume (9k)
-#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)   SI21 fetal-pipeline control (14)   SI22 global level removed (15)
+#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)   SI21 fetal-pipeline control (14)   SI22 global level removed (15)   SI23 two-group PMA interaction (16)
 #
 #    OVERVIEW (what each check tests and what it showed; details above each block)
 #      9a  clinical cutoffs ........ 9 of the edges FDR-significant; 8 of the 16 hold (cutoff-dependent set)
@@ -3781,6 +3783,84 @@ if (RUN_GLOBAL_LEVEL_CONTROL) {
     scale_x_discrete(labels = function(x) gsub(", ", ",\n", x)) + scale_y_continuous(limits = c(0, 105), expand = c(0, 0)) +
     labs(x = NULL, y = "Primary edges still FDR-significant\nwith the same sign (%)") + si_theme()
   si_fetal("global_level", "globalLevel", res_gl, n_gl, extra = p15b)
+}
+
+###############################################################################
+# 16. FETAL vs. PRETERM x PMA INTERACTION (two groups)
+#     The primary fetal-vs-preterm model (section 4) forces one PMA slope for both groups. Here the slope is allowed to differ:
+#       FC ~ scanner + PMA + group + PMA:group,  random intercept per infant,  for each of the 3,003 edges (PMA centered at 36 wk).
+#     The interaction coefficient is (preterm slope - fetal slope) in Fisher z per week; its Wald t-test has 1 df. FDR is applied across edges.
+#     Also reported: each group's slope and the preterm - fetal difference at 30, 34 and 38 wk. Because the group coefficient is
+#     only meaningful at a given age once there is an interaction, the differences are given at those ages.
+#     Two runs: all scans, and only scans in the PMA range both groups share (so slopes are compared where both have data).
+#     CAUTION: fetal scans are all 1.5T and cover younger ages than most preterm scans; the fetal slope rests on a different
+#     age range than the preterm slope.
+#     Output number: "two_group_interaction" in SI_ID.
+###############################################################################
+
+if (RUN_TWO_GROUP_INTERACTION) {
+  si_2 <- scanInfo; si_2$PMAc <- si_2$ScanPMA - 36
+  ages2 <- c(30, 34, 38)
+  pr2 <- lapply(split(scanInfo$ScanPMA, scanInfo$scanType), range)
+  lo2 <- max(sapply(pr2, `[`, 1)); hi2 <- min(sapply(pr2, `[`, 2))
+  si_2ov <- droplevels(si_2[si_2$ScanPMA >= lo2 & si_2$ScanPMA <= hi2, ])
+  print(c(overlap_lo = lo2, overlap_hi = hi2)); print(table(si_2ov$scanType))
+
+  two_edge <- function(cn, data, ages) {
+    nm <- c("int_b", "int_se", "int_p", "slope_fetal", "slope_fetal_se", "slope_preterm", "slope_preterm_se",
+            paste0("diff", ages, "_b"), paste0("diff", ages, "_se"))
+    d <- data; d$FC <- as.numeric(goodFCData[d$longID, cn])
+    tryCatch({
+      m <- lme(FC ~ PMAc + scanner + scanType + PMAc:scanType, random = ~ 1 | shortID, data = d, control = ctrl)
+      b <- nlme::fixef(m); V <- vcov(m); tt <- summary(m)$tTable
+      w <- function(a) { x <- setNames(numeric(length(b)), names(b)); x[names(a)] <- a; x }
+      ci <- function(x) c(sum(x * b), sqrt(drop(t(x) %*% V %*% x)))
+      sf <- ci(w(c(PMAc = 1))); sp <- ci(w(c(PMAc = 1, `PMAc:scanTypePreterm` = 1)))
+      dd <- lapply(ages, function(a) ci(w(c(scanTypePreterm = 1, `PMAc:scanTypePreterm` = a - 36))))
+      setNames(c(tt["PMAc:scanTypePreterm", "Value"], tt["PMAc:scanTypePreterm", "Std.Error"], tt["PMAc:scanTypePreterm", "p-value"],
+                 sf, sp, sapply(dd, `[`, 1), sapply(dd, `[`, 2)), nm)
+    }, error = function(e) setNames(rep(NA_real_, length(nm)), nm))
+  }
+  run_two <- function(d, tag) {
+    res <- cached(paste0("twoGroupInt_", tag), key = paste(data_key, "twoGroupInt", tag, table_key(d)),
+                  data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, two_edge, data = d, ages = ages2)), row.names = NULL))
+    res$int_pAdj <- p.adjust(res$int_p, "fdr"); res
+  }
+  res_two    <- run_two(si_2,   "all")
+  res_two_ov <- run_two(si_2ov, "overlap")
+
+  two_sum <- function(res, d, label) {
+    s <- !is.na(res$int_pAdj) & res$int_pAdj < .05
+    data.frame(Data = label, Scans = nrow(d), `Fetal scans` = sum(d$scanType == "Fetal"), `Preterm scans` = sum(d$scanType == "Preterm"),
+               `Raw p < .05` = sum(res$int_p < .05, na.rm = TRUE), `FDR p < .05` = sum(s),
+               `Preterm slope steeper` = sum(s & res$int_b > 0), `Fetal slope steeper` = sum(s & res$int_b < 0),
+               `Of the 1,404 primary edges, significant` = sum(s & sigFetal),
+               `Median fetal slope, primary edges` = round(median(res$slope_fetal[sigFetal], na.rm = TRUE), 4),
+               `Median preterm slope, primary edges` = round(median(res$slope_preterm[sigFetal], na.rm = TRUE), 4),
+               `Median preterm - fetal at 30 wk, primary edges` = round(median(res$diff30_b[sigFetal], na.rm = TRUE), 3),
+               `Median preterm - fetal at 34 wk, primary edges` = round(median(res$diff34_b[sigFetal], na.rm = TRUE), 3),
+               `Median preterm - fetal at 38 wk, primary edges` = round(median(res$diff38_b[sigFetal], na.rm = TRUE), 3), check.names = FALSE)
+  }
+  two_tab <- rbind(two_sum(res_two, si_2, "All scans"), two_sum(res_two_ov, si_2ov, sprintf("Shared PMA range (%.1f-%.1f wk)", lo2, hi2)))
+  print(t(two_tab), quote = FALSE)
+  top_two <- res_two[order(res_two$int_p), c("Connection", "int_b", "int_se", "int_p", "int_pAdj", "slope_fetal", "slope_preterm")][1:20, ]
+  top_two[-1] <- lapply(top_two[-1], signif, 3); print(top_two, row.names = FALSE)
+
+  si_table(two_tab, "two_group_interaction", "GroupByPma_Summary")
+  si_table(top_two, "two_group_interaction", "GroupByPma_TopEdges")
+  si_table(res_two, "two_group_interaction", "GroupByPma_AllEdges_AllScans")
+  si_table(res_two_ov, "two_group_interaction", "GroupByPma_AllEdges_SharedRange")
+  # Figure: A. interaction coefficient vs. significance for every edge; B. each edge's fetal vs. preterm slope
+  d_v <- data.frame(b = res_two$int_b, y = -log10(res_two$int_p), sig = factor(!is.na(res_two$int_pAdj) & res_two$int_pAdj < .05, c(TRUE, FALSE), c("FDR p < .05", "Not significant")))
+  p16a <- ggplot(d_v, aes(b, y, color = sig)) + geom_vline(xintercept = 0, linewidth = 0.3) + geom_point(size = 0.5, alpha = 0.5, stroke = 0) +
+    scale_color_manual(values = c("FDR p < .05" = col_preterm, "Not significant" = "#8a8a8a"), name = NULL) +
+    labs(x = "Preterm slope - fetal slope (Fisher z per week)", y = "-log10 p") + si_theme()
+  d_s <- data.frame(f = res_two$slope_fetal, p = res_two$slope_preterm, sig = d_v$sig)
+  p16b <- ggplot(d_s, aes(f, p, color = sig)) + geom_abline(linetype = "dashed", linewidth = 0.3) + geom_point(size = 0.5, alpha = 0.5, stroke = 0) +
+    scale_color_manual(values = c("FDR p < .05" = col_preterm, "Not significant" = "#8a8a8a"), name = NULL) +
+    labs(x = "Fetal slope (Fisher z per week)", y = "Preterm slope (Fisher z per week)") + si_theme()
+  si_fig("two_group_interaction", "GroupByPma", 7.6, 3.6, function()
+    print(ggpubr::ggarrange(p16a, p16b, nrow = 1, labels = c("A", "B"), common.legend = TRUE, legend = "bottom")))
 }
 
 sessionInfo()

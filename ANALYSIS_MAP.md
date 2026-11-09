@@ -20,6 +20,7 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 | SI20 | Table 1 group comparisons | 13 |
 | SI21 | preterm scans re-run through the fetal pipeline | 14 |
 | SI22 | global level removed | 15 |
+| SI23 | fetal vs preterm x PMA interaction (two groups) | 16 |
 
 ## Main text
 
@@ -64,6 +65,7 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 | All four groups in one model | 12 | SI19 | each preterm group differs from fetal on 965 to 1,178 edges; EPT, VPT, MPT do not differ from each other in average level |
 | Are the groups comparable on Table 1 variables? | 13 | SI20 | no sex difference; clinical severity falls steeply from EPT to MPT; MPT scanned later with more volumes, slightly lower FD |
 | Does the processing pipeline explain the fetal-vs-preterm difference? (six preterm scans run through the fetal pipeline) | 14 (a to g) | SI21 | fetal pipeline lowers overall connectivity (mean about -0.10; -0.14 at 1.5T) and gives a different edge pattern per scan (r 0.14 to 0.51, 19 to 74% of what reliability allows); the shift is not due to censoring, global signal, band-pass range or drift; the edge differences are not consistent across scans (mean r 0.005); the cause of the level shift is unresolved |
+| Does the fetal-vs-preterm difference change with age (two-group PMA x group interaction)? | 16 | SI23 | not yet run; see the table `SI23_Table_GroupByPma_Summary` after the first run |
 | Is the group difference just an overall-level difference? | 15 | SI22 | preterm overall level is higher (0.050 [0.036, 0.063]); after removing each scan's level, 644 of 1,118 preterm > fetal edges (58%) and all 286 fetal > preterm edges remain significant |
 
 ## Section 14 sub-tests (all about the six preterm scans)
