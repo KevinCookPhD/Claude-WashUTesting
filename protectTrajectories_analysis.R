@@ -4112,6 +4112,40 @@ if (RUN_TWO_GROUP_INTERACTION) {
     si_table(pair_tab,   "two_group_interaction", "GroupByPma_LobePairs")
     si_table(lm_tab,     "two_group_interaction", "GroupByPma_DistanceModel")
     si_table(size_tab,   "two_group_interaction", "GroupByPma_SizeVsDistance")
+
+    # P-values for those correlations. "Naive" treats the edges as independent (they are not: edges share ROIs). The permutation p shuffles the ROI labels
+    # of the distance matrix (as in 9i; 5,000 permutations, so the smallest possible p is 0.0002) and is the one to report. Last row: within- minus
+    # between-hemisphere rho for |coef| vs. distance, by the same permutation (cross-hemisphere edges cover a narrower, longer distance range, which
+    # alone weakens their rho; this is not a matched-distance comparison).
+    if (exists("Dmat")) {
+      set.seed(2026); n_permL <- 5000
+      nodesP <- sort(unique(c(cmL$ROI1, cmL$ROI2))); j1 <- match(cmL$ROI1, nodesP); j2 <- match(cmL$ROI2, nodesP)
+      Dm <- Dmat[nodesP, nodesP]
+      stopifnot(isTRUE(all.equal(unname(Dm[cbind(j1, j2)]), unname(edge_dist))))               # the rebuilt distances match edge_dist
+      subsL <- list(`All edges` = rep(TRUE, nrow(cmL)), `Within hemisphere` = sameH, `Between hemispheres` = !sameH)
+      meas  <- c("|Coef| vs. distance", "Partial, controlling for mean FC", "|Coef| / SD of FC vs. distance", "Signed coef vs. distance")
+      aN <- aB / sdFC; bS <- res_two$int_b
+      stat_fun <- function(dist, idx) {                                                         # Spearman rho of each measure with distance (ranks within the subset)
+        d <- rank(dist[idx]); y <- rank(aB[idx]); m <- rank(meanFC[idx])
+        rdy <- cor(d, y); rdm <- cor(d, m); rym <- cor(y, m)
+        setNames(c(rdy, (rdy - rdm * rym) / sqrt((1 - rdm^2) * (1 - rym^2)), cor(d, rank(aN[idx])), cor(d, rank(bS[idx]))), meas)
+      }
+      all_stats <- function(dist) {
+        s <- lapply(subsL, function(ix) stat_fun(dist, ix))
+        c(unlist(s, use.names = FALSE), unname(s[[2]][1] - s[[3]][1]))                          # 12 values, then within minus between (|Coef|)
+      }
+      obs  <- all_stats(edge_dist)
+      perm <- replicate(n_permL, { p <- sample(length(nodesP)); all_stats(Dm[cbind(p[j1], p[j2])]) })
+      p_perm <- (1 + rowSums(abs(perm) >= abs(obs))) / (1 + n_permL)
+      nn <- rep(sapply(subsL, sum), each = 4); dfn <- nn - 2 - rep(c(0, 1, 0, 0), 3)           # the partial correlation loses one df
+      p_naive <- 2 * pt(-abs(obs[1:12] * sqrt(dfn / (1 - obs[1:12]^2))), dfn)
+      fmt_pp  <- function(p) ifelse(p <= 1.001 / (n_permL + 1), "<0.0002", fmt_p(p))
+      rho_tab <- data.frame(Edges = c(rep(names(subsL), each = 4), "Within minus between hemispheres"),
+                            Measure = c(rep(meas, 3), meas[1]), rho = round(obs, 2),
+                            `Naive p` = c(fmt_p(p_naive), "n/a"), `Permutation p` = fmt_pp(p_perm), check.names = FALSE)
+      print(rho_tab, row.names = FALSE)
+      si_table(rho_tab, "two_group_interaction", "GroupByPma_SizeVsDistance_Pvalues")
+    } else message("Permutation p-values skipped: Dmat (section 9i) not found.")
   } else message("Section 16 lobe/distance summary skipped: run section 9i first (it defines edge_dist).")
 }
 
