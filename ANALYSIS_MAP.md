@@ -20,7 +20,7 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 | SI20 | Table 1 group comparisons | 13 |
 | SI21 | preterm scans re-run through the fetal pipeline | 14 |
 | SI22 | global level removed | 15 |
-| SI23 | fetal vs preterm x PMA interaction (two groups): interaction results, group difference by age | 16 |
+| SI23 | fetal vs preterm x PMA interaction (two groups): interaction results, group difference by age, lobe/hemisphere/distance summary, motion checks (see "Section 16 output files" below) | 16 |
 | SI24 | sensitivity checks for the primary additive model: joint 2-df test, splines | 16 |
 
 ## Main text
@@ -67,8 +67,28 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 | Are the groups comparable on Table 1 variables? | 13 | SI20 | no sex difference; clinical severity falls steeply from EPT to MPT; MPT scanned later with more volumes, slightly lower FD |
 | Does the processing pipeline explain the fetal-vs-preterm difference? (six preterm scans run through the fetal pipeline) | 14 (a to g) | SI21 | fetal pipeline lowers overall connectivity (mean about -0.10; -0.14 at 1.5T) and gives a different edge pattern per scan (r 0.14 to 0.51, 19 to 74% of what reliability allows); the shift is not due to censoring, global signal, band-pass range or drift; the edge differences are not consistent across scans (mean r 0.005); the cause of the level shift is unresolved |
 | Does the fetal-vs-preterm difference change with age (two-group PMA x group interaction)? | 16 | `Fig4_GroupByPma` (candidate main-text figure); SI23 tables and figure; SI24 sensitivity checks | 346 edges with an interaction (63 in the shared PMA range), 92% of the 1,404 retained in the joint test (SI24); of the 346, 318 have a falling fetal and rising preterm slope |
-| Where are the PMA x cohort interactions (lobe, hemisphere, distance)? | 16 (end; needs 9i run first for `edge_dist`) | SI23 tables `LobeHemisphereEnrichment`, `LobePairs`, `DistanceModel`, `SizeVsDistance` | interactions concentrate in short-range, within-lobe, same-hemisphere edges (temporal-temporal excepted); odds of a significant interaction fall about 74% per SD of distance; \|coefficient\| vs distance rho = -0.39 (-0.50 within, -0.26 between hemispheres); the size_tab columns give the partial rho (controlling mean FC) and \|coef\|/SD checks |
+| Where are the PMA x cohort interactions (lobe, hemisphere)? | 16 (end; the distance parts need 9i run first for `edge_dist`, `Dmat`) | SI23 `LobeHemisphereEnrichment`, `LobePairs`, `DistanceModel` | within-lobe edges 25% vs 7% significant (OR 4.7); frontal-frontal, parietal-parietal, occipital-occipital 27 to 29%, temporal-temporal at baseline (12%), frontal-occipital 0.5%; in a joint model distance dominates (OR 0.26 per SD), within-lobe (1.6) and same-hemisphere (1.5) remain independent |
+| Is the interaction larger for short connections? | 16 (end) | SI23 `SizeVsDistance`, `SizeVsDistance_Pvalues` | \|coefficient\| vs distance rho = -0.39 (-0.50 within, -0.26 between hemispheres), permutation p < 0.0002; not explained by edge strength (partial rho -0.34, \|coef\|/SD -0.36); within minus between hemisphere is -0.24 but is not a matched-distance test |
+| Which group produces the distance pattern? | 16 (end) | SI23 `SlopesVsDistance` | both: fetal slopes rise toward zero with distance (rho +0.25), preterm slopes fall toward zero (rho -0.40); between hemispheres the fetal side is near zero (+0.08) |
+| Does head motion explain the distance pattern? | 16 (motion check) | SI23 `MotionCheck`, `MotionVsPma`, `MotionVariants`, `PartialCorrelations` (+ `_AllEdges` files) | no: meanFD (centered within cohort) as a covariate changes the interaction coefficients by a median 0.0003 (r = 0.9995; 351 vs 346 significant) and leaves the distance rho unchanged (-0.39); with motion x group and motion x PMA terms rho is -0.38; 199 motion x group terms are significant; edge-wise motion effects are unrelated to the interaction (\|rho\| <= 0.09); partial correlation controlling for each edge's motion sensitivity is unchanged (-0.39). Raw (uncentered) meanFD gives identical interaction results because group is in the model. Group-level motion cannot be adjusted for (meanFD vs group r = -0.93); fetal meanFD is unrelated to PMA (r 0.03), preterm falls with PMA (r -0.29) |
 | Is the group difference just an overall-level difference? | 15 | SI22 | preterm overall level is higher (0.050 [0.036, 0.063]); after removing each scan's level, 644 of 1,118 preterm > fetal edges (58%) and all 286 fetal > preterm edges remain significant |
+
+## Section 16 output files (all `SI23_Table_GroupByPma_<name>.csv` unless noted; SI24 files are `SI24_Table_...`)
+
+| Name | Contents |
+|---|---|
+| `Summary`, `GroupDifferenceByAge` | counts of significant interactions (all scans, shared range) and the preterm - fetal difference at 30, 33, 36, 38 wk |
+| `InteractionThenGroupEffect` | hierarchical summary: interaction first, then the group main effect among edges without one (1,166 of 2,657, all scans) |
+| `TopEdges`, `SignificantEdges_AllScans`, `SignificantEdges_SharedRange` | the strongest 20 edges and every significant edge |
+| `InteractionTable`, `InteractionTable_SharedRange` | publication-style table (full region names, slopes, coefficient, p, FDR p) |
+| `AllEdges_AllScans`, `AllEdges_SharedRange` | edge-wise results for all 3,003 edges (data files, numeric p-values) |
+| `JointTest_Summary`, `SplineSensitivity`, `SplineSensitivity_AllEdges` (SI24) | joint 2-df test (92% of the 1,404 retained) and the spline sensitivity check |
+| `LobeHemisphereEnrichment`, `LobePairs`, `DistanceModel` | where the interactions fall: lobe, hemisphere, distance |
+| `SizeVsDistance`, `SizeVsDistance_Pvalues`, `SlopesVsDistance`, `PartialCorrelations` | interaction size vs distance, with normalization checks, permutation p-values and partial correlations |
+| `MotionCheck`, `MotionCheck_AllEdges`, `MotionVsPma`, `MotionVariants`, `MotionVariants_AllEdges` | motion checks |
+| figures | `Fig4_GroupByPma` (main-text candidate: A = lobe-ordered matrix of slope differences, B = fetal vs preterm slope per edge), `SI23_Fig_GroupByPma` |
+
+Slow steps (the interaction, spline and motion models, and the three permutation analyses) are cached; set `USE_CACHE <- FALSE` in section 0 to recompute. Only the distance-based outputs need section 9i run first.
 
 ## Section 14 sub-tests (all about the six preterm scans)
 
