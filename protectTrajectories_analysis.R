@@ -4054,6 +4054,65 @@ if (RUN_TWO_GROUP_INTERACTION) {
     labs(x = "Fetal Connectivity Change (per week)", y = "Preterm Connectivity Change (per week)") + theme_classic(base_size = 9)
   fig4 <- ggpubr::ggarrange(pM, pD, ncol = 2, nrow = 1, labels = c("A", "B"))
   show_fig("Fig4_GroupByPma", 9, 4.5, function() print(fig4))
+
+  # ---- Where the interactions are: lobe, hemisphere and distance (descriptive; edges share ROIs, so p-values are optimistic) ----
+  # (1) enrichment of significant interactions within vs. between lobes, within vs. between hemispheres (Fisher test, odds ratios);
+  # (2) the same by lobe pair; (3) a logistic model of "significant" on within-lobe + same-hemisphere + distance (per SD);
+  # (4) is the interaction SIZE (|coefficient|) larger for short connections? Spearman with distance, overall and by hemisphere class, and
+  #     the normalized checks: short edges are stronger, so their slopes could be bigger only because they have more signal. The check
+  #     is (a) the partial Spearman correlation controlling for each edge's mean FC, and (b) |coefficient| divided by the edge's SD of FC across scans.
+  # Distances are the section 9i edge distances (template nearest the median scan PMA); run 9i first (RUN_DISTANCE_CONTROL).
+  if (exists("edge_dist")) {
+    cmL <- columnMembershipCortOnly; stopifnot(identical(res_two$Connection, cmL$Connection), length(edge_dist) == nrow(cmL))
+    sigL <- !is.na(res_two$int_pAdj) & res_two$int_pAdj < .05
+    dvgL <- sigL & res_two$slope_fetal < 0 & res_two$slope_preterm > 0                       # fetal falling, preterm rising
+    withinL <- cmL$Lobe1 == cmL$Lobe2; sameH <- sub(".*-", "", cmL$ROI1) == sub(".*-", "", cmL$ROI2)
+    pairL <- paste(pmin(cmL$Lobe1, cmL$Lobe2), pmax(cmL$Lobe1, cmL$Lobe2), sep = "-")
+    enrich_row <- function(flag, set, label) {                                                # is `set` over-represented among `flag` edges?
+      t <- matrix(c(sum(set[flag]), sum(!set[flag]), sum(set[!flag]), sum(!set[!flag])), 2); f <- fisher.test(t)
+      data.frame(Test = label, `Significant in group` = sprintf("%d/%d (%.0f%%)", t[1, 1], sum(flag), 100 * t[1, 1] / sum(flag)),
+                 `Significant in rest` = sprintf("%d/%d (%.0f%%)", t[1, 2], sum(!flag), 100 * t[1, 2] / sum(!flag)),
+                 `Odds ratio` = round(unname(f$estimate), 2), p = fmt_p(f$p.value), check.names = FALSE)
+    }
+    enrich_tab <- rbind(enrich_row(withinL, sigL, "Within-lobe vs. between-lobe, all interactions"),
+                        enrich_row(withinL, dvgL, "Within-lobe vs. between-lobe, fetal falling and preterm rising"),
+                        enrich_row(sameH, sigL, "Same-hemisphere vs. cross-hemisphere"),
+                        enrich_row(withinL & sameH, sigL, "Within-lobe and same-hemisphere vs. all other edges"))
+    print(enrich_tab, row.names = FALSE)
+    pair_tab <- do.call(rbind, lapply(split(seq_len(nrow(cmL)), pairL), function(i) {
+      f <- fisher.test(matrix(c(sum(sigL[i]), sum(!sigL[i]), sum(sigL[-i]), sum(!sigL[-i])), 2))
+      data.frame(`Lobe pair` = pairL[i[1]], Edges = length(i), Significant = sum(sigL[i]), `Percent significant` = round(100 * mean(sigL[i]), 1),
+                 `Fetal falling, preterm rising` = sum(dvgL[i]), `Odds ratio` = round(unname(f$estimate), 2), p = f$p.value, check.names = FALSE) }))
+    pair_tab$`FDR p` <- fmt_p(p.adjust(pair_tab$p, "fdr")); pair_tab$p <- fmt_p(pair_tab$p)
+    pair_tab <- pair_tab[order(-pair_tab$`Percent significant`), ]; rownames(pair_tab) <- NULL; print(pair_tab, row.names = FALSE)
+    dl <- data.frame(sig = sigL, within = withinL, sameH = sameH, dist = as.numeric(scale(edge_dist)))
+    mL <- glm(sig ~ within + sameH + dist, data = dl, family = binomial); cfL <- summary(mL)$coefficients; ciL <- exp(confint.default(mL))
+    lm_tab <- data.frame(Predictor = c("Within-lobe", "Same hemisphere", "Distance (per SD)"), `Odds ratio` = round(exp(cfL[-1, 1]), 2),
+                         `95% CI` = sprintf("%.2f to %.2f", ciL[-1, 1], ciL[-1, 2]), p = fmt_p(cfL[-1, 4]), check.names = FALSE, row.names = NULL)
+    print(lm_tab, row.names = FALSE)
+    # size of the interaction vs. distance, with the normalization checks
+    meanFC <- colMeans(goodFCData[si_2$longID, allConn, drop = FALSE], na.rm = TRUE)           # each edge's mean FC (harmonized, all scans)
+    sdFC   <- apply(goodFCData[si_2$longID, allConn, drop = FALSE], 2, sd, na.rm = TRUE)       # SD of FC across scans
+    aB <- abs(res_two$int_b)
+    prs <- function(x, y, z) { rx <- resid(lm(rank(x) ~ rank(z))); ry <- resid(lm(rank(y) ~ rank(z))); cor.test(rx, ry) }   # partial Spearman (rank residuals)
+    size_row <- function(label, idx) {
+      a <- cor.test(aB[idx], edge_dist[idx], method = "spearman", exact = FALSE)
+      b <- prs(aB[idx], edge_dist[idx], meanFC[idx])
+      n <- cor.test(aB[idx] / sdFC[idx], edge_dist[idx], method = "spearman", exact = FALSE)
+      s <- cor.test(res_two$int_b[idx], edge_dist[idx], method = "spearman", exact = FALSE)
+      data.frame(Edges = label, N = sum(idx), `|Coef| vs. distance (rho)` = round(unname(a$estimate), 2),
+                 `Partial rho, controlling for the edge's mean FC` = round(unname(b$estimate), 2),
+                 `|Coef| / SD of FC vs. distance (rho)` = round(unname(n$estimate), 2),
+                 `Signed coef vs. distance (rho)` = round(unname(s$estimate), 2), check.names = FALSE)
+    }
+    size_tab <- rbind(size_row("All edges", rep(TRUE, nrow(cmL))), size_row("Within hemisphere", sameH), size_row("Between hemispheres", !sameH))
+    cat("Mean FC vs. distance (rho):", round(cor(meanFC, edge_dist, method = "spearman"), 2), "\n")
+    print(size_tab, row.names = FALSE)
+    si_table(enrich_tab, "two_group_interaction", "GroupByPma_LobeHemisphereEnrichment")
+    si_table(pair_tab,   "two_group_interaction", "GroupByPma_LobePairs")
+    si_table(lm_tab,     "two_group_interaction", "GroupByPma_DistanceModel")
+    si_table(size_tab,   "two_group_interaction", "GroupByPma_SizeVsDistance")
+  } else message("Section 16 lobe/distance summary skipped: run section 9i first (it defines edge_dist).")
 }
 
 sessionInfo()
