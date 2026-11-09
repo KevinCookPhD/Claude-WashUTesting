@@ -20,7 +20,8 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 | SI20 | Table 1 group comparisons | 13 |
 | SI21 | preterm scans re-run through the fetal pipeline | 14 |
 | SI22 | global level removed | 15 |
-| SI23 | fetal vs preterm x PMA interaction (two groups) | 16 |
+| SI23 | fetal vs preterm x PMA interaction (two groups): interaction results, group difference by age | 16 |
+| SI24 | sensitivity checks for the primary additive model: joint 2-df test, splines | 16 |
 
 ## Main text
 

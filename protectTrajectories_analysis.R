@@ -238,7 +238,7 @@ SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03"
            clinical = "SI05", continuous_GA = "SI06", gt32 = "SI07", within_between = "SI08",
            volumes = "SI09", motion_covariate = "SI10", age_matched = "SI11", postnatal = "SI12",
            unharmonized = "SI13", distance = "SI14", motion_followup = "SI15", equal_volume = "SI16",
-           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20", fetal_pipeline = "SI21", global_level = "SI22", two_group_interaction = "SI23")
+           sex_fetal_preterm = "SI17", sex_preterm = "SI18", four_group = "SI19", table1_tests = "SI20", fetal_pipeline = "SI21", global_level = "SI22", two_group_interaction = "SI23", two_group_sensitivity = "SI24")
 si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
@@ -1836,7 +1836,7 @@ si_posthoc_counts
 #      SI05 clinical cutoffs (9a)   SI06 continuous birth GA (9b)     SI07 scans > 32 wk (9c)    SI08 within/between (9d)
 #      SI09 usable volumes (9e A-C) SI10 motion as covariate (9e D-F) SI11 age-matched (9f)      SI12 postnatal age (9g)
 #      SI13 unharmonized (9h)       SI14 distance (9i)                SI15 motion follow-up (9j) SI16 equal volume (9k)
-#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)   SI21 fetal-pipeline control (14)   SI22 global level removed (15)   SI23 two-group PMA interaction (16)
+#      SI17 sex, fetal vs. preterm (11b)   SI18 sex, preterm (11c-d)   SI19 four-group model (12)   SI20 Table 1 group comparisons (13)   SI21 fetal-pipeline control (14)   SI22 global level removed (15)   SI23 two-group PMA interaction (16)   SI24 its sensitivity checks (16)
 #
 #    OVERVIEW (what each check tests and what it showed; details above each block)
 #      9a  clinical cutoffs ........ 9 of the edges FDR-significant; 8 of the 16 hold (cutoff-dependent set)
@@ -3853,9 +3853,6 @@ if (RUN_TWO_GROUP_INTERACTION) {
                `Of the 1,404 primary edges, significant` = sum(s & sigFetal),
                `Median fetal slope, primary edges` = round(median(res$slope_fetal[sigFetal], na.rm = TRUE), 4),
                `Median preterm slope, primary edges` = round(median(res$slope_preterm[sigFetal], na.rm = TRUE), 4),
-               `Joint 2-df test (group + group x PMA), FDR p < .05` = sum(!is.na(res$joint_pAdj) & res$joint_pAdj < .05),
-               `   of the 1,404 primary edges, significant in the joint test` = sum(!is.na(res$joint_pAdj) & res$joint_pAdj < .05 & sigFetal),
-               `   significant in the joint test but not among the 1,404` = sum(!is.na(res$joint_pAdj) & res$joint_pAdj < .05 & !sigFetal),
                `Median preterm - fetal at 30 wk, primary edges` = round(median(res$diff30_b[sigFetal], na.rm = TRUE), 3),
                `Median preterm - fetal at 33 wk, primary edges` = round(median(res$diff33_b[sigFetal], na.rm = TRUE), 3),
                `Median preterm - fetal at 36 wk, primary edges` = round(median(res$diff36_b[sigFetal], na.rm = TRUE), 3), check.names = FALSE)
@@ -3905,14 +3902,23 @@ if (RUN_TWO_GROUP_INTERACTION) {
   res_spl <- cached("twoGroupSpline_overlap", key = paste(data_key, "twoGroupSpline", table_key(si_2ov)),
                     data.frame(Connection = allConn, do.call(rbind, par_lapply(allConn, spline_edge, data = si_2ov)), row.names = NULL))
   res_spl$spl_pAdj <- p.adjust(res_spl$spl_p, "fdr")
+  # SENSITIVITY CHECKS (SI "two_group_sensitivity"): the joint 2-df test and the spline analysis check that the primary additive result does not depend
+  # on assuming parallel (or straight) PMA slopes. The interaction results themselves (SI "two_group_interaction") are the new findings.
+  joint_row <- function(res, label) { sj <- !is.na(res$joint_pAdj) & res$joint_pAdj < .05
+    data.frame(Data = label, `Joint 2-df test (group + group x PMA), FDR p < .05` = sum(sj), `Of the 1,404 primary edges, significant` = sum(sj & sigFetal),
+               `Percent of the 1,404 retained` = round(100 * sum(sj & sigFetal) / sum(sigFetal), 1), `Primary edges not significant in the joint test` = sum(!sj & sigFetal),
+               `Significant in the joint test but not among the 1,404` = sum(sj & !sigFetal), check.names = FALSE) }
+  joint_tab <- rbind(joint_row(res_two, "All scans"), joint_row(res_two_ov, sprintf("Shared PMA range (%.1f-%.1f wk)", lo2, hi2)))
+  print(t(joint_tab), quote = FALSE)
+  si_table(joint_tab, "two_group_sensitivity", "JointTest_Summary")
   s_spl <- !is.na(res_spl$spl_pAdj) & res_spl$spl_pAdj < .05; s_jt <- !is.na(res_two_ov$joint_pAdj) & res_two_ov$joint_pAdj < .05
   spl_tab <- data.frame(Analysis = c("Linear joint test (2 df), shared range", "Spline joint test (4 df), shared range"),
                         `FDR p < .05` = c(sum(s_jt), sum(s_spl)), `Of the 1,404 primary edges, significant` = c(sum(s_jt & sigFetal), sum(s_spl & sigFetal)),
                         `Not among the 1,404` = c(sum(s_jt & !sigFetal), sum(s_spl & !sigFetal)), check.names = FALSE)
   spl_tab$`Agreement with the linear joint test (both significant)` <- c(sum(s_jt), sum(s_jt & s_spl))
   print(spl_tab, row.names = FALSE)
-  si_table(spl_tab, "two_group_interaction", "GroupByPma_SplineSensitivity")
-  si_table(res_spl, "two_group_interaction", "GroupByPma_SplineSensitivity_AllEdges")
+  si_table(spl_tab, "two_group_sensitivity", "SplineSensitivity")
+  si_table(res_spl, "two_group_sensitivity", "SplineSensitivity_AllEdges")
   top_two <- res_two[order(res_two$int_p), c("Connection", "int_b", "int_se", "int_p", "int_pAdj", "slope_fetal", "slope_preterm")][1:20, ]
   top_two[-1] <- lapply(top_two[-1], signif, 3); print(top_two, row.names = FALSE)
 
