@@ -3948,7 +3948,7 @@ if (RUN_TWO_GROUP_INTERACTION) {
   #    week of PMA (the same units as the axes of B), for every edge with a significant PMA x group interaction (FDR p < .05); blue = preterm slope
   #    steeper, red = fetal slope steeper; the colour scale is capped at +/- fig4_cap and saturates beyond it.
   # B. every edge's fetal slope against its preterm slope (square axes, same limits); significant edges are outlined and coloured by direction, with
-  #    the number of significant edges in each quadrant.
+  #    (the quadrant counts are printed to the console for the text).
   fig4_cap <- 0.06                                                                 # cap of the colour scale in A (slope difference, Fisher z per week)
   sig4 <- !is.na(res_two$int_pAdj) & res_two$int_pAdj < .05
   stopifnot(identical(cp$Conn, res_two$Connection))                                # cp (section 4b) and res_two share the edge order
@@ -3962,17 +3962,13 @@ if (RUN_TWO_GROUP_INTERACTION) {
   dir_cols4 <- c("Preterm slope steeper" = col_preterm, "Fetal slope steeper" = col_fetal)
   lim_s <- ceiling(max(abs(c(res_two$slope_fetal, res_two$slope_preterm)), na.rm = TRUE) * 100) / 100
   dd <- res_two[sig4, ]; dd$dir <- factor(ifelse(dd$int_b > 0, "Preterm slope steeper", "Fetal slope steeper"), names(dir_cols4))
-  q4 <- table(factor(sign(dd$slope_fetal), c(-1, 1)), factor(sign(dd$slope_preterm), c(-1, 1)))     # rows: fetal slope sign; columns: preterm slope sign
+  print(table(fetal = sign(dd$slope_fetal), preterm = sign(dd$slope_preterm)))                         # quadrant counts of the significant edges, for the text
   pD <- ggplot(res_two, aes(slope_fetal, slope_preterm)) +
     geom_hline(yintercept = 0, linewidth = 0.3) + geom_vline(xintercept = 0, linewidth = 0.3) + geom_abline(linetype = "dashed", linewidth = 0.3) +
     geom_point(color = "#d9d9d9", size = 0.5, alpha = 0.6, stroke = 0) +
     geom_point(data = dd, aes(fill = dir), shape = 21, color = "#000000", stroke = 0.15, size = 1.9, alpha = 0.9) +
     scale_fill_manual(values = dir_cols4, guide = "none") +
     coord_fixed(xlim = c(-lim_s, lim_s), ylim = c(-lim_s, lim_s)) +
-    annotate("text", x = -0.95 * lim_s, y =  0.95 * lim_s, label = paste0("n = ", q4["-1", "1"]),  hjust = 0,   vjust = 1,   size = 3) +    # labels sit in their
-    annotate("text", x =  0.60 * lim_s, y =  0.95 * lim_s, label = paste0("n = ", q4["1", "1"]),   hjust = 0.5, vjust = 1,   size = 3) +    # quadrants but off the
-    annotate("text", x = -0.95 * lim_s, y = -0.60 * lim_s, label = paste0("n = ", q4["-1", "-1"]), hjust = 0,   vjust = 0.5, size = 3) +    # dashed diagonal
-    annotate("text", x =  0.95 * lim_s, y = -0.95 * lim_s, label = paste0("n = ", q4["1", "-1"]),  hjust = 1,   vjust = 0,   size = 3) +
     labs(x = "Fetal Connectivity Change (per week)", y = "Preterm Connectivity Change (per week)") + theme_classic(base_size = 9)
   fig4 <- ggpubr::ggarrange(pM, pD, ncol = 2, nrow = 1, labels = c("A", "B"))
   show_fig("Fig4_GroupByPma", 9, 4.5, function() print(fig4))
