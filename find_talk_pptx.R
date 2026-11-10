@@ -8,7 +8,8 @@
 
 # ---- Settings ---------------------------------------------------------------
 args     <- commandArgs(trailingOnly = TRUE)
-root_dir <- if (length(args) >= 1) args[1] else "."
+root_dir <- if (length(args) >= 1) args[1] else
+  "C:/Users/Kevin/OneDrive - Childrens National Hospital/"
 target   <- as.Date("2025-12-03")
 # Also flag files whose internal created/modified date is within this many days
 # of the target (useful if the date isn't printed on the title slide).
