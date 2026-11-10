@@ -71,7 +71,7 @@ library(ggpubr)     # ggarrange() for the multi-panel Fig. 3B
 
 ## ---- Switches --------------------------------------------------------------
 SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
-FIG_FORMATS               <- c("tiff", "svg")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf"
+FIG_FORMATS               <- c("tiff", "svg", "pdf")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
@@ -185,7 +185,7 @@ theme_paper <- function(grid_y = TRUE, grid_x = FALSE, legend = "none") {
 #              device leaves a notch at the top-left corner of bar outlines, so avoid it.
 #   svg      : editable vector for Inkscape / Illustrator (svglite, or svg() without it).
 #              Text stays live text; install the fonts or convert text to outlines on opening.
-#   pdf      : vector via cairo_pdf (not written by default; add "pdf" to FIG_FORMATS).
+#   pdf      : vector via cairo_pdf (fonts embedded; accepted by most journals and LaTeX).
 # install.packages(c("ragg", "svglite")) once for the best output.
 show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS) {
   if (!save) { draw(); return(invisible(NULL)) }
@@ -238,9 +238,9 @@ fmt3 <- function(x) sub("^-(0\\.000)$", "\\1", sprintf("%.3f", x))
 
 ## ---- Output naming ------------------------------------------------------------------------------------------------
 # Every saved file follows one pattern, so related items sort together in figureDir:
-#   main text      Fig<n>_<Name>.tiff/.svg           Table<n>_<Name>.csv        (Fig2_part_<Name> = pieces of Fig. 2)
+#   main text      Fig<n>_<Name>.tiff/.svg/.pdf         Table<n>_<Name>.csv        (Fig2_part_<Name> = pieces of Fig. 2)
 #   full results   Data_<Name>.csv                   (edge-wise results behind the main figures and tables)
-#   supplement     SI<nn>_Fig_<Name>.tiff/.svg       SI<nn>_Table_<Name>.csv    (one SI number per topic; its tables and figures sort together)
+#   supplement     SI<nn>_Fig_<Name>.tiff/.svg/.pdf     SI<nn>_Table_<Name>.csv    (one SI number per topic; its tables and figures sort together)
 # <Name> is UpperCamelCase; sub-parts are separated by underscores. The SI numbers live only in this registry: renumber here
 # (e.g. SI_ID[["gt32"]] <- "SI12") and every file name follows. Fig. 1 (flowchart) is made by flowchart/make_flowchart.py.
 SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03", posthoc = "SI04",
