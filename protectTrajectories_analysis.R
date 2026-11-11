@@ -730,7 +730,7 @@ if (SAVE_TABLES) write.csv(clin_cov, file.path(figureDir, "Table1_ClinicalCovera
 inf_t   <- merge(inf_t,   clin_inf, by = "shortID", all.x = TRUE)       # infant-level items; fetal infants get NA
 scan_df <- merge(scan_df, clin_inf, by = "shortID", all.x = TRUE)       # each scan carries its infant's values
 
-# Race and ethnicity (one row per infant: study_id, study, race, ethnicity). study_id must equal the infant ID (shortID); the match is printed per group.
+# Race and ethnicity (one row per infant: shortID, study_id, study, race, ethnicity). Matched on shortID; the match is printed per group.
 # Categories are taken from the file as written; collapse them with race_recode / eth_recode (a named vector c("old label" = "new label")) if some are small.
 race_file    <- "2026-11-06_KC_race_ethnicity.xlsx"       # in the data folder (or a full path)
 race_recode  <- NULL; eth_recode <- NULL
@@ -739,17 +739,17 @@ if (!file.exists(race_file)) {
   message("Race/ethnicity file not found (", race_file, "): Table 1 is built without race and ethnicity rows.")
 } else {
   rc <- as.data.frame(readxl::read_excel(race_file)); names(rc) <- tolower(trimws(names(rc)))
-  stopifnot(all(c("study_id", "race", "ethnicity") %in% names(rc)))
+  stopifnot(all(c("shortid", "race", "ethnicity") %in% names(rc)))                      # columns: shortID, study_id, study, race, ethnicity (names are lower-cased here)
   clean_cat <- function(x, recode) { x <- trimws(as.character(x)); x[x %in% c("", "NA", "N/A", "na", "n/a", ".")] <- NA
     if (!is.null(recode)) { hit <- x %in% names(recode); x[hit] <- recode[x[hit]] }; x }
-  rc$id <- trimws(as.character(rc$study_id)); rc$race <- clean_cat(rc$race, race_recode); rc$ethnicity <- clean_cat(rc$ethnicity, eth_recode)
+  rc$id <- trimws(as.character(rc$shortid)); rc$race <- clean_cat(rc$race, race_recode); rc$ethnicity <- clean_cat(rc$ethnicity, eth_recode)
   first_val <- function(v, id) { s <- split(v, id); unname(sapply(s, function(z) if (all(is.na(z))) NA_character_ else z[!is.na(z)][1])[unique(id)]) }
   rc_u <- data.frame(id = unique(rc$id), race = first_val(rc$race, rc$id), ethnicity = first_val(rc$ethnicity, rc$id), stringsAsFactors = FALSE)
-  cat("\nRace/ethnicity file: ", nrow(rc), " rows, ", nrow(rc_u), " unique study_id; repeated study_id: ", sum(duplicated(rc$id)), "\n", sep = "")
+  cat("\nRace/ethnicity file: ", nrow(rc), " rows, ", nrow(rc_u), " unique shortID; repeated shortID: ", sum(duplicated(rc$id)), "\n", sep = "")
   if ("study" %in% names(rc)) { cat("Rows by 'study':\n"); print(table(rc$study, useNA = "ifany")) }
   m_r <- match(inf_t$shortID, rc_u$id)
   cat("Infants matched to the race/ethnicity file, by group:\n"); print(tapply(!is.na(m_r), inf_t$grp, function(x) sprintf("%d of %d", sum(x), length(x))))
-  if (mean(!is.na(m_r)) < 0.5) warning("Fewer than half of the infants match study_id: the IDs probably need reformatting (compare head(rc_u$id) with head(inf_t$shortID)).")
+  if (mean(!is.na(m_r)) < 0.5) warning("Fewer than half of the infants match the file's shortID column: check that it holds the same IDs as the connectivity tables (compare head(rc_u$id) with head(inf_t$shortID)).")
   inf_t$race <- rc_u$race[m_r]; inf_t$ethnicity <- rc_u$ethnicity[m_r]
   scan_df$race <- inf_t$race[match(scan_df$shortID, inf_t$shortID)]; scan_df$ethnicity <- inf_t$ethnicity[match(scan_df$shortID, inf_t$shortID)]
   cat("\nRace, infants by group (check the categories):\n");      print(table(inf_t$race, inf_t$grp, useNA = "ifany"))
