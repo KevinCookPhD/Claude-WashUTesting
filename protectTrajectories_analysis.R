@@ -730,6 +730,35 @@ if (SAVE_TABLES) write.csv(clin_cov, file.path(figureDir, "Table1_ClinicalCovera
 inf_t   <- merge(inf_t,   clin_inf, by = "shortID", all.x = TRUE)       # infant-level items; fetal infants get NA
 scan_df <- merge(scan_df, clin_inf, by = "shortID", all.x = TRUE)       # each scan carries its infant's values
 
+# Race and ethnicity (one row per infant: study_id, study, race, ethnicity). study_id must equal the infant ID (shortID); the match is printed per group.
+# Categories are taken from the file as written; collapse them with race_recode / eth_recode (a named vector c("old label" = "new label")) if some are small.
+race_file    <- "2026-11-06_KC_race_ethnicity.xlsx"       # in the data folder (or a full path)
+race_recode  <- NULL; eth_recode <- NULL
+race_items   <- list()                                    # rows added to Table 1: label -> c(column, category)
+if (!file.exists(race_file)) {
+  message("Race/ethnicity file not found (", race_file, "): Table 1 is built without race and ethnicity rows.")
+} else {
+  rc <- as.data.frame(readxl::read_excel(race_file)); names(rc) <- tolower(trimws(names(rc)))
+  stopifnot(all(c("study_id", "race", "ethnicity") %in% names(rc)))
+  clean_cat <- function(x, recode) { x <- trimws(as.character(x)); x[x %in% c("", "NA", "N/A", "na", "n/a", ".")] <- NA
+    if (!is.null(recode)) { hit <- x %in% names(recode); x[hit] <- recode[x[hit]] }; x }
+  rc$id <- trimws(as.character(rc$study_id)); rc$race <- clean_cat(rc$race, race_recode); rc$ethnicity <- clean_cat(rc$ethnicity, eth_recode)
+  first_val <- function(v, id) { s <- split(v, id); unname(sapply(s, function(z) if (all(is.na(z))) NA_character_ else z[!is.na(z)][1])[unique(id)]) }
+  rc_u <- data.frame(id = unique(rc$id), race = first_val(rc$race, rc$id), ethnicity = first_val(rc$ethnicity, rc$id), stringsAsFactors = FALSE)
+  cat("\nRace/ethnicity file: ", nrow(rc), " rows, ", nrow(rc_u), " unique study_id; repeated study_id: ", sum(duplicated(rc$id)), "\n", sep = "")
+  if ("study" %in% names(rc)) { cat("Rows by 'study':\n"); print(table(rc$study, useNA = "ifany")) }
+  m_r <- match(inf_t$shortID, rc_u$id)
+  cat("Infants matched to the race/ethnicity file, by group:\n"); print(tapply(!is.na(m_r), inf_t$grp, function(x) sprintf("%d of %d", sum(x), length(x))))
+  if (mean(!is.na(m_r)) < 0.5) warning("Fewer than half of the infants match study_id: the IDs probably need reformatting (compare head(rc_u$id) with head(inf_t$shortID)).")
+  inf_t$race <- rc_u$race[m_r]; inf_t$ethnicity <- rc_u$ethnicity[m_r]
+  scan_df$race <- inf_t$race[match(scan_df$shortID, inf_t$shortID)]; scan_df$ethnicity <- inf_t$ethnicity[match(scan_df$shortID, inf_t$shortID)]
+  cat("\nRace, infants by group (check the categories):\n");      print(table(inf_t$race, inf_t$grp, useNA = "ifany"))
+  cat("\nEthnicity, infants by group (check the categories):\n"); print(table(inf_t$ethnicity, inf_t$grp, useNA = "ifany"))
+  lv_r <- names(sort(table(inf_t$race), decreasing = TRUE)); lv_e <- names(sort(table(inf_t$ethnicity), decreasing = TRUE))
+  race_items <- c(setNames(lapply(lv_r, function(l) c("race", l)), paste0("Race: ", lv_r)), list(`Race: not reported` = c("race", NA)),
+                  setNames(lapply(lv_e, function(l) c("ethnicity", l)), paste0("Ethnicity: ", lv_e)), list(`Ethnicity: not reported` = c("ethnicity", NA)))
+}
+
 msd <- function(x, d = 1) sprintf(paste0("%.", d, "f (%.", d, "f)"), mean(x, na.rm = TRUE), sd(x, na.rm = TRUE))
 npc <- function(x) if (all(is.na(x))) "no data" else sprintf("%d (%.0f%%)", sum(x, na.rm = TRUE), 100 * mean(x, na.rm = TRUE))
 grp_sel <- function(g) list(EPT = g == "EPT", VPT = g == "VPT", MPT = g == "MPT", Total = g != "Fetal", Fetal = g == "Fetal")
@@ -747,7 +776,10 @@ make_table1 <- function(d) {                                           # d = sca
     `PMA at scan (Weeks)`         = ic(function(x) msd(x$pma, 2)),
     `PMA at birth (Weeks)`        = ic(function(x) msd(x$birthPMA, 2)),
     `Sex (Male)`                  = ic(function(x) npc(x$male == 1)))
-  for (k in clin_items)                                                # APGAR and clinical items: mean (SD) for APGAR and ventilation days, n (%) for yes/no items
+  cat_row <- function(col, lv) function(x) if (is.na(lv)) sprintf("%d (%.0f%%)", sum(is.na(x[[col]])), 100 * mean(is.na(x[[col]])))      # "not reported" row: count and share of the group
+                               else sprintf("%d (%.0f%%)", sum(x[[col]] == lv, na.rm = TRUE), 100 * sum(x[[col]] == lv, na.rm = TRUE) / nrow(x))   # category row: share of ALL rows in the group (infants, or scans in the by-scan table), so the rows plus "not reported" add to 100%
+  for (nm_r in names(race_items)) rows[[nm_r]] <- ic(cat_row(race_items[[nm_r]][1], race_items[[nm_r]][2]))
+  for (k in clin_items)                                               # APGAR and clinical items: mean (SD) for APGAR and ventilation days, n (%) for yes/no items
     rows[[k]] <- if (grepl("weight", k)) ic(function(x) msd(x[[k]], 0)) else if (grepl("^APGAR", k)) ic(function(x) msd(x[[k]], 2)) else if (grepl("ventilation", k)) pre(function(x) msd(x[[k]], 2)) else pre(function(x) npc(as_yes(x[[k]])))
   nm <- setdiff(names(rows), "Birth weight (g)")                      # birth weight goes right after PMA at birth
   rows <- rows[append(nm, "Birth weight (g)", after = match("PMA at birth (Weeks)", nm))]
