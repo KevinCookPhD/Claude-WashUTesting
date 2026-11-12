@@ -1106,11 +1106,11 @@ round_box <- function(x, y, w, h) {                  # x, y = lower-left corner,
 }
 RUN_FIG2_ASSEMBLY <- TRUE
 fig2_box_h_in   <- 4.2    # base height of a box, inches: sets the size of the matrices (and the first guess for the chords)
-fig2_matrix_scale <- 1.1  # matrix height relative to the base height (content_h); larger = bigger matrix next to the chord (the chord is 1.15 on the same scale)
+fig2_matrix_scale <- 1.15 # matrix height relative to the base height (content_h); larger = bigger matrix next to the chord (the chord is 1.15 on the same scale)
 fig2_chord_scale <- 1.15  # chord diagram height relative to that (1 = same as before); the boxes, and panel C, grow with it. The figure gets wider and taller
 fig2_title_h_in <- 0.5    # band at the top of each box for the title (Preterm / Fetal)
-fig2_pad_in     <- 0.15   # space around the pieces
-fig2_gap_in     <- 0.3    # space between the A and B rows and before C
+fig2_pad_in     <- 0.10   # space around the pieces
+fig2_gap_in     <- 0.2    # space between the A and B rows and before C
 fig2_title_pt   <- 18     # box titles (points)
 fig2_letter_pt  <- 18     # panel letters (points)
 fig2_dpi        <- 220    # resolution at which the pieces are drawn before they are placed (their design sizes are 6-10 in)
