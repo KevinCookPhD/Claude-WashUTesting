@@ -71,7 +71,7 @@ library(ggpubr)     # ggarrange() for the multi-panel Fig. 3B
 
 ## ---- Switches --------------------------------------------------------------
 SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
-FIG_FORMATS               <- c("tiff", "svg", "pdf")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
+FIG_FORMATS               <- c("tiff", "svg", "pdf")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf","eps" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
@@ -200,6 +200,7 @@ show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS) {
       svg  = if (requireNamespace("svglite", quietly = TRUE)) svglite::svglite(path, width = w, height = h)
              else svg(path, width = w, height = h),
       pdf  = cairo_pdf(path, width = w, height = h),
+      eps  = cairo_ps(path, width = w, height = h, onefile = FALSE, fallback_resolution = 600),   # EPS has no transparency: semi-transparent layers are rasterized (here at 600 dpi)
       stop("Unknown figure format: ", fmt))
   }
   for (fmt in FIG_FORMATS) {
