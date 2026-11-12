@@ -32,7 +32,7 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 | How do fetal and preterm connectivity differ across all edges? | 4 (model), 4a tallies, 4b matrices, 4c chords | `Fig2_FetalVsPreterm` (A, B); `Data_FetalVsPreterm_AllEdges` | 1,404 FDR edges: 1,118 preterm > fetal, 286 fetal > preterm |
 | Which homotopic (left-right) regions differ? | 4d, 4e | `Fig2_FetalVsPreterm` (C); `Table2_HomotopicFetalVsPreterm` | |
 | Which connections show PMA x prematurity? | 5 (5a stats, 5b FDR, 5c Table 3) | `Table3_PmaByPrematurity`; `Data_PmaByPrematurity_AllEdges` | 16 edges; main effects (PMA, scanner, prematurity) not significant after FDR in those edges |
-| What do the trajectories look like? | 6 (panels B and C), 7 and 7b (brain, panel A) | `Fig3_PmaByPrematurity` | 13 edges in panel B (MPT steeper than EPT and VPT), 3 oddball edges in panel C |
+| What do the trajectories look like? | 6 (panels B and C), 7 and 7b (brain, panel A) | `Fig4_PmaByPrematurity` | 13 edges in panel B (MPT steeper than EPT and VPT), 3 oddball edges in panel C |
 | How do EPT, VPT and MPT slopes differ pairwise? | 8 | `SI04_Table_*PosthocSlopeContrasts*`; `Data_PmaByPrematurity_SlopesSigEdges` | MPT vs EPT and MPT vs VPT differ on 15 of 16 (both FDR-significant); VPT vs EPT on 3 uncorrected, 2 after FDR |
 
 ## Controls for the fetal-vs-preterm result
@@ -66,7 +66,7 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 | All four groups in one model | 12 | SI19 | each preterm group differs from fetal on 965 to 1,178 edges; EPT, VPT, MPT do not differ from each other in average level |
 | Are the groups comparable on Table 1 variables? | 13 | SI20 | no sex difference; clinical severity falls steeply from EPT to MPT; MPT scanned later with more volumes, slightly lower FD |
 | Does the processing pipeline explain the fetal-vs-preterm difference? (six preterm scans run through the fetal pipeline) | 14 (a to g) | SI21 | fetal pipeline lowers overall connectivity (mean about -0.10; -0.14 at 1.5T) and gives a different edge pattern per scan (r 0.14 to 0.51, 19 to 74% of what reliability allows); the shift is not due to censoring, global signal, band-pass range or drift; the edge differences are not consistent across scans (mean r 0.005); the cause of the level shift is unresolved |
-| Does the fetal-vs-preterm difference change with age (two-group PMA x group interaction)? | 16 | `Fig4_GroupByPma` (candidate main-text figure); SI23 tables and figure; SI24 sensitivity checks | 346 edges with an interaction (63 in the shared PMA range), 92% of the 1,404 retained in the joint test (SI24); of the 346, 318 have a falling fetal and rising preterm slope |
+| Does the fetal-vs-preterm difference change with age (two-group PMA x group interaction)? | 16 | `Fig3_GroupByPma` (candidate main-text figure); SI23 tables and figure; SI24 sensitivity checks | 346 edges with an interaction (63 in the shared PMA range), 92% of the 1,404 retained in the joint test (SI24); of the 346, 318 have a falling fetal and rising preterm slope |
 | Where are the PMA x cohort interactions (lobe, hemisphere)? | 16 (end; the distance parts need 9i run first for `edge_dist`, `Dmat`) | SI23 `LobeHemisphereEnrichment`, `LobePairs`, `DistanceModel` | within-lobe edges 25% vs 7% significant (OR 4.7); frontal-frontal, parietal-parietal, occipital-occipital 27 to 29%, temporal-temporal at baseline (12%), frontal-occipital 0.5%; in a joint model distance dominates (OR 0.26 per SD), within-lobe (1.6) and same-hemisphere (1.5) remain independent |
 | Is the interaction larger for short connections? | 16 (end) | SI23 `SizeVsDistance`, `SizeVsDistance_Pvalues` | \|coefficient\| vs distance rho = -0.39 (-0.50 within, -0.26 between hemispheres), permutation p < 0.0002; not explained by edge strength (partial rho -0.34, \|coef\|/SD -0.36); within minus between hemisphere is -0.24 but is not a matched-distance test |
 | Which group produces the distance pattern? | 16 (end) | SI23 `SlopesVsDistance` | both: fetal slopes rise toward zero with distance (rho +0.25), preterm slopes fall toward zero (rho -0.40); between hemispheres the fetal side is near zero (+0.08) |
@@ -86,7 +86,7 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 | `LobeHemisphereEnrichment`, `LobePairs`, `DistanceModel` | where the interactions fall: lobe, hemisphere, distance |
 | `SizeVsDistance`, `SizeVsDistance_Pvalues`, `SlopesVsDistance`, `PartialCorrelations` | interaction size vs distance, with normalization checks, permutation p-values and partial correlations |
 | `MotionCheck`, `MotionCheck_AllEdges`, `MotionVsPma`, `MotionVariants`, `MotionVariants_AllEdges` | motion checks |
-| figures | `Fig4_GroupByPma` (main-text candidate: A = lobe-ordered matrix of slope differences, B = fetal vs preterm slope per edge), `SI23_Fig_GroupByPma` |
+| figures | `Fig3_GroupByPma` (main-text candidate: A = lobe-ordered matrix of slope differences, B = fetal vs preterm slope per edge), `SI23_Fig_GroupByPma` |
 
 Slow steps (the interaction, spline and motion models, and the three permutation analyses) are cached; set `USE_CACHE <- FALSE` in section 0 to recompute. Only the distance-based outputs need section 9i run first.
 
@@ -107,7 +107,7 @@ Slow steps (the interaction, spline and motion models, and the three permutation
 - Birth-group rule: `birth_cat()` in section 0 (EPT <= 28, VPT > 28 to <= 32, MPT > 32).
 - Inclusion rule (4 minutes of data: 120 volumes at TR 2 s, 80 at TR 3 s): section 1 (`good4Min`, preterm scans) and the fetal controls in section 2; the flowchart script (`QA_REASON_*`) states it.
 - Clinical data for Table 1: `clin_file` in section 3d (workbook `2026-08-03_KC_fetal_preterm.xlsx`).
-- Figure layout settings: Fig. 2 in 4f (`fig2_*`), Fig. 3 in sections 6 and 7b (`bn_*`, `panelB_*`), frames `fig2_boxes` and `fig3_boxes`.
+- Figure layout settings: Fig. 2 in 4f (`fig2_*`), Fig. 4 in sections 6 and 7b (`bn_*`, `panelB_*`), frames `fig2_boxes` and `fig4_boxes`.
 
 ## Open items
 

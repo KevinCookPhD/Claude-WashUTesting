@@ -32,9 +32,9 @@
 #   2  Fetal controls + LongComBat harmonization (+ harmonization checks)
 #   3  Analysis data: connection table, scan table, preterm table, Table 1
 #   4  Fetal vs. preterm, all edges (Fig. 2: matrices, chords, homotopic bars; Table 2; Fig. 2 assembled; SI Fig. 2 mean matrices)
-#   5  Preterm only: PMA x prematurity, all edges (Fig. 3, Table 3)
-#   6  Fig. 3 Panels B and C (group trajectories)
-#   7  Fig. 3 Panel A (BrainNet Viewer edge file; 7b: the same picture in R with rgl, and the combined Fig. 3 A-C)
+#   5  Preterm only: PMA x prematurity, all edges (Fig. 4, Table 3)
+#   6  Fig. 4 Panels B and C (group trajectories)
+#   7  Fig. 4 Panel A (BrainNet Viewer edge file; 7b: the same picture in R with rgl, and the combined Fig. 4 A-C)
 #   8  Group slopes and pairwise contrasts for the significant edges
 #   9  Sensitivity analyses and controls
 #  10  Save tables
@@ -67,11 +67,11 @@ library(lmerTest)   # lmer() with p-values (used for Table 3, with car)
 library(car)        # Anova(): Type II Wald chi-square tests for lmer models
 library(longCombat) # longitudinal ComBat
 library(circlize)   # chord diagrams (Fig. 2)
-library(ggpubr)     # ggarrange() for the multi-panel Fig. 3B
+library(ggpubr)     # ggarrange() for the multi-panel Fig. 4B
 
 ## ---- Switches --------------------------------------------------------------
 SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
-FIG_FORMATS               <- c("tiff", "svg", "pdf")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf","eps" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
+FIG_FORMATS               <- c("tiff", "svg", "pdf", "eps")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf","eps" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
@@ -117,7 +117,7 @@ birth_cat <- function(ga, rule = "paper") {
 # Colors: fetal = red, preterm = blue. Lobe sidebar/sector colors (frontal pink,
 # temporal yellow, parietal green, occipital blue) are separate and unchanged.
 # Preterm blue #2a78d6 (passes the color-blind/contrast checks); the preterm heatmap is built from the same blue.
-# Fig. 3B/C groups run cyan (EPT) -> blue (VPT) -> navy (MPT).
+# Fig. 4B/C groups run cyan (EPT) -> blue (VPT) -> navy (MPT).
 pal <- list(fetal = "#cc2936", preterm = "#2a78d6",
             cols_pt      = c(EPT = "#12b5cf", VPT = "#2a78d6", MPT = "#0d366b"),
             heat_preterm = c("#cde2fb", "#2a78d6", "#0d366b"),                     # low, mid, high
@@ -239,9 +239,9 @@ fmt3 <- function(x) sub("^-(0\\.000)$", "\\1", sprintf("%.3f", x))
 
 ## ---- Output naming ------------------------------------------------------------------------------------------------
 # Every saved file follows one pattern, so related items sort together in figureDir:
-#   main text      Fig<n>_<Name>.tiff/.svg/.pdf         Table<n>_<Name>.csv        (Fig2_part_<Name> = pieces of Fig. 2)
+#   main text      Fig<n>_<Name>.tiff/.svg/.pdf/.eps    Table<n>_<Name>.csv        (Fig2_part_<Name> = pieces of Fig. 2)
 #   full results   Data_<Name>.csv                   (edge-wise results behind the main figures and tables)
-#   supplement     SI<nn>_Fig_<Name>.tiff/.svg/.pdf     SI<nn>_Table_<Name>.csv    (one SI number per topic; its tables and figures sort together)
+#   supplement     SI<nn>_Fig_<Name>.tiff/.svg/.pdf/.eps SI<nn>_Table_<Name>.csv    (one SI number per topic; its tables and figures sort together)
 # <Name> is UpperCamelCase; sub-parts are separated by underscores. The SI numbers live only in this registry: renumber here
 # (e.g. SI_ID[["gt32"]] <- "SI12") and every file name follows. Fig. 1 (flowchart) is made by flowchart/make_flowchart.py.
 SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03", posthoc = "SI04",
@@ -1091,10 +1091,10 @@ show_fig("Fig2_part_HomotopicBars", 6.2, 10, function() print(p_homo_h))
 # (the sizes used for the separate files above), trimmed, and placed in one figure, so the proportions of the text
 # stay as in the separate pieces. The chords are placed as pictures; the
 # separate Fig2_chord_* files remain available as vectors for editing. Whole-figure size is set by fig2_box_h_in.
-# Rounded frames around the panels (Figs. 2 and 3). Set fig2_boxes / fig3_boxes to FALSE for no frames.
+# Rounded frames around the panels (Figs. 2 and 4). Set fig2_boxes / fig4_boxes to FALSE for no frames.
 fig2_boxes   <- TRUE
-fig3_boxes   <- TRUE
-fig3_pad_in  <- 0.15        # Fig. 3: space inside each frame above, below and beside the panels, inches
+fig4_boxes   <- TRUE
+fig4_pad_in  <- 0.15        # Fig. 4: space inside each frame above, below and beside the panels, inches
 fig_box_col  <- "#2b2b2b"   # frame color (dark gray; "#808080" was the lighter version)
 fig_box_lwd  <- 1.0         # frame line width
 fig_box_r_in <- 0.12        # corner radius, inches
@@ -1351,7 +1351,7 @@ intxRes  <- data.frame(Connection = tab3_all$Connection, chi = tab3_all$Intx_chi
 sigEdges <- intxRes$Connection[intxRes$pAdj < .05 & !is.na(intxRes$pAdj)]
 c(failed_fits = sum(is.na(intxRes$p)), uncorrected_p05 = sum(intxRes$p < .05, na.rm = TRUE), fdr05 = length(sigEdges))
 
-# ORDER OF THE SIGNIFICANT EDGES for Table 3, Fig. 3B (left to right, top to bottom),
+# ORDER OF THE SIGNIFICANT EDGES for Table 3, Fig. 4B (left to right, top to bottom),
 # the BrainNet file and the slope tables. EDIT THIS LIST to reorder: keep one edge
 # name per line, in the order you want. It must contain exactly the significant
 # edges; if the data change and the set changes, the script stops and tells you
@@ -1407,7 +1407,7 @@ tab3_display
 
 
 ###############################################################################
-# 6. FIG. 3 PANEL B: GROUP TRAJECTORIES FOR THE SIGNIFICANT EDGES (Fisher z)
+# 6. FIG. 4 PANEL B: GROUP TRAJECTORIES FOR THE SIGNIFICANT EDGES (Fisher z)
 #    Points: scans, adjusted to the average of the two scanners.
 #    Lines: model-estimated trends over each group's observed ages (no
 #    extrapolation). Layout: Panel B (the 13 consistent connections) and Panel C (the 3 oddballs), panel_ncol_split columns wide.
@@ -1522,7 +1522,7 @@ draw_pt_legend <- function(w_in, h_in, x0_in = 0, y0_in = 0, first_col = 3, ncol
 }
 
 # Draws Panel B above Panel C (and the group legend beside C) in the current device. letters: labels for the two panels.
-# pad_in > 0 (used with the rounded frames of Fig. 3): each of B and C gets pad_in of space above and below inside its own
+# pad_in > 0 (used with the rounded frames of Fig. 4): each of B and C gets pad_in of space above and below inside its own
 # frame (B and C stay stacked, C below B) and the plots are shifted right by pad_in; the legend then sits inside B's frame,
 # centered in the empty block to the right of the last row of plots. With pad_in = 0 the layout is as before (legend centered
 # on the boundary between B's last row and C).
@@ -1580,7 +1580,7 @@ panelC <- make_panel_b(panelC_edges)
 
 
 ###############################################################################
-# 7. FIG. 3 PANEL A: EDGE FILE FOR BRAINNET VIEWER
+# 7. FIG. 4 PANEL A: EDGE FILE FOR BRAINNET VIEWER
 #    Writes a symmetric binary adjacency matrix (rows/columns in node-file order)
 #    with 1 for each significant PMA x prematurity edge.
 ###############################################################################
@@ -1600,11 +1600,11 @@ write_brainnet_edges <- function(edges, nodeFile, outFile) {
 }
 nodeFile <- file.path(figureDir, "bainNetPlotting", "new_AALNode_80_cortical.node")
 if (file.exists(nodeFile)) {
-  edgeMat <- write_brainnet_edges(sigEdges, nodeFile, file.path(figureDir, "bainNetPlotting", "Fig3_BrainNet_Edges.edge"))
+  edgeMat <- write_brainnet_edges(sigEdges, nodeFile, file.path(figureDir, "bainNetPlotting", "Fig4_BrainNet_Edges.edge"))
   print(c(edges_written = sum(edgeMat) / 2, n_sigEdges = length(sigEdges)))   # should match
 } else message("Node file not found; skipping BrainNet edge export.")
 
-## ---- 7b. Fig. 3 Panel A in R: nodes and significant edges on the neonatal surface (rgl) ----
+## ---- 7b. Fig. 4 Panel A in R: nodes and significant edges on the neonatal surface (rgl) ----
 # Reads the neonatal surface exported from Surf Ice (preterm_mesh.obj) and the same node file used for
 # BrainNet Viewer, then draws the nodes (colored by lobe) and the significant edges on a semi-transparent
 # surface, then combines left lateral, right lateral and a dorsal view (with a box around the densest cluster) plus a
@@ -1744,7 +1744,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     H     <- bn_panel_h_in; padx <- bn_pad_x_in; pady <- bn_pad_y_in
     hgt   <- setNames(rep(H, length(ims)), names(ims)); if (bn_inset) hgt[["inset"]] <- H * bn_inset_scale
     wid   <- sapply(names(ims), function(nm) hgt[[nm]] * dim(ims[[nm]])[2] / dim(ims[[nm]])[1])
-    message("Brain images (Fig. 3A): effective resolution at the placed size, dpi: ",                            # 600 or more needs a larger rgl window (bn_png_px) or a smaller bn_panel_h_in
+    message("Brain images (Fig. 4A): effective resolution at the placed size, dpi: ",                            # 600 or more needs a larger rgl window (bn_png_px) or a smaller bn_panel_h_in
             paste(names(ims), round(sapply(names(ims), function(nm) dim(ims[[nm]])[1] / hgt[[nm]])), sep = " ", collapse = ", "))
     rows  <- list(c(bn_panels, if (bn_inset) "inset"))                                          # all images in one row
     row_w <- function(r) sum(wid[r]) + (length(r) + 1) * padx
@@ -1763,22 +1763,22 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
         }
       }
     }
-    # Figure 3, Panels A + B: the image strip on top (scaled to the width of Panel B), the interaction plots below.
+    # Figure 4, Panels A + B: the image strip on top (scaled to the width of Panel B), the interaction plots below.
     # Panel B is drawn at its own design size (section 6), so its text sizes are unchanged.
     sc_a    <- panelB_w_in / W
     a_h_in  <- Hfig * sc_a
     b_h_in  <- panelB_row_h_in * panelB$nrow                                                                # Panel B
     c_h_in  <- panelB_row_h_in * panelC$nrow                                                                # Panel C (its legend sits beside the plots)
-    p3      <- if (fig3_boxes) fig3_pad_in else 0                                                           # space inside each frame
-    fig3_w  <- panelB_w_in + 2 * p3
-    fig3_h  <- a_h_in + bn_key_h_in + b_h_in + c_h_in + 6 * p3 + (if (fig3_boxes) 0 else bn_gap_ab_in)
-    draw_fig3 <- function() {
+    p3      <- if (fig4_boxes) fig4_pad_in else 0                                                           # space inside each frame
+    fig4_w  <- panelB_w_in + 2 * p3
+    fig4_h  <- a_h_in + bn_key_h_in + b_h_in + c_h_in + 6 * p3 + (if (fig4_boxes) 0 else bn_gap_ab_in)
+    draw_fig4 <- function() {
       grid::grid.newpage()
-      grid::pushViewport(grid::viewport(x = grid::unit(p3, "in"), y = grid::unit(fig3_h - p3, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(a_h_in, "in"), just = c("left", "top")))
+      grid::pushViewport(grid::viewport(x = grid::unit(p3, "in"), y = grid::unit(fig4_h - p3, "in"), width = grid::unit(panelB_w_in, "in"), height = grid::unit(a_h_in, "in"), just = c("left", "top")))
       draw_strip(sc_a, lwd = 1)                                                                   # Panel A (same drawing, scaled)
       grid::popViewport()
       # Lobe color key under Panel A: a dot per lobe, same colors as the nodes
-      key_y  <- fig3_h - p3 - a_h_in - bn_key_h_in / 2
+      key_y  <- fig4_h - p3 - a_h_in - bn_key_h_in / 2
       key_w  <- c(0.62, 0.7, 0.62, 0.55)                                                          # width of each dot + label (inches); the last is the label's own width
       key_x0 <- p3 + (panelB_w_in - sum(key_w)) / 2
       grid::grid.rect(x = grid::unit(p3 + panelB_w_in / 2, "in"), y = grid::unit(key_y, "in"), width = grid::unit(sum(key_w) + 0.2, "in"),
@@ -1791,15 +1791,15 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
                         gp = grid::gpar(fontsize = bn_key_pt))
       }
       draw_panels_bc(panelB, panelC, panelB_w_in, pad_in = p3)                                    # Panels B and C below, indented so the letters fit
-      grid::grid.text("A", x = grid::unit(bn_letter_in + 0.6 * p3, "in"), y = grid::unit(fig3_h - 0.4 * p3, "in") - grid::unit(0.02, "in"), just = c("left", "top"),
+      grid::grid.text("A", x = grid::unit(bn_letter_in + 0.6 * p3, "in"), y = grid::unit(fig4_h - 0.4 * p3, "in") - grid::unit(0.02, "in"), just = c("left", "top"),
                       gp = grid::gpar(fontsize = bn_letter_pt, fontface = "bold"))
-      if (fig3_boxes) {                                                                           # rounded frames: A (strip + lobe key), B, C
-        round_box(0, c_h_in + b_h_in + 4 * p3, fig3_w, a_h_in + bn_key_h_in + 2 * p3)
-        round_box(0, c_h_in + 2 * p3, fig3_w, b_h_in + 2 * p3)
-        round_box(0, 0, fig3_w, c_h_in + 2 * p3)
+      if (fig4_boxes) {                                                                           # rounded frames: A (strip + lobe key), B, C
+        round_box(0, c_h_in + b_h_in + 4 * p3, fig4_w, a_h_in + bn_key_h_in + 2 * p3)
+        round_box(0, c_h_in + 2 * p3, fig4_w, b_h_in + 2 * p3)
+        round_box(0, 0, fig4_w, c_h_in + 2 * p3)
       }
     }
-    show_fig("Fig3_PmaByPrematurity", fig3_w, fig3_h, draw_fig3)
+    show_fig("Fig4_PmaByPrematurity", fig4_w, fig4_h, draw_fig4)
   }
   # The rgl window stays open: rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
 }
@@ -1852,7 +1852,7 @@ slopesMain_wide
 # Uncorrected contrast p-values: these are follow-ups to the FDR-significant omnibus interaction.
 
 # Supplemental table of the post hoc results: group slopes and pairwise slope contrasts on the 16 edges, with full region
-# names, the Fig. 3 panel, uncorrected p and BH-FDR p (across the 16 edges, per contrast). Written under the "posthoc" SI number (see SI_ID).
+# names, the Fig. 4 panel, uncorrected p and BH-FDR p (across the 16 edges, per contrast). Written under the "posthoc" SI number (see SI_ID).
 si_posthoc <- local({
   tl <- slopesMain; g <- function(k) tl[tl$term == k, ]
   cell <- function(r) sprintf("%s [%s, %s]", fmt3(r$est), fmt3(r$lo), fmt3(r$hi))
@@ -1861,7 +1861,7 @@ si_posthoc <- local({
   e <- g("slope_EPT")$Connection
   cbind(`Region 1` = sapply(strsplit(e, "_", fixed = TRUE), function(p) full_name(p[1])),
         `Region 2` = sapply(strsplit(e, "_", fixed = TRUE), function(p) full_name(p[2])),
-        `Fig. 3 panel` = ifelse(e %in% panelC_edges, "C", "B"),
+        `Fig. 4 panel` = ifelse(e %in% panelC_edges, "C", "B"),
         `EPT slope` = cell(g("slope_EPT")), `VPT slope` = cell(g("slope_VPT")), `MPT slope` = cell(g("slope_MPT")),
         ctr("MPT_vs_EPT", "MPT - EPT"), ctr("MPT_vs_VPT", "MPT - VPT"), ctr("VPT_vs_EPT", "VPT - EPT"))
 })
@@ -2030,7 +2030,7 @@ if (RUN_SENSITIVITY) {
   slopes_gt32_wide <- slope_wide(slope_table(pt32, sigEdges, fml_main)); print(slopes_gt32_wide)
   si_intx("gt32", "after32wk", list(`Scans after 32 wk PMA` = res_gt32), list(`Scans after 32 wk PMA` = cmp_gt32))
   si_table(slopes_gt32_wide, "gt32", "after32wk_slopes")
-  # Supplemental figure: the Fig. 3 B/C trajectories refit on these scans only (same connections, order and layout).
+  # Supplemental figure: the Fig. 4 B/C trajectories refit on these scans only (same connections, order and layout).
   # Status of each of the 16 edges in this analysis: significant (FDR p < .05), trending (FDR p between .05 and .10), or neither
   st32 <- setNames(ifelse(cmp_gt32$primary_edges$pAdj < .05, "sig", ifelse(cmp_gt32$primary_edges$pAdj < .10, "trend", NA_character_)), cmp_gt32$primary_edges$Connection)
   print(table(st32, useNA = "ifany"))
@@ -2159,7 +2159,7 @@ si_fetal <- function(key, name, res_list, n_list, extra = NULL) {
 #   1:1 match fetal to preterm scans on volumes; (D) motion (mean framewise displacement): as a raw and a
 #   group-centered covariate, restricted to the range both groups share, and 1:1 matched on motion;
 #   (E) volumes and motion together; (F) preterm only: the PMA x prematurity
-#   test (Fig. 3) with motion as a covariate, since motion does overlap within the preterm group.
+#   test (Fig. 4) with motion as a covariate, since motion does overlap within the preterm group.
 # STATUS: motion RUN (D-F). Volume controls A-C and E were first run with finalVol and then switched to the usable
 #   volume count (scan_vol); the numbers marked [finalVol] below are from the first version and are to be replaced by
 #   the rerun. tSNR is not planned; if a reviewer asks, add a tSNR column to si_fd (centered
@@ -2296,7 +2296,7 @@ if (RUN_QC_COVARIATE_CONTROL) {
   res_qc_all <- run_fetal(si_fd, "allQC", extra = c("vol_c", qc_more))
   print(cmp_fetal(res_qc_all, n_scans = nrow(si_fd)))
 
-  ## F. preterm only: does the PMA x prematurity result (Fig. 3) survive adjusting for motion? Motion overlaps within the
+  ## F. preterm only: does the PMA x prematurity result (Fig. 4) survive adjusting for motion? Motion overlaps within the
   ## preterm group, so unlike D this adjustment is meaningful. Same test as the primary scan plus meanFD as a covariate.
   pt_fd <- pt; pt_fd$meanFD <- scan_fd[match(pt$longID, scanInfo$longID)]
   pt_fd <- droplevels(pt_fd[!is.na(pt_fd$meanFD), ])
@@ -3148,7 +3148,7 @@ if (RUN_SEX_ANALYSES) {
   pts_top_main <- sex_top(res_sex_pt, "sexF", "sexFMale");              print(head(pts_top_main, 10))
   pts_top_pma  <- sex_top(res_sex_pt, "ScanPMAc:sexF", "ScanPMAc:sexFMale"); print(head(pts_top_pma, 10))
   pts_top_bc   <- sex_top(res_sex_pt, "BirthCat:sexF");                 print(head(pts_top_bc, 10))
-  # Three-way PMA x birth group x sex (does the Fig. 3 slope pattern differ by sex?)  Exploratory: small cells.
+  # Three-way PMA x birth group x sex (does the Fig. 4 slope pattern differ by sex?)  Exploratory: small cells.
   res_sex_pt3 <- sex_scan(pt_sex, FCz ~ scanner + ScanPMAc * BirthCat * sexF, "ScanPMAc:BirthCat:sexF", tag = "preterm3way")
   pts3_sum <- sex_term_summary(res_sex_pt3, "ScanPMAc:BirthCat:sexF", "PMA x birth group x sex"); print(pts3_sum, row.names = FALSE)
   pts3_top <- sex_top(res_sex_pt3, "ScanPMAc:BirthCat:sexF"); print(head(pts3_top, 10))
@@ -3188,10 +3188,10 @@ if (RUN_SEX_ANALYSES) {
       sex_edge_plot(pt_sex, top_pt), ncol = 1, heights = c(1, 1.7), labels = c("", "C"))))
   si_fig("sex_preterm", "PvalueQQ", 6.2, 5.0, function() print(sex_qq(res_sex_pt, pts_terms, pts_labels)))
 
-  ## ---- 11d. Focused test on the 16 primary edges: does the Fig. 3 slope pattern differ by sex? ---------------------
+  ## ---- 11d. Focused test on the 16 primary edges: does the Fig. 4 slope pattern differ by sex? ---------------------
   # One model per edge: FC ~ scanner + PMA * birth group * sex (random intercept per infant). From it: the PMA slope in each
   # birth group and sex, the male - female difference of each slope (3 contrasts), and the difference-in-differences that
-  # tests the Fig. 3 pattern directly: (MPT slope - EPT slope) and (MPT slope - VPT slope) in males minus the same in
+  # tests the Fig. 4 pattern directly: (MPT slope - EPT slope) and (MPT slope - VPT slope) in males minus the same in
   # females (1 df each). FDR is applied across the 16 edges for each contrast family. This is a targeted follow-up on
   # edges chosen from the primary analysis, not a discovery scan, so report it as such.
   sex_focus <- function(cn) {
@@ -3335,7 +3335,7 @@ if (RUN_FOUR_GROUP) {
                `Correlation of beta with primary beta` = round(cor(res4[[paste0(k, "_b")]], fetalRes$scanTypeb, use = "complete.obs"), 3), check.names = FALSE)
   }))
   print(gr4, row.names = FALSE)
-  # Fig. 3 edges: the preterm group contrasts on the 16 primary PMA x prematurity edges (adjusted for PMA, not group x PMA)
+  # Fig. 4 edges: the preterm group contrasts on the 16 primary PMA x prematurity edges (adjusted for PMA, not group x PMA)
   e16 <- res4[match(sigEdges, res4$Connection), c("Connection", paste0(rep(c("MPT_vs_EPT", "MPT_vs_VPT", "VPT_vs_EPT"), each = 2), c("_b", "_p")), "pmaXgrp_p")]
   e16[-1] <- lapply(e16[-1], signif, 3); print(e16, row.names = FALSE)
 
@@ -3345,7 +3345,7 @@ if (RUN_FOUR_GROUP) {
   si_table(res4, "four_group", "fourGroup_allEdges")
 
   # PMA-slope contrasts among the four groups (interaction model; 1 df each; FDR across the 3,003 edges per contrast). "First group steeper" =
-  # the first-named group has the larger PMA slope (e.g., MPT vs EPT: MPT steeper). Fig3_16 = how many of the 16 preterm-only PMA x prematurity
+  # the first-named group has the larger PMA slope (e.g., MPT vs EPT: MPT steeper). Fig4_16 = how many of the 16 preterm-only PMA x prematurity
   # edges are significant for the contrast; primary = how many of the 1,404 fetal-vs-preterm edges are significant.
   sl_lab <- c(EPT_vs_Fetal = "EPT vs. fetal", VPT_vs_Fetal = "VPT vs. fetal", MPT_vs_Fetal = "MPT vs. fetal",
               VPT_vs_EPT = "VPT vs. EPT", MPT_vs_EPT = "MPT vs. EPT", MPT_vs_VPT = "MPT vs. VPT")
@@ -3354,11 +3354,11 @@ if (RUN_FOUR_GROUP) {
     p <- res4[[paste0("slope_", k, "_p")]]; pa <- res4[[paste0("slope_", k, "_pAdj")]]; b <- res4[[paste0("slope_", k, "_b")]]; sg4 <- !is.na(pa) & pa < .05
     data.frame(Contrast = sl_lab[[k]], `Raw p < .05` = sum(p < .05, na.rm = TRUE), `FDR p < .05` = sum(sg4),
                `First group steeper` = sum(sg4 & b > 0), `Second group steeper` = sum(sg4 & b < 0),
-               `Of the 16 Fig. 3 edges, significant (FDR)` = sum(sg4 & in16), `Of the 16 Fig. 3 edges, raw p < .05` = sum(p < .05 & in16, na.rm = TRUE),
+               `Of the 16 Fig. 4 edges, significant (FDR)` = sum(sg4 & in16), `Of the 16 Fig. 4 edges, raw p < .05` = sum(p < .05 & in16, na.rm = TRUE),
                `Of the 1,404 primary edges, significant` = sum(sg4 & sigFetal), check.names = FALSE) }))
   print(slope4_tab, row.names = FALSE)
   si_table(slope4_tab, "four_group", "fourGroup_SlopeContrasts")
-  # The three preterm contrasts on the 16 Fig. 3 edges: this model (fetal included) vs. the preterm-only model of section 8
+  # The three preterm contrasts on the 16 Fig. 4 edges: this model (fetal included) vs. the preterm-only model of section 8
   cmp16 <- do.call(rbind, lapply(c("MPT_vs_EPT", "MPT_vs_VPT", "VPT_vs_EPT"), function(k) {
     i4 <- match(sigEdges, res4$Connection); io <- slopesMain[slopesMain$term == k, ]; j <- match(sigEdges, io$Connection)
     data.frame(Contrast = sl_lab[[k]], Connection = sigEdges, `Four-group model: estimate` = round(res4[[paste0("slope_", k, "_b")]][i4], 4),
@@ -4035,7 +4035,7 @@ if (RUN_TWO_GROUP_INTERACTION) {
     g  <- res[!is.na(res$int_pAdj) & res$int_pAdj < .05, ]
     pp <- strsplit(g$Connection, "_", fixed = TRUE); r1 <- sapply(pp, `[`, 1); r2 <- sapply(pp, `[`, 2)
     i1 <- match(r1, roi_levels); i2 <- match(r2, roi_levels)
-    o  <- order(pmin(i1, i2), pmax(i1, i2)); g <- g[o, ]; r1 <- r1[o]; r2 <- r2[o]               # lobe order, as in the Fig. 4 matrix
+    o  <- order(pmin(i1, i2), pmax(i1, i2)); g <- g[o, ]; r1 <- r1[o]; r2 <- r2[o]               # lobe order, as in the Fig. 3 matrix
     other <- res_other$Connection[!is.na(res_other$int_pAdj) & res_other$int_pAdj < .05]
     out <- data.frame(`Region 1` = sapply(r1, full_name), `Region 2` = sapply(r2, full_name),
                       `Slope over PMA, fetal` = fmt3(g$slope_fetal), `Slope over PMA, preterm` = fmt3(g$slope_preterm),
@@ -4063,24 +4063,24 @@ if (RUN_TWO_GROUP_INTERACTION) {
   # Main-text figure (candidate): where the significant interactions are and what they look like.
   # A. lobe-ordered triangular matrix in the Fig. 2 style (same tri_heat function): the slope difference (preterm slope - fetal slope), in Fisher z per
   #    week of PMA (the same units as the axes of B), for every edge with a significant PMA x group interaction (FDR p < .05); blue = preterm slope
-  #    steeper, red = fetal slope steeper; the colour scale is capped at +/- fig4_cap and saturates beyond it.
+  #    steeper, red = fetal slope steeper; the colour scale is capped at +/- fig3_cap and saturates beyond it.
   # B. every edge's fetal slope against its preterm slope (square axes, same limits); significant edges are outlined and coloured by direction, with
   #    (the quadrant counts are printed to the console for the text).
-  fig4_cap <- 0.06                                                                 # cap of the colour scale in A (slope difference, Fisher z per week)
+  fig3_cap <- 0.06                                                                 # cap of the colour scale in A (slope difference, Fisher z per week)
   sig4 <- !is.na(res_two$int_pAdj) & res_two$int_pAdj < .05
   stopifnot(identical(cp$Conn, res_two$Connection))                                # cp (section 4b) and res_two share the edge order
   cp_int <- cp; cp_int$B <- res_two$int_b; cp_int$pAdj <- res_two$int_pAdj
   tri_int <- tri_heat                                                              # tri_heat, reading the signed interaction coefficients (abs() switched off in this copy)
   environment(tri_int) <- list2env(list(cp = cp_int, abs = function(x) x), parent = environment(tri_heat))
   pM <- suppressMessages(tri_int(sig4, pal$heat_preterm, lim = 0.6) +          # lim here only feeds the scale that is replaced just below (its breaks need lim >= 0.1)
-    scale_fill_gradient2(low = col_fetal, mid = "white", high = col_preterm, midpoint = 0, limits = c(-fig4_cap, fig4_cap), oob = scales::squish,
-                         breaks = seq(-fig4_cap, fig4_cap, length.out = 5), labels = function(x) sprintf("%.2f", x)) +
+    scale_fill_gradient2(low = col_fetal, mid = "white", high = col_preterm, midpoint = 0, limits = c(-fig3_cap, fig3_cap), oob = scales::squish,
+                         breaks = seq(-fig3_cap, fig3_cap, length.out = 5), labels = function(x) sprintf("%.2f", x)) +
     labs(fill = "Slope"))
   dir_cols4 <- c("Preterm slope steeper" = col_preterm, "Fetal slope steeper" = col_fetal)
   lim_s <- ceiling(max(abs(c(res_two$slope_fetal, res_two$slope_preterm)), na.rm = TRUE) * 100) / 100
-  fig4B_xlim <- c(-0.05, 0.035); fig4B_ylim <- c(-0.03, 0.055)      # axis limits of panel B (Fisher z per week); same span on both axes so the plot stays square. Data: fetal slopes -0.047 to 0.028, preterm -0.018 to 0.051
-  if (any(res_two$slope_fetal < fig4B_xlim[1] | res_two$slope_fetal > fig4B_xlim[2] | res_two$slope_preterm < fig4B_ylim[1] | res_two$slope_preterm > fig4B_ylim[2], na.rm = TRUE))
-    message("Fig. 4B: some slopes fall outside fig4B_xlim / fig4B_ylim and are cut off; widen the limits")
+  fig3B_xlim <- c(-0.05, 0.035); fig3B_ylim <- c(-0.03, 0.055)      # axis limits of panel B (Fisher z per week); same span on both axes so the plot stays square. Data: fetal slopes -0.047 to 0.028, preterm -0.018 to 0.051
+  if (any(res_two$slope_fetal < fig3B_xlim[1] | res_two$slope_fetal > fig3B_xlim[2] | res_two$slope_preterm < fig3B_ylim[1] | res_two$slope_preterm > fig3B_ylim[2], na.rm = TRUE))
+    message("Fig. 3B: some slopes fall outside fig3B_xlim / fig3B_ylim and are cut off; widen the limits")
   dd <- res_two[sig4, ]; dd$dir <- factor(ifelse(dd$int_b > 0, "Preterm slope steeper", "Fetal slope steeper"), names(dir_cols4))
   print(table(fetal = sign(dd$slope_fetal), preterm = sign(dd$slope_preterm)))                         # quadrant counts of the significant edges, for the text
   pD <- ggplot(res_two, aes(slope_fetal, slope_preterm)) +
@@ -4090,10 +4090,10 @@ if (RUN_TWO_GROUP_INTERACTION) {
     scale_fill_manual(values = dir_cols4, guide = "none") +
     scale_x_continuous(breaks = seq(-0.06, 0.06, 0.02), labels = function(x) sprintf("%.2f", x)) +     # ticks every 0.02 on both axes
     scale_y_continuous(breaks = seq(-0.06, 0.06, 0.02), labels = function(x) sprintf("%.2f", x)) +
-    coord_fixed(xlim = fig4B_xlim, ylim = fig4B_ylim) +
+    coord_fixed(xlim = fig3B_xlim, ylim = fig3B_ylim) +
     labs(x = "Fetal Connectivity Change (per week)", y = "Preterm Connectivity Change (per week)") + theme_classic(base_size = 9)
-  fig4 <- ggpubr::ggarrange(pM, pD, ncol = 2, nrow = 1, labels = c("A", "B"))
-  show_fig("Fig4_GroupByPma", 9, 4.5, function() print(fig4))
+  fig3 <- ggpubr::ggarrange(pM, pD, ncol = 2, nrow = 1, labels = c("A", "B"))
+  show_fig("Fig3_GroupByPma", 9, 4.5, function() print(fig3))
 
   # ---- Where the interactions are: lobe, hemisphere and distance (descriptive; edges share ROIs, so p-values are optimistic) ----
   # (1) enrichment of significant interactions within vs. between lobes, within vs. between hemispheres (Fisher test, odds ratios);

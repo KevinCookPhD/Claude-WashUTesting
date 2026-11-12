@@ -18,7 +18,7 @@ lobe (frontal, temporal, parietal, occipital). (C) Estimated marginal mean conne
 significant group difference. Models: connectivity ~ PMA at scan + scanner + group with a random intercept per infant, on
 LongComBat-harmonized data (scanner = batch). Group difference = preterm minus fetal.
 
-## Figure 3. PMA x prematurity
+## Figure 4. PMA x prematurity
 (A) The 16 connections with a significant PMA x birth-group interaction (FDR-corrected p < .05), on a neonatal surface:
 right lateral, coronal and dorsal views, with a magnified view of the boxed frontal region (the six most medial
 frontal-frontal connections). Nodes are colored by lobe. (B) Thirteen connections in which connectivity (Fisher z,
@@ -28,8 +28,8 @@ observed ages. Birth groups: EPT <= 28 weeks, VPT > 28 to <= 32 weeks, MPT > 32 
 Model: connectivity ~ scanner + PMA x birth group with a random intercept per infant; 2-df Wald chi-square test of the
 interaction. **[verify: the 13-connection description against the group slopes in your table]**
 
-## Supplemental figure (section 9c): Fig. 3 B and C on scans after 32 weeks PMA
-The same connections, order and layout as Fig. 3B-C, refit on scans after 32 weeks PMA only (301 scans from 176 infants;
+## Supplemental figure (section 9c): Fig. 4 B and C on scans after 32 weeks PMA
+The same connections, order and layout as Fig. 4B-C, refit on scans after 32 weeks PMA only (301 scans from 176 infants;
 45 earlier scans removed). Six of the 16 connections remain FDR-significant in this subset; the group pattern (MPT slope
 steeper than EPT and VPT) is unchanged.
 
