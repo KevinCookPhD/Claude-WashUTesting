@@ -261,8 +261,14 @@ if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
     render_svg(os.path.join(here, "Fig1_Flowchart.svg"))
     render_raster(os.path.join(here, "Fig1_Flowchart.tif"), None)
+    notes = ""
     try:
-        render_pdf(os.path.join(here, "Fig1_Flowchart.pdf")); pdf_note = "/.pdf"
+        render_pdf(os.path.join(here, "Fig1_Flowchart.pdf")); notes += "/.pdf"
+        import shutil, subprocess                                # EPS: converted from the PDF with poppler's pdftops (fonts stay embedded)
+        if shutil.which("pdftops"):
+            subprocess.run(["pdftops", "-eps", os.path.join(here, "Fig1_Flowchart.pdf"), os.path.join(here, "Fig1_Flowchart.eps")], check=True); notes += "/.eps"
+        else:
+            print("pdftops (poppler-utils) not found: EPS skipped")
     except ImportError:
-        pdf_note = ""; print("reportlab not installed: PDF skipped (pip install reportlab)")
-    print(f"Wrote Fig1_Flowchart.svg/.tif{pdf_note}  ({W/72:.2f} x {H/72:.2f} in)")
+        print("reportlab not installed: PDF and EPS skipped (pip install reportlab)")
+    print(f"Wrote Fig1_Flowchart.svg/.tif{notes}  ({W/72:.2f} x {H/72:.2f} in)")
