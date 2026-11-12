@@ -230,8 +230,39 @@ def render_raster(path_tif, path_png, dpi=600, ss=2):
     img.save(path_tif, compression="tiff_lzw", dpi=(dpi, dpi))
     if path_png: img.save(path_png, dpi=(dpi, dpi))
 
+def render_pdf(path):
+    """Vector PDF with the Liberation Sans font embedded (needs reportlab)."""
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.colors import HexColor
+    pdfmetrics.registerFont(TTFont("FlowSans", _font_path(False)))
+    pdfmetrics.registerFont(TTFont("FlowSans-Bold", _font_path(True)))
+    c = canvas.Canvas(path, pagesize=(W, H)); c.setTitle("Fig1_Flowchart")
+    for p in prims:                                              # y is measured down in the spec, up in PDF
+        if p[0] == "rect":
+            _, x, y, w, h, fill, stroke, lw = p
+            c.setFillColor(HexColor(fill)); c.setStrokeColor(HexColor(stroke)); c.setLineWidth(lw)
+            c.rect(x, H - y - h, w, h, fill=1, stroke=1)
+        elif p[0] == "arrow":
+            _, x1, y1, x2, y2, color, lw = p
+            tri, (bx, by) = arrow_head(x1, y1, x2, y2)
+            c.setStrokeColor(HexColor(color)); c.setFillColor(HexColor(color)); c.setLineWidth(lw)
+            c.line(x1, H - y1, bx, H - by)
+            pth = c.beginPath(); pth.moveTo(tri[0][0], H - tri[0][1]); pth.lineTo(tri[1][0], H - tri[1][1]); pth.lineTo(tri[2][0], H - tri[2][1]); pth.close()
+            c.drawPath(pth, fill=1, stroke=0)
+        elif p[0] == "text":
+            _, x, y, s, sz, bold = p
+            c.setFillColor(HexColor(INK)); c.setFont("FlowSans-Bold" if bold else "FlowSans", sz)
+            c.drawString(x, H - y, s)
+    c.save()
+
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
     render_svg(os.path.join(here, "Fig1_Flowchart.svg"))
     render_raster(os.path.join(here, "Fig1_Flowchart.tif"), None)
-    print(f"Wrote Fig1_Flowchart.svg/.tif  ({W/72:.2f} x {H/72:.2f} in)")
+    try:
+        render_pdf(os.path.join(here, "Fig1_Flowchart.pdf")); pdf_note = "/.pdf"
+    except ImportError:
+        pdf_note = ""; print("reportlab not installed: PDF skipped (pip install reportlab)")
+    print(f"Wrote Fig1_Flowchart.svg/.tif{pdf_note}  ({W/72:.2f} x {H/72:.2f} in)")
