@@ -1,7 +1,7 @@
-# Initialize Environment ----
+# 0. SETUP ----
 
 
-# setup ----
+## Paths and Libraries ----
 
 # HOME LAPTOP
 baseDir <- 'C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/04_Projects/01_Active/FASD_FetalASDRisk/data'
@@ -18,8 +18,8 @@ library(circlize)
 library(emmeans)
 
 
-# Prepare Data ----
 
+# 1. SHARED DATA ----
 
 ## Behavioral Data (MCHAT) ----
 
@@ -30,8 +30,11 @@ mchatData <- read.csv(paste0(baseDir,'/behavioral/MCHAT.csv'))
 
 
 
-## Read Imaging Data ----
 
+# 2. STRUCTURAL ANALYSES (run after Setup + Shared Data) ----
+
+
+## 2a. Subject Selection and Matching ----
 
 ### Anatomical Data ----
 
@@ -356,163 +359,8 @@ contingency_table <- contingency_table[1:2, 2:9]
 chisq.test(contingency_table)
 
 
-### Functional Matching ----
 
-
-# ----
-
-#| echo: false
-
-asdDemo <- read.csv(paste0(baseDir,'/functional/asdDemo_expand.csv'), stringsAsFactors = F)
-tdDemo <- read.csv(paste0(baseDir,'/functional/tdDemo.csv'), stringsAsFactors = F)
-
-asdDemo <- asdDemo[asdDemo$ID!='rescue_0187_01',] #Why is this excluded? Why are 715,748 included?
-rownames(asdDemo) <- 1:nrow(asdDemo)
-
-
-asdDemo$Grp <- 'ASD'
-tdDemo$Grp <- 'TD'
-combDemo <- rbind(asdDemo, tdDemo)
-
-matchFrame <- MatchIt::matchit(as.factor(Grp) ~ ScanGA, data=combDemo)
-
-tdDemoMatch <- tdDemo[matchFrame$match.matrix,]
-tdDemoMatch <- tdDemoMatch[complete.cases(tdDemoMatch),]
-tdDemoMatch <- tdDemoMatch[order(as.numeric(row.names(tdDemoMatch))), ]
-
-dropPtList <- c('none')
-
-keepRows <- as.numeric(rownames(asdDemo[!(asdDemo$ID %in% dropPtList), ]))
-tdDemoFinal <- tdDemoMatch[keepRows,]
-asdDemoFinal <- asdDemo[keepRows,]
-
-
-mean(tdDemoFinal$ScanGA)
-sd(tdDemoFinal$ScanGA)
-mean(asdDemoFinal$ScanGA)
-sd(asdDemoFinal$ScanGA)
-
-t.test(tdDemoFinal$ScanGA, asdDemoFinal$ScanGA)
-
-
-xiSqTable <- matrix(ncol=2, nrow=2)
-xiSqTable[1,1] <- nrow(subset(tdDemoFinal, Sex=='m'))
-xiSqTable[1,2] <- nrow(subset(tdDemoFinal, Sex=='f'))
-xiSqTable[2,1] <- nrow(subset(asdDemoFinal, Sex=='m'))
-xiSqTable[2,2] <- nrow(subset(asdDemoFinal, Sex=='f'))
-chisq.test(xiSqTable)
-
-
-tdBirthAge <- c(40.00,39.00,40.29,39.86,39.71,38.71,40.43,39.86,38.88,40.57,38.43,39.71,39.71,38.43,39.43,39.00,40.14,38.14,38.71)
-asdBirthAge <- c(37.71,39.57,38.86,38.86,39.29,38.29,38.14,39.71,38.00,39.00,39.00,41.00,40.86,38.86,38.86,38.00,38.00,39.43,37.29)
-
-t.test(tdBirthAge, asdBirthAge)
-
-mean(tdBirthAge)
-sd(tdBirthAge)
-mean(asdBirthAge)
-sd(asdBirthAge)
-
-# tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00715_02',]
-tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00748_02',]
-tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00556_01',]
-asdDemoFinal <- asdDemoFinal[asdDemoFinal$ID != 'pl_0028_02',]
-
-
-#DO demos here!
-fcMatchedDataTemp <- rbind(asdDemoFinal, tdDemoFinal)
-
-fcMatchedDataTemp$study_id <- NA
-for(i in 1:nrow(fcMatchedDataTemp)) {
-  
-  tempID <- fcMatchedDataTemp$ID[i]
-  
-  studyAbbrev <- substr(tempID,0,1)
-  
-  if(studyAbbrev == 'f')
-  {
-    
-    fcMatchedDataTemp$study_id[i] <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
-    
-  } else if(studyAbbrev == 'r') {
-    
-    tempNum <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
-    fcMatchedDataTemp$study_id[i] <- paste0('RES-',sprintf("%03d", tempNum))
-    
-  } else {
-    tempNum <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
-    fcMatchedDataTemp$study_id[i] <- paste0('PL-',sprintf("%03d", tempNum))
-
-  }
-}
-
-
-testDataFC <- read.csv(paste0(baseDir,'/functional/combinedASDData.csv'),stringsAsFactors=F)
-demoDataPaperFC <- merge(fcMatchedDataTemp, testDataFC[,c('study_id','Sex','BirthGA','X18MLTFAge','birthWeight', 'Race', 'mchat_result')], all.x=T, all.y=F, by='study_id')
-
-
-xiSqTable <- matrix(ncol=2, nrow=2)
-xiSqTable[1,1] <- nrow(subset(demoDataPaperFC, Sex.x=='m' & mchat_result=='Pass'))
-xiSqTable[1,2] <- nrow(subset(demoDataPaperFC, Sex.x=='f' & mchat_result=='Pass'))
-xiSqTable[2,1] <- nrow(subset(demoDataPaperFC, Sex.x=='m' & mchat_result=='Fail'))
-xiSqTable[2,2] <- nrow(subset(demoDataPaperFC, Sex.x=='f' & mchat_result=='Fail'))
-chisq.test(xiSqTable)
-
-
-t.test(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight,subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, paired=F)
-mean(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight, na.rm=T)
-sd(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight, na.rm=T)
-mean(subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, na.rm=T)
-sd(subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, na.rm=T)
-
-
-t.test(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA,subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, paired=F)
-mean(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA, na.rm=T)
-sd(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA, na.rm=T)
-mean(subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, na.rm=T)
-sd(subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, na.rm=T)
-
-
-contingency_table <- table(demoDataPaperFC$mchat_result, demoDataPaperFC$Race)
-chisq.test(contingency_table)
-
-
-### Functional Data ----
-
-
-# ----
-
-
-#| echo: false
-#| 
-allTDFC <- read.csv(paste0(baseDir,'/functional/UseableData/tdCorrSummary.csv'), row.names = 1)
-allASDFC <- read.csv(paste0(baseDir,'/functional/UseableData/asdCorrSummary_Expand.csv'), row.names = 1)
-
-rownames(allTDFC) <- substr(rownames(allTDFC),0,nchar(rownames(allTDFC))-28)
-#rownames(allASDFC) <- substr(rownames(allASDFC),0,nchar(rownames(allASDFC))-16)
-
-tdFC <- allTDFC[rownames(allTDFC) %in% tdDemoFinal$ID,]
-asdFC <- allASDFC[rownames(allASDFC) %in% asdDemoFinal$ID,]
-
-rm(list=c('allTDFC', 'allASDFC'))
-
-
-### Anatomical-Functional Overlap ----
-
-
-# ----
-
-fetalMatched
-
-asdDemoFinal$ID[!c(asdDemoFinal$ID %in% fetalMatched$longID)]
-
-subset(fetalMatched, mchat_result=='Fail')$longID[!c(subset(fetalMatched, mchat_result=='Fail')$longID %in% asdDemoFinal$ID)]
-
-
-# Anatomical Analyses ----
-
-
-## Tissue Volumes ----
+## 2b. Tissue Volumes ----
 
 
 # ----
@@ -640,7 +488,7 @@ subset(glmTissueNormedVolTable.Itx, Grp.p.Adj < .05)
 subset(glmTissueNormedVolTable.Itx, Itx.p.Adj < .05)
 
 
-## Regional Volumes ----
+## 2c. Regional Volumes ----
 
 
 # ----
@@ -1139,7 +987,7 @@ ggpubr::ggarrange(HPC.L.Plot, HPC.R.Plot, Amy.L.Plot, FUS.R.Plot,
 #dev.off()
 
 
-## Cortical Thickness ----
+## 2d. Cortical Thickness ----
 
 
 # ----
@@ -1271,10 +1119,155 @@ subset(glmCTNormedTable.Itx, Grp.p.Adj < .05)
 subset(glmCTNormedTable.Itx, Itx.p.Adj < .05)
 
 
-# Functional Analyses ----
+
+# 3. FUNCTIONAL ANALYSES (run after Setup + Shared Data) ----
 
 
-## Whole Brain Approach ----
+## 3a. Subject Selection and Matching ----
+
+### Functional Matching ----
+
+
+# ----
+
+#| echo: false
+
+asdDemo <- read.csv(paste0(baseDir,'/functional/asdDemo_expand.csv'), stringsAsFactors = F)
+tdDemo <- read.csv(paste0(baseDir,'/functional/tdDemo.csv'), stringsAsFactors = F)
+
+asdDemo <- asdDemo[asdDemo$ID!='rescue_0187_01',] #Why is this excluded? Why are 715,748 included?
+rownames(asdDemo) <- 1:nrow(asdDemo)
+
+
+asdDemo$Grp <- 'ASD'
+tdDemo$Grp <- 'TD'
+combDemo <- rbind(asdDemo, tdDemo)
+
+matchFrame <- MatchIt::matchit(as.factor(Grp) ~ ScanGA, data=combDemo)
+
+tdDemoMatch <- tdDemo[matchFrame$match.matrix,]
+tdDemoMatch <- tdDemoMatch[complete.cases(tdDemoMatch),]
+tdDemoMatch <- tdDemoMatch[order(as.numeric(row.names(tdDemoMatch))), ]
+
+dropPtList <- c('none')
+
+keepRows <- as.numeric(rownames(asdDemo[!(asdDemo$ID %in% dropPtList), ]))
+tdDemoFinal <- tdDemoMatch[keepRows,]
+asdDemoFinal <- asdDemo[keepRows,]
+
+
+mean(tdDemoFinal$ScanGA)
+sd(tdDemoFinal$ScanGA)
+mean(asdDemoFinal$ScanGA)
+sd(asdDemoFinal$ScanGA)
+
+t.test(tdDemoFinal$ScanGA, asdDemoFinal$ScanGA)
+
+
+xiSqTable <- matrix(ncol=2, nrow=2)
+xiSqTable[1,1] <- nrow(subset(tdDemoFinal, Sex=='m'))
+xiSqTable[1,2] <- nrow(subset(tdDemoFinal, Sex=='f'))
+xiSqTable[2,1] <- nrow(subset(asdDemoFinal, Sex=='m'))
+xiSqTable[2,2] <- nrow(subset(asdDemoFinal, Sex=='f'))
+chisq.test(xiSqTable)
+
+
+tdBirthAge <- c(40.00,39.00,40.29,39.86,39.71,38.71,40.43,39.86,38.88,40.57,38.43,39.71,39.71,38.43,39.43,39.00,40.14,38.14,38.71)
+asdBirthAge <- c(37.71,39.57,38.86,38.86,39.29,38.29,38.14,39.71,38.00,39.00,39.00,41.00,40.86,38.86,38.86,38.00,38.00,39.43,37.29)
+
+t.test(tdBirthAge, asdBirthAge)
+
+mean(tdBirthAge)
+sd(tdBirthAge)
+mean(asdBirthAge)
+sd(asdBirthAge)
+
+# tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00715_02',]
+tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00748_02',]
+tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00556_01',]
+asdDemoFinal <- asdDemoFinal[asdDemoFinal$ID != 'pl_0028_02',]
+
+
+#DO demos here!
+fcMatchedDataTemp <- rbind(asdDemoFinal, tdDemoFinal)
+
+fcMatchedDataTemp$study_id <- NA
+for(i in 1:nrow(fcMatchedDataTemp)) {
+  
+  tempID <- fcMatchedDataTemp$ID[i]
+  
+  studyAbbrev <- substr(tempID,0,1)
+  
+  if(studyAbbrev == 'f')
+  {
+    
+    fcMatchedDataTemp$study_id[i] <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
+    
+  } else if(studyAbbrev == 'r') {
+    
+    tempNum <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
+    fcMatchedDataTemp$study_id[i] <- paste0('RES-',sprintf("%03d", tempNum))
+    
+  } else {
+    tempNum <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
+    fcMatchedDataTemp$study_id[i] <- paste0('PL-',sprintf("%03d", tempNum))
+
+  }
+}
+
+
+testDataFC <- read.csv(paste0(baseDir,'/functional/combinedASDData.csv'),stringsAsFactors=F)
+demoDataPaperFC <- merge(fcMatchedDataTemp, testDataFC[,c('study_id','Sex','BirthGA','X18MLTFAge','birthWeight', 'Race', 'mchat_result')], all.x=T, all.y=F, by='study_id')
+
+
+xiSqTable <- matrix(ncol=2, nrow=2)
+xiSqTable[1,1] <- nrow(subset(demoDataPaperFC, Sex.x=='m' & mchat_result=='Pass'))
+xiSqTable[1,2] <- nrow(subset(demoDataPaperFC, Sex.x=='f' & mchat_result=='Pass'))
+xiSqTable[2,1] <- nrow(subset(demoDataPaperFC, Sex.x=='m' & mchat_result=='Fail'))
+xiSqTable[2,2] <- nrow(subset(demoDataPaperFC, Sex.x=='f' & mchat_result=='Fail'))
+chisq.test(xiSqTable)
+
+
+t.test(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight,subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, paired=F)
+mean(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight, na.rm=T)
+sd(subset(demoDataPaperFC, mchat_result=='Pass')$birthWeight, na.rm=T)
+mean(subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, na.rm=T)
+sd(subset(demoDataPaperFC, mchat_result=='Fail')$birthWeight, na.rm=T)
+
+
+t.test(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA,subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, paired=F)
+mean(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA, na.rm=T)
+sd(subset(demoDataPaperFC, mchat_result=='Pass')$BirthGA, na.rm=T)
+mean(subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, na.rm=T)
+sd(subset(demoDataPaperFC, mchat_result=='Fail')$BirthGA, na.rm=T)
+
+
+contingency_table <- table(demoDataPaperFC$mchat_result, demoDataPaperFC$Race)
+chisq.test(contingency_table)
+
+
+### Functional Data ----
+
+
+# ----
+
+
+#| echo: false
+#| 
+allTDFC <- read.csv(paste0(baseDir,'/functional/UseableData/tdCorrSummary.csv'), row.names = 1)
+allASDFC <- read.csv(paste0(baseDir,'/functional/UseableData/asdCorrSummary_Expand.csv'), row.names = 1)
+
+rownames(allTDFC) <- substr(rownames(allTDFC),0,nchar(rownames(allTDFC))-28)
+#rownames(allASDFC) <- substr(rownames(allASDFC),0,nchar(rownames(allASDFC))-16)
+
+tdFC <- allTDFC[rownames(allTDFC) %in% tdDemoFinal$ID,]
+asdFC <- allASDFC[rownames(allASDFC) %in% asdDemoFinal$ID,]
+
+rm(list=c('allTDFC', 'allASDFC'))
+
+
+
+## 3b. Whole Brain Approach ----
 
 # First step is to just do a whole brain search
 
@@ -1851,7 +1844,7 @@ ggplot(asdConnPlot, aes(x=Row, y=Col)) +
 # dev.off()
 
 
-## Smaller Network Approach ----
+## 3c. Smaller Network Approach ----
 
 # Here we are subdividing out into smaller networks
 
@@ -2954,4 +2947,17 @@ ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
 
+
+
+
+# 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----
+
+
+# ----
+
+fetalMatched
+
+asdDemoFinal$ID[!c(asdDemoFinal$ID %in% fetalMatched$longID)]
+
+subset(fetalMatched, mchat_result=='Fail')$longID[!c(subset(fetalMatched, mchat_result=='Fail')$longID %in% asdDemoFinal$ID)]
 
