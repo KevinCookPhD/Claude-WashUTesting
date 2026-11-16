@@ -413,10 +413,7 @@ addFDRfc <- function(tbl) {
 
 # 1. SHARED DATA ----
 
-## Behavioral Data (MCHAT) ----
-
-
-mchatData <- read.csv(paste0(baseDir,'/behavioral/MCHAT.csv'))
+# (Nothing is shared between the structural and functional analyses: each reads its own data below.)
 
 
 # 2. STRUCTURAL ANALYSES (run after Setup + Shared Data) ----
@@ -428,14 +425,10 @@ mchatData <- read.csv(paste0(baseDir,'/behavioral/MCHAT.csv'))
 
 
 testData <- read.csv(paste0(baseDir,'/anatomical/combinedASDData.csv'),stringsAsFactors=F)
-testPreemie <- subset(testData, PretermStatus=='Preterm' & (Kidokoro <8 | is.na(Kidokoro)))
 testFetal <- subset(testData, PretermStatus=='Term' & CHDStatus !='CHD' & AnyFetal==T)
 
-testFetalPass <- subset(testFetal, mchat_result=='Pass')
 testFetalFail <- subset(testFetal, mchat_result=='Fail')
 
-
-fetalPassID <- formatID(testFetalPass$study_id, testFetalPass$study)
 
 fetalFailID <- formatID(testFetalFail$study_id, testFetalFail$study)
 
@@ -1241,14 +1234,6 @@ saveResultTable(fcGLM, 'wholebrain_main')
 saveResultTable(fcIntxGLM, 'wholebrain_intx')
 
 
-SigROIList <- subset(fcIntxGLM, Grp.p.adjust <.05)$ROI
-ROIList1 <- vapply(strsplit(SigROIList, '_'), function(x) x[1], character(1))
-ROIList2 <- vapply(strsplit(SigROIList, '_'), function(x) x[2], character(1))
-
-ROIListFull <- c(ROIList1, ROIList2)
-# sort(table(ROIListFull))
-
-
 write.table(fcIntxGLM, paste0(baseDir,'/functional/output/WholeBrain_WholeTable.csv'), col.names=T, row.names=F, sep=',')
 write.table(subset(fcIntxGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/WholeBrain_P05FDR.csv'), col.names=T, row.names=F, sep=',')
 
@@ -1964,23 +1949,10 @@ for (net in names(networkSpecs)) {
              paste0('network_', net, '_bars'), width = 12, height = 6)
 }
 
-# Effect size conversion and group-difference summary for the cerebellar network
-effectsize::eta2_to_f2(0.2953587)
-effectsize::eta2_to_f(0.2953587)
-
-deltaSS <- mean(networkResults$CRB$fcGLM$TD.Mean) - mean(networkResults$CRB$fcGLM$ASD.Mean)
-sigmaSS <- sd(networkResults$CRB$fcGLM$TD.Mean) - sd(networkResults$CRB$fcGLM$ASD.Mean)
-
-
 #### Network Connectivity Figures ----
 
 
 # Read in the output of the above analyses for plotting
-FCTable.AllConn.DMN <- read.csv(paste0(baseDir,'/functional/output/DMN_Intx_Wholebrain.csv'), stringsAsFactors=F)
-FCTable.AllConn.Limbic <- read.csv(paste0(baseDir,'/functional/output/Limbic_Intx_Wholebrain.csv'), stringsAsFactors=F)
-FCTable.AllConn.Subcort <- read.csv(paste0(baseDir,'/functional/output/SubCort_Intx_Wholebrain.csv'), stringsAsFactors=F)
-FCTable.AllConn.CRB <- read.csv(paste0(baseDir,'/functional/output/CRB_Intx_Wholebrain.csv'), stringsAsFactors=F)
-
 FCTable.TrendOnly.DMN <- read.csv(paste0(baseDir,'/functional/output/DMN_Intx_P10FDR.csv'), stringsAsFactors=F)
 FCTable.TrendOnly.Limbic <- read.csv(paste0(baseDir,'/functional/output/Limbic_Intx_P10FDR.csv'), stringsAsFactors=F)
 FCTable.TrendOnly.Subcort <- read.csv(paste0(baseDir,'/functional/output/SubCort_Intx_P10FDR.csv'), stringsAsFactors=F)
