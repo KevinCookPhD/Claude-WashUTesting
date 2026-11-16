@@ -268,6 +268,44 @@ groupPointFill <- c(low = tintColor(groupColors[['low']], .64, '55'), high = tin
 groupLineColor <- c(low = tintColor(groupColors[['low']], .2), high = tintColor(groupColors[['high']], .2))
 networkBarFill <- c(low = tintColor(groupColors[['low']], .5, 'cc'), high = tintColor(groupColors[['high']], .5, 'cc'))
 
+# Axis numbers with a fixed number of decimals (never scientific notation): the fewest decimals that show every tick exactly
+fixedDecimalLabels <- function(breaks) {
+  digits <- 0
+  while (digits < 8 && any(abs(breaks * 10^digits - round(breaks * 10^digits)) > 1e-8, na.rm = TRUE)) { digits <- digits + 1 }
+  formatC(breaks, format = 'f', digits = digits)
+}
+
+# A boxed legend (Low Risk / High Risk) drawn as its own panel, like the key in the older hand-formatted figure.
+# type = 'group' (filled bars), 'network' (bars with colored outlines) or 'intx' (diamond / circle with a line);
+# textSize = size of the 'Low Risk' / 'High Risk' text
+riskLegendPanel <- function(type, textSize = 7.5) {
+  legendPlot <- ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed() + theme_void() +
+    annotate('rect', xmin = .08, xmax = .92, ymin = .2, ymax = .8, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('text', x = .40, y = .61, label = 'Low Risk', hjust = 0, size = textSize) +
+    annotate('text', x = .40, y = .39, label = 'High Risk', hjust = 0, size = textSize)
+
+  if (type == 'group') {
+    legendPlot +
+      annotate('rect', xmin = .16, xmax = .32, ymin = .53, ymax = .69, fill = groupBarFill[['low']], colour = 'black', linewidth = 1) +
+      annotate('rect', xmin = .16, xmax = .32, ymin = .31, ymax = .47, fill = groupBarFill[['high']], colour = 'black', linewidth = 1)
+  } else if (type == 'network') {
+    legendPlot +
+      annotate('rect', xmin = .16, xmax = .32, ymin = .53, ymax = .69, fill = networkBarFill[['low']], colour = groupColors[['low']], linewidth = 1) +
+      annotate('rect', xmin = .16, xmax = .32, ymin = .31, ymax = .47, fill = networkBarFill[['high']], colour = groupColors[['high']], linewidth = 1)
+  } else {
+    legendPlot +
+      annotate('segment', x = .13, xend = .35, y = .61, yend = .61, colour = groupLineColor[['low']], linewidth = 2) +
+      annotate('point', x = .24, y = .61, shape = 23, size = 7, fill = groupPointFill[['low']], colour = 'black', stroke = .75) +
+      annotate('segment', x = .13, xend = .35, y = .39, yend = .39, colour = groupLineColor[['high']], linewidth = 2) +
+      annotate('point', x = .24, y = .39, shape = 21, size = 7, fill = groupPointFill[['high']], colour = 'black', stroke = .75)
+  }
+}
+
+# Put the boxed Low Risk / High Risk legend to the right of a single plot
+addRiskLegend <- function(plotObj, legendType) {
+  ggpubr::ggarrange(plotObj, riskLegendPanel(legendType, textSize = 5), ncol = 2, widths = c(5, 1.3), legend = 'none')
+}
+
 # Keep a table in resultTables[[name]] and, if saveTables is TRUE, write it to tableDir/<name>.csv
 saveTable <- function(tbl, name) {
   resultTables[[name]] <<- tbl
@@ -728,13 +766,6 @@ significantROIs <- function(tbl, pAdjCol, threshold) {
   tbl$ROI[which(tbl[[pAdjCol]] < threshold)]
 }
 
-# Axis numbers with a fixed number of decimals (never scientific notation): the fewest decimals that show every tick exactly
-fixedDecimalLabels <- function(breaks) {
-  digits <- 0
-  while (digits < 8 && any(abs(breaks * 10^digits - round(breaks * 10^digits)) > 1e-8, na.rm = TRUE)) { digits <- digits + 1 }
-  formatC(breaks, format = 'f', digits = digits)
-}
-
 # Break a long axis label onto two lines so it fits beside the panel
 wrapAxisLabel <- function(label, width = 28) paste(strwrap(label, width = width), collapse = '\n')
 
@@ -817,27 +848,6 @@ plotRoiInteraction <- function(roi) {
     geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
     ylab(axisInfo$label) + xlab('Gestational Age (Weeks)') +
     themeRegionalFigure(showXTitle = TRUE)
-}
-
-# A boxed legend (Low Risk / High Risk) drawn as its own panel, like the key in the older hand-formatted figure.
-# type = 'group' (filled bars) or 'intx' (diamond / circle with a line)
-riskLegendPanel <- function(type) {
-  legendPlot <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
-    annotate('rect', xmin = .08, xmax = .92, ymin = .2, ymax = .8, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('text', x = .40, y = .61, label = 'Low Risk', hjust = 0, size = 7.5) +
-    annotate('text', x = .40, y = .39, label = 'High Risk', hjust = 0, size = 7.5)
-
-  if (type == 'group') {
-    legendPlot +
-      annotate('rect', xmin = .16, xmax = .32, ymin = .53, ymax = .69, fill = groupBarFill[['low']], colour = 'black', linewidth = 1) +
-      annotate('rect', xmin = .16, xmax = .32, ymin = .31, ymax = .47, fill = groupBarFill[['high']], colour = 'black', linewidth = 1)
-  } else {
-    legendPlot +
-      annotate('segment', x = .13, xend = .35, y = .61, yend = .61, colour = groupLineColor[['low']], linewidth = 2) +
-      annotate('point', x = .24, y = .61, shape = 23, size = 7, fill = groupPointFill[['low']], colour = 'black', stroke = .75) +
-      annotate('segment', x = .13, xend = .35, y = .39, yend = .39, colour = groupLineColor[['high']], linewidth = 2) +
-      annotate('point', x = .24, y = .39, shape = 21, size = 7, fill = groupPointFill[['high']], colour = 'black', stroke = .75)
-  }
 }
 
 # Size (inches) of a figure with one panel per ROI plus the legend: 4 panels per row, 3.5 in per panel
@@ -1883,20 +1893,22 @@ runNetworkAnalysis <- function(name, spec) {
   list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
 }
 
-# Bar chart of the group means for every connection in a network, ordered by group p-value
+# Bar chart of the group means for every connection in a network, ordered by group p-value, with a boxed legend to its right
 plotNetworkBars <- function(fcGLM, spec) {
   longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
   pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
 
   barPlot <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group)))
   if (!is.null(spec$yLimits)) {
-    barPlot <- barPlot + scale_y_continuous(limits=spec$yLimits, breaks=spec$yBreaks, expand=c(0,0))
+    barPlot <- barPlot + scale_y_continuous(limits=spec$yLimits, breaks=spec$yBreaks, labels=fixedDecimalLabels, expand=c(0,0))
+  } else {
+    barPlot <- barPlot + scale_y_continuous(labels=fixedDecimalLabels)
   }
   barPlot <- barPlot +
     scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
     scale_color_manual(values=c(groupColors[['low']], groupColors[['high']]))
   if (spec$zeroLine) { barPlot <- barPlot + geom_hline(yintercept = 0, linewidth=1.5) }
-  barPlot +
+  barPlot <- barPlot +
     geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
     ylab('Connectivity Strength') + xlab(spec$xLabel) +
     theme(axis.title.x = element_text(color = 'black', size = 16),
@@ -1914,6 +1926,8 @@ plotNetworkBars <- function(fcGLM, spec) {
           legend.position = 'none',
           legend.text = element_text(color = 'black', size = 12),
           legend.title=element_blank())
+
+  addRiskLegend(barPlot, 'network')
 }
 
 
@@ -1924,7 +1938,7 @@ networkResults <- list()
 for (net in names(networkSpecs)) {
   networkResults[[net]] <- runNetworkAnalysis(net, networkSpecs[[net]])
   showFigure(plotNetworkBars(networkResults[[net]]$fcGLM, networkSpecs[[net]]),
-             paste0('network_', net, '_bars'), width = 10, height = 6)
+             paste0('network_', net, '_bars'), width = 12, height = 6)
 }
 
 # Effect size conversion and group-difference summary for the cerebellar network
@@ -2011,15 +2025,15 @@ plotFrame$SE <- as.numeric(plotFrame$SE)
 ##need marginal means? -- emmeans? Give the SE from the model itself
 
 network_combined_bars_p10 <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
-  #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
+  scale_y_continuous(labels=fixedDecimalLabels) +
   scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
   scale_color_manual(values=c(groupColors[['low']], groupColors[['high']])) +
   geom_hline(yintercept = 0, lwd=1) +
   geom_bar(stat='identity', position=position_dodge2(0.2), aes(color=Grp,fill=Grp)) +
   # geom_errorbar(position=position_dodge2(0.2), aes(ymin=Mean-SE, ymax=Mean+SE), size=.2) +
-  ylab('Connectivity Strength') + xlab('Subcortical Connections') +
+  ylab('Connectivity Strength') + xlab('Network Connections') +
   theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 4, angle=90),
+        axis.text.x = element_text(color = 'black', size = 6, angle=90, hjust=1, vjust=.5),
         axis.ticks.x = element_blank(),
         axis.title.y = element_text(color = 'black', size = 16),
         axis.text.y = element_text(color = 'black', size = 12),
@@ -2030,11 +2044,11 @@ network_combined_bars_p10 <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Gr
         panel.grid.major.y = element_line(color = '#aaaaaa'),
         panel.grid.major.x = element_line(color = '#aaaaaa'),
         panel.background = element_rect(fill='white'),
-        legend.position = 'right',
+        legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
 
-showFigure(network_combined_bars_p10, 'network_combined_bars_p10', width = 10, height = 6)
+showFigure(addRiskLegend(network_combined_bars_p10, 'network'), 'network_combined_bars_p10', width = 12, height = 6)
 
 
 # 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----
