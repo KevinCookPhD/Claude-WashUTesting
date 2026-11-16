@@ -1495,996 +1495,212 @@ for(i in 1:nrow(connROIs)){
 }
 
 
-### Cerebellar ----
+### Network Analyses ----
+
+# For each network, take the connections where BOTH regions belong to the network, then for every connection fit
+#   (1) FC ~ Grp + ScanGA   and   (2) FC ~ Grp * ScanGA   (random intercept per subject).
+# Each network writes its tables to functional/output and gets a bar chart (network_<name>_bars).
 
 
 # ----
 
-# Cerebellar ROI in both ROI
-ROI1match <- grepl('CRB',connROIs$ROI1)
-ROI2match <- grepl('CRB',connROIs$ROI2)
-bothROIMatch <- ROI1match & ROI2match
+# ROI number = the third '.'-separated part of an ROI name (e.g. 'CAU.L.39' -> 39)
+roiNumber <- function(roi) as.numeric(vapply(strsplit(roi, '.', fixed = TRUE), function(x) x[3], character(1)))
 
-tdFCNetwork <- tdFC[,bothROIMatch]
-asdFCNetwork <- asdFC[,bothROIMatch]
+# One entry per network:
+#   match         - function(roi names) -> TRUE for regions in the network
+#   xLabel        - x-axis label of the bar chart
+#   yLimits/yBreaks - y-axis of the bar chart (yLimits NULL = automatic)
+#   zeroLine      - draw a line at 0 on the bar chart
+#   adjustedMeans - TRUE: interaction-table group means are model-adjusted (emmeans); FALSE: raw group means
+networkSpecs <- list(
 
-fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
-colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+  CRB = list(match = function(roi) grepl('CRB', roi),
+             xLabel = 'Cerebellar Connections', yLimits = c(0,1.2), yBreaks = seq(0,2,.2), zeroLine = TRUE, adjustedMeans = TRUE),
 
-fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
-colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+  # Originally c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200); parahippocampal gyrus added (43,86,125)
+  Limbic = list(match = function(roi) roiNumber(roi) %in% c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200,
+                                                            43,86,125),
+                xLabel = 'Limbic Connections', yLimits = c(-.4,1.4), yBreaks = seq(-2,2,.2), zeroLine = FALSE, adjustedMeans = FALSE),
 
+  # Originally also included 43,86,125 (hippocampus and parahippocampal gyrus); removed
+  DMN = list(match = function(roi) roiNumber(roi) %in% c(4,11,18,22,23,34,40,42,48,53,70,85,88,96,100,102,104,106,123,124,128,137,150,152,156,163,168,171,176,178),
+             xLabel = 'Default Mode Connections', yLimits = c(-.6,1), yBreaks = seq(-2,2,.2), zeroLine = FALSE, adjustedMeans = TRUE),
 
-for(i in 1:nrow(fcGLM)){
-  
-  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
-  colnames(tempTD) <- c('ID','FC')
-  tempTD$Grp <- 'TD'
-  tempTD <- merge(tempTD, tdDemoFinal)
-  
-  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
-  colnames(tempASD) <- c('ID','FC')
-  tempASD$Grp <- 'ASD'
-  tempASD <- merge(tempASD, asdDemoFinal)
-  
-  glmFrame <- rbind(tempTD, tempASD)
-  glmFrame$FC <- as.numeric(glmFrame$FC)
-  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
-  
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  adjustMeans <- emmeans(tempGLM,'Grp')
-  
-  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
-  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
-  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
-  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
-  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
-  
-  
+  SomMot = list(match = function(roi) grepl('PreCG', roi) | grepl('PoCG', roi) | grepl('SMA', roi),
+                xLabel = 'Sensorimotor Connections', yLimits = c(-.3,1.1), yBreaks = seq(-2,2,.2), zeroLine = FALSE, adjustedMeans = TRUE),
+
+  SubCort = list(match = function(roi) roiNumber(roi) %in% c(31,32,39,51,80,92,97,107,111,134,139,145,151),
+                 xLabel = 'Subcortical Connections', yLimits = c(-.2,1.2), yBreaks = seq(-2,2,.2), zeroLine = FALSE, adjustedMeans = TRUE),
+
+  Auditory = list(match = function(roi) roiNumber(roi) %in% c(88,94,2,12,48,171,107,139,152,185),
+                  xLabel = 'Auditory Connections', yLimits = NULL, yBreaks = NULL, zeroLine = FALSE, adjustedMeans = TRUE),
+
+  Visual = list(match = function(roi) roiNumber(roi) %in% c(181,174,153,114,149,195,167,105,116,194,197,162,131,186,135,
+                                                            72,60,19,52,35,75,25,15,42,30,91,87,98,57),
+                xLabel = 'Visual Connections', yLimits = NULL, yBreaks = NULL, zeroLine = FALSE, adjustedMeans = TRUE)
+)
+
+# Fit both models for every connection (column) of the network.
+# Returns the main-effects table (fcGLM) and the interaction table (fcIntxGLM).
+fitNetworkModels <- function(tdFCNetwork, asdFCNetwork, tdDemo, asdDemo, adjustedMeans) {
+
+  lmeCtrl <- lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')
+
+  fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+  colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+  fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+  colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+  for(i in 1:nrow(fcGLM)){
+
+    tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+    colnames(tempTD) <- c('ID','FC')
+    tempTD$Grp <- 'TD'
+    tempTD <- merge(tempTD, tdDemo)
+
+    tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+    colnames(tempASD) <- c('ID','FC')
+    tempASD$Grp <- 'ASD'
+    tempASD <- merge(tempASD, asdDemo)
+
+    glmFrame <- rbind(tempTD, tempASD)
+    glmFrame$FC <- as.numeric(glmFrame$FC)
+    glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+
+    tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
+
+    fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+    fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+    fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+    fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+    fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+    fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+    fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+    fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+    fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+
+    tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
+
+    fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+    if (adjustedMeans) {
+      adjustMeans <- as.data.frame(emmeans(tempGLM, 'Grp', data=glmFrame))
+      fcIntxGLM$TD.Mean[i] <- adjustMeans$emmean[2]
+      fcIntxGLM$TD.SE[i] <- adjustMeans$SE[2]
+      fcIntxGLM$ASD.Mean[i] <- adjustMeans$emmean[1]
+      fcIntxGLM$ASD.SE[i] <- adjustMeans$SE[1]
+    } else {
+      fcIntxGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+      fcIntxGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+      fcIntxGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+      fcIntxGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+    }
+    fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+    fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+    fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+    fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+    fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+    fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  }
+
+  list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
 }
 
-fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
-fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+# FDR-correct the p-values of a network table (Grp.p.adjust, GA.p.adjust, and Intx.p.adjust for the interaction table)
+addFDRfc <- function(tbl) {
+  tbl$Grp.p.adjust <- p.adjust(tbl$Grp.p, method='fdr')
+  tbl$GA.p.adjust <- p.adjust(tbl$GA.p, method='fdr')
+  if ('Intx.p' %in% colnames(tbl)) { tbl$Intx.p.adjust <- p.adjust(tbl$Intx.p, method='fdr') }
+  tbl
+}
 
-# subset(fcGLM, Grp.p <.05)
-# subset(fcGLM, Grp.p <.01)
-# subset(fcGLM, Grp.p <.001)
+# Write a network's tables to functional/output (these files are read back for the connectivity figures below)
+writeNetworkTables <- function(name, fcGLM, fcIntxGLM) {
+  out <- function(tbl, suffix) {
+    write.table(tbl, paste0(baseDir,'/functional/output/', name, '_', suffix, '.csv'), col.names=T, row.names=F, sep=',')
+  }
+  out(fcGLM, 'WholeTable')
+  out(subset(fcGLM, Grp.p <.05), 'P05')
+  out(subset(fcGLM, Grp.p <.01), 'P01')
+  out(subset(fcGLM, Grp.p <.001), 'P001')
+  out(subset(fcGLM, Grp.p.adjust <.05), 'P05FDR')
 
-subset(fcGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
+  out(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), 'Intx_P05FDR')
+  out(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), 'Intx_P10FDR')
+  out(fcIntxGLM, 'Intx_Wholebrain')
+}
+
+# Run one network: select its connections, fit the models, FDR-correct, print what survives, and write the tables
+runNetworkAnalysis <- function(name, spec) {
+  bothROIMatch <- spec$match(connROIs$ROI1) & spec$match(connROIs$ROI2)
+
+  models <- fitNetworkModels(tdFC[,bothROIMatch], asdFC[,bothROIMatch], tdDemoFinal, asdDemoFinal, spec$adjustedMeans)
+  fcGLM <- addFDRfc(models$fcGLM)
+  fcIntxGLM <- addFDRfc(models$fcIntxGLM)
+
+  message(name, ': ', sum(bothROIMatch), ' connections')
+  print(subset(fcGLM, Grp.p.adjust <.05))
+  print(subset(fcIntxGLM, Grp.p.adjust <.05))
+  print(subset(fcIntxGLM, Intx.p.adjust <.05))
+
+  writeNetworkTables(name, fcGLM, fcIntxGLM)
+  list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
+}
+
+# Bar chart of the group means for every connection in a network, ordered by group p-value
+plotNetworkBars <- function(fcGLM, spec) {
+  longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
+  pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
+
+  barPlot <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group)))
+  if (!is.null(spec$yLimits)) {
+    barPlot <- barPlot + scale_y_continuous(limits=spec$yLimits, breaks=spec$yBreaks, expand=c(0,0))
+  }
+  barPlot <- barPlot +
+    scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
+    scale_color_manual(values=c('#bb0000','#0000bb'))
+  if (spec$zeroLine) { barPlot <- barPlot + geom_hline(yintercept = 0, linewidth=1.5) }
+  barPlot +
+    geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+    ylab('Connectivity Strength') + xlab(spec$xLabel) +
+    theme(axis.title.x = element_text(color = 'black', size = 16),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_text(color = 'black', size = 16),
+          axis.text.y = element_text(color = 'black', size = 12),
+          axis.ticks.y = element_blank(),
+          axis.line.x = element_line(color='black', linewidth = 1),
+          axis.line.y = element_line(color='black', linewidth = 1),
+          plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+          panel.grid.major.y = element_line(color = 'dark gray'),
+          panel.grid.major.x = element_line(color = 'dark gray'),
+          panel.background = element_rect(fill='white'),
+          legend.position = 'none',
+          legend.text = element_text(color = 'black', size = 12),
+          legend.title=element_blank())
+}
 
 
-fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
-
-subset(fcIntxGLM, Grp.p.adjust <.05)
-subset(fcIntxGLM, Intx.p.adjust <.05)
+### Run Network Analyses ----
 
 
-write.table(fcGLM, paste0(baseDir,'/functional/output/CRB_WholeTable.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/CRB_P05.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/CRB_P01.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/CRB_P001.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/CRB_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+# ----
 
-write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/CRB_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/CRB_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(fcIntxGLM, paste0(baseDir,'/functional/output/CRB_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
+networkResults <- list()
+for (net in names(networkSpecs)) {
+  networkResults[[net]] <- runNetworkAnalysis(net, networkSpecs[[net]])
+  showFigure(plotNetworkBars(networkResults[[net]]$fcGLM, networkSpecs[[net]]),
+             paste0('network_', net, '_bars'), width = 10, height = 6)
+}
 
-
-# fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-# fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-# fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
-# 
-# subset(fcIntxGLM, Grp.p <.001)
-# #subset(fcGLM, GA.p <.05)
-# subset(fcIntxGLM, Grp.p.adjust <.05)
-# #subset(fcGLM, GA.p.adjust <.05)
-# subset(fcIntxGLM, Intx.p.adjust <.05)
-# #subset(fcGLM, GA.p.adjust <.05)
-
-
+# Effect size conversion and group-difference summary for the cerebellar network
 effectsize::eta2_to_f2(0.2953587)
 effectsize::eta2_to_f(0.2953587)
 
+deltaSS <- mean(networkResults$CRB$fcGLM$TD.Mean) - mean(networkResults$CRB$fcGLM$ASD.Mean)
+sigmaSS <- sd(networkResults$CRB$fcGLM$TD.Mean) - sd(networkResults$CRB$fcGLM$ASD.Mean)
 
-deltaSS <- mean(fcGLM$TD.Mean) - mean(fcGLM$ASD.Mean)
-sigmaSS <- sd(fcGLM$TD.Mean) - sd(fcGLM$ASD.Mean)
-
-longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
-
-pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
-
-limit05 <- nrow(subset(fcGLM, Grp.p <.05))
-limit01 <- nrow(subset(fcGLM, Grp.p <.01))
-limit001 <- nrow(subset(fcGLM, Grp.p <.001))
-limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
-
-
-network_CRB_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
-  scale_y_continuous(limits=c(0,1.2), breaks=seq(0,2,.2), expand=c(0,0)) +
-  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-  scale_color_manual(values=c('#bb0000','#0000bb')) +
-  geom_hline(yintercept = 0, linewidth=1.5) +
-  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
-  ylab('Connectivity Strength') + xlab('Cerebellar Connections') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.y = element_line(color = 'dark gray'),
-        panel.grid.major.x = element_line(color = 'dark gray'),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-
-showFigure(network_CRB_bars, 'network_CRB_bars', width = 10, height = 6)
-
-
-### Limbic ----
-
-
-# ----
-
-#roiNumeric <- c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200)
-
-# ADD IN PARAHIPPOCAMPAL GYRUS TO SEE WHAT HAPPENS
-roiNumeric <- c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200,
-                43,86,125)
-
-bothROIMatch <- vector()
-
-for(i in 1:nrow(connROIs)){
-  
-  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
-  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
-  
-  match1 <- conn1Num %in% roiNumeric
-  match2 <- conn2Num %in% roiNumeric
-  bothROIMatch[i] <- (match1 & match2)
-}
-
-
-tdFCNetwork <- tdFC[,bothROIMatch]
-asdFCNetwork <- asdFC[,bothROIMatch]
-
-fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
-colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
-
-fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
-colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
-
-
-for(i in 1:nrow(fcGLM)){
-  
-  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
-  colnames(tempTD) <- c('ID','FC')
-  tempTD$Grp <- 'TD'
-  tempTD <- merge(tempTD, tdDemoFinal)
-  
-  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
-  colnames(tempASD) <- c('ID','FC')
-  tempASD$Grp <- 'ASD'
-  tempASD <- merge(tempASD, asdDemoFinal)
-  
-  glmFrame <- rbind(tempTD, tempASD)
-  glmFrame$FC <- as.numeric(glmFrame$FC)
-  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
-  
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  adjustMeans <- emmeans(tempGLM,'Grp')
-  
-  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcIntxGLM$TD.Mean[i] <-mean(as.numeric(tempTD$FC), na.rm = T)
-  fcIntxGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcIntxGLM$ASD.Mean[i] <-mean(as.numeric(tempASD$FC), na.rm = T)
-  fcIntxGLM$ASD.SE[i] <-sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
-  
-}
-
-fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
-fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
-
-# subset(fcGLM, Grp.p <.05)
-# subset(fcGLM, Grp.p <.01)
-# subset(fcGLM, Grp.p <.001)
-
-subset(fcGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
-
-
-fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
-
-subset(fcIntxGLM, Grp.p.adjust <.05)
-subset(fcIntxGLM, Intx.p.adjust <.05)
-
-
-write.table(fcGLM, paste0(baseDir,'/functional/output/Limbic_WholeTable.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/Limbic_P05.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/Limbic_P01.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/Limbic_P001.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/Limbic_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-
-write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/Limbic_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/Limbic_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(fcIntxGLM, paste0(baseDir,'/functional/output/Limbic_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
-
-
-longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
-
-pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
-
-limit05 <- nrow(subset(fcGLM, Grp.p <.05))
-limit01 <- nrow(subset(fcGLM, Grp.p <.01))
-limit001 <- nrow(subset(fcGLM, Grp.p <.001))
-limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
-
-network_Limbic_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
-  scale_y_continuous(limits=c(-.4,1.4), breaks=seq(-2,2,.2), expand=c(0,0)) +
-  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-  scale_color_manual(values=c('#bb0000','#0000bb')) +
-  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
-  ylab('Connectivity Strength') + xlab('Limbic Connections') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.y = element_line(color = 'dark gray'),
-        panel.grid.major.x = element_line(color = 'dark gray'),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-
-showFigure(network_Limbic_bars, 'network_Limbic_bars', width = 10, height = 6)
-
-
-### Default Mode ----
-
-
-# ----
-
-#roiNumeric <- c(4,11,18,22,23,34,40,42,43,48,53,70,85,86,88,96,100,102,104,106,123,124,125,128,137,150,152,156,160,163,168,171,176,178)
-
-# REMOVE HIPPOCAMPUS AND PARAHIPPOCAMPAL GYRUS
-roiNumeric <- c(4,11,18,22,23,34,40,42,48,53,70,85,88,96,100,102,104,106,123,124,128,137,150,152,156,163,168,171,176,178)
-
-
-bothROIMatch <- vector()
-
-for(i in 1:nrow(connROIs)){
-  
-  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
-  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
-  
-  match1 <- conn1Num %in% roiNumeric
-  match2 <- conn2Num %in% roiNumeric
-  bothROIMatch[i] <- (match1 & match2)
-}
-
-
-tdFCNetwork <- tdFC[,bothROIMatch]
-asdFCNetwork <- asdFC[,bothROIMatch]
-
-fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
-colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
-
-fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
-colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
-
-
-for(i in 1:nrow(fcGLM)){
-  
-  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
-  colnames(tempTD) <- c('ID','FC')
-  tempTD$Grp <- 'TD'
-  tempTD <- merge(tempTD, tdDemoFinal)
-  
-  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
-  colnames(tempASD) <- c('ID','FC')
-  tempASD$Grp <- 'ASD'
-  tempASD <- merge(tempASD, asdDemoFinal)
-  
-  glmFrame <- rbind(tempTD, tempASD)
-  glmFrame$FC <- as.numeric(glmFrame$FC)
-  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
-  
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  adjustMeans <- emmeans(tempGLM,'Grp')
-  
-  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
-  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
-  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
-  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
-  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
-  
-}
-
-fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
-fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
-
-# subset(fcGLM, Grp.p <.05)
-# subset(fcGLM, Grp.p <.01)
-# subset(fcGLM, Grp.p <.001)
-
-subset(fcGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
-
-
-fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
-
-subset(fcIntxGLM, Grp.p.adjust <.05)
-subset(fcIntxGLM, Intx.p.adjust <.05)
-
-
-write.table(fcGLM, paste0(baseDir,'/functional/output/DMN_WholeTable.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/DMN_P05.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/DMN_P01.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/DMN_P001.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/DMN_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-
-write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/DMN_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/DMN_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(fcIntxGLM, paste0(baseDir,'/functional/output/DMN_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
-
-
-longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
-
-pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
-
-limit05 <- nrow(subset(fcGLM, Grp.p <.05))
-limit01 <- nrow(subset(fcGLM, Grp.p <.01))
-limit001 <- nrow(subset(fcGLM, Grp.p <.001))
-limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
-
-network_DMN_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
-  scale_y_continuous(limits=c(-.6,1), breaks=seq(-2,2,.2), expand=c(0,0)) +
-  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-  scale_color_manual(values=c('#bb0000','#0000bb')) +
-  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
-  ylab('Connectivity Strength') + xlab('Default Mode Connections') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.y = element_line(color = 'dark gray'),
-        panel.grid.major.x = element_line(color = 'dark gray'),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-
-showFigure(network_DMN_bars, 'network_DMN_bars', width = 10, height = 6)
-
-
-### Somatomotor ----
-
-
-# ----
-ROI1match <- grepl('PreCG',connROIs$ROI1) |
- grepl('PoCG',connROIs$ROI1) | grepl('SMA',connROIs$ROI1)
-ROI2match <- grepl('PreCG',connROIs$ROI2) |
- grepl('PoCG',connROIs$ROI2) | grepl('SMA',connROIs$ROI2)
-bothROIMatch <- ROI1match & ROI2match
-
-tdFCNetwork <- tdFC[,bothROIMatch]
-asdFCNetwork <- asdFC[,bothROIMatch]
-
-fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
-colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
-
-fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
-colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
-
-
-for(i in 1:nrow(fcGLM)){
-  
-  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
-  colnames(tempTD) <- c('ID','FC')
-  tempTD$Grp <- 'TD'
-  tempTD <- merge(tempTD, tdDemoFinal)
-  
-  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
-  colnames(tempASD) <- c('ID','FC')
-  tempASD$Grp <- 'ASD'
-  tempASD <- merge(tempASD, asdDemoFinal)
-  
-  glmFrame <- rbind(tempTD, tempASD)
-  glmFrame$FC <- as.numeric(glmFrame$FC)
-  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
-  
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  adjustMeans <- emmeans(tempGLM,'Grp')
-  
-  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
-  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
-  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
-  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
-  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
-  
-}
-
-fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
-fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
-
-# subset(fcGLM, Grp.p <.05)
-# subset(fcGLM, Grp.p <.01)
-# subset(fcGLM, Grp.p <.001)
-
-subset(fcGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
-
-
-fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
-
-subset(fcIntxGLM, Grp.p.adjust <.05)
-subset(fcIntxGLM, Intx.p.adjust <.05)
-
-
-write.table(fcGLM, paste0(baseDir,'/functional/output/SomMot_WholeTable.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/SomMot_P05.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/SomMot_P01.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/SomMot_P001.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/SomMot_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-
-write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/SomMot_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/SomMot_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(fcIntxGLM, paste0(baseDir,'/functional/output/SomMot_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
-
-
-longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
-
-pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
-
-limit05 <- nrow(subset(fcGLM, Grp.p <.05))
-limit01 <- nrow(subset(fcGLM, Grp.p <.01))
-limit001 <- nrow(subset(fcGLM, Grp.p <.001))
-limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
-
-network_SomMot_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
-  scale_y_continuous(limits=c(-.3,1.1), breaks=seq(-2,2,.2), expand=c(0,0)) +
-  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-  scale_color_manual(values=c('#bb0000','#0000bb')) +
-  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
-  ylab('Connectivity Strength') + xlab('Sensorimotor Connections') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.y = element_line(color = 'dark gray'),
-        panel.grid.major.x = element_line(color = 'dark gray'),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-
-showFigure(network_SomMot_bars, 'network_SomMot_bars', width = 10, height = 6)
-
-
-### Subcortical ----
-
-
-# ----
-
-roiNumeric <- c(31,32,39,51,80,92,97,107,111,134,139,145,151)
-bothROIMatch <- vector()
-
-for(i in 1:nrow(connROIs)){
-  
-  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
-  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
-  
-  match1 <- conn1Num %in% roiNumeric
-  match2 <- conn2Num %in% roiNumeric
-  bothROIMatch[i] <- (match1 & match2)
-}
-
-
-tdFCNetwork <- tdFC[,bothROIMatch]
-asdFCNetwork <- asdFC[,bothROIMatch]
-
-fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
-colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
-
-fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
-colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
-
-
-for(i in 1:nrow(fcGLM)){
-  
-  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
-  colnames(tempTD) <- c('ID','FC')
-  tempTD$Grp <- 'TD'
-  tempTD <- merge(tempTD, tdDemoFinal)
-  
-  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
-  colnames(tempASD) <- c('ID','FC')
-  tempASD$Grp <- 'ASD'
-  tempASD <- merge(tempASD, asdDemoFinal)
-  
-  glmFrame <- rbind(tempTD, tempASD)
-  glmFrame$FC <- as.numeric(glmFrame$FC)
-  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
-  
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  adjustMeans <- emmeans(tempGLM,'Grp')
-  
-  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
-  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
-  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
-  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
-  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
-  
-}
-
-fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
-fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
-
-# subset(fcGLM, Grp.p <.05)
-# subset(fcGLM, Grp.p <.01)
-# subset(fcGLM, Grp.p <.001)
-
-subset(fcGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
-
-
-fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
-
-subset(fcIntxGLM, Grp.p.adjust <.05)
-subset(fcIntxGLM, Intx.p.adjust <.05)
-
-
-write.table(fcGLM, paste0(baseDir,'/functional/output/SubCort_WholeTable.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/SubCort_P05.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/SubCort_P01.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/SubCort_P001.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/SubCort_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-
-write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/SubCort_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/SubCort_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(fcIntxGLM, paste0(baseDir,'/functional/output/SubCort_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
-
-
-longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
-
-pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
-
-limit05 <- nrow(subset(fcGLM, Grp.p <.05))
-limit01 <- nrow(subset(fcGLM, Grp.p <.01))
-limit001 <- nrow(subset(fcGLM, Grp.p <.001))
-limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
-
-network_SubCort_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
-  scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
-  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-  scale_color_manual(values=c('#bb0000','#0000bb')) +
-  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
-  ylab('Connectivity Strength') + xlab('Subcortical Connections') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.y = element_line(color = 'dark gray'),
-        panel.grid.major.x = element_line(color = 'dark gray'),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-
-showFigure(network_SubCort_bars, 'network_SubCort_bars', width = 10, height = 6)
-
-
-### Auditory ----
-
-
-# ----
-
-roiNumeric <- c(88,94,2,12,48,
-                171,107,139,152,185)
-bothROIMatch <- vector()
-
-for(i in 1:nrow(connROIs)){
-
-  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
-  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
-
-  match1 <- conn1Num %in% roiNumeric
-  match2 <- conn2Num %in% roiNumeric
-  bothROIMatch[i] <- (match1 & match2)
-}
-
-
-tdFCNetwork <- tdFC[,bothROIMatch]
-asdFCNetwork <- asdFC[,bothROIMatch]
-
-fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
-colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
-
-fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
-colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
-
-
-for(i in 1:nrow(fcGLM)){
-  
-  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
-  colnames(tempTD) <- c('ID','FC')
-  tempTD$Grp <- 'TD'
-  tempTD <- merge(tempTD, tdDemoFinal)
-  
-  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
-  colnames(tempASD) <- c('ID','FC')
-  tempASD$Grp <- 'ASD'
-  tempASD <- merge(tempASD, asdDemoFinal)
-  
-  glmFrame <- rbind(tempTD, tempASD)
-  glmFrame$FC <- as.numeric(glmFrame$FC)
-  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
-  
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  adjustMeans <- emmeans(tempGLM,'Grp')
-  
-  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
-  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
-  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
-  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
-  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
-  
-}
-
-fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
-fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
-
-# subset(fcGLM, Grp.p <.05)
-# subset(fcGLM, Grp.p <.01)
-# subset(fcGLM, Grp.p <.001)
-
-subset(fcGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
-
-
-fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
-
-subset(fcIntxGLM, Grp.p.adjust <.05)
-subset(fcIntxGLM, Intx.p.adjust <.05)
-
-
-write.table(fcGLM, paste0(baseDir,'/functional/output/Auditory_WholeTable.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/Auditory_P05.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/Auditory_P01.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/Auditory_P001.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/Auditory_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-
-write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/Auditory_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/Auditory_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(fcIntxGLM, paste0(baseDir,'/functional/output/Auditory_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
-
-
-network_Auditory_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
-  #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
-  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-  scale_color_manual(values=c('#bb0000','#0000bb')) +
-  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
-  ylab('Connectivity Strength') + xlab('Subcortical Connections') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.y = element_line(color = 'dark gray'),
-        panel.grid.major.x = element_line(color = 'dark gray'),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-
-showFigure(network_Auditory_bars, 'network_Auditory_bars', width = 10, height = 6)
-
-
-### Visual ----
-
-
-# ----
-
-roiNumeric <- c(181,174,153,114,149,195,167,105,116,194,197,162,131,186,135,
-                72,60,19,52,35,75,25,15,42,30,91,87,98,57)
-bothROIMatch <- vector()
-
-for(i in 1:nrow(connROIs)){
-
-  conn1Num <- as.numeric(strsplit(connROIs$ROI1[i],'.',fixed = T)[[1]][3])
-  conn2Num <- as.numeric(strsplit(connROIs$ROI2[i],'.',fixed = T)[[1]][3])
-
-  match1 <- conn1Num %in% roiNumeric
-  match2 <- conn2Num %in% roiNumeric
-  bothROIMatch[i] <- (match1 & match2)
-}
-
-
-tdFCNetwork <- tdFC[,bothROIMatch]
-asdFCNetwork <- asdFC[,bothROIMatch]
-
-fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
-colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
-
-fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
-colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
-
-
-for(i in 1:nrow(fcGLM)){
-  
-  tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
-  colnames(tempTD) <- c('ID','FC')
-  tempTD$Grp <- 'TD'
-  tempTD <- merge(tempTD, tdDemoFinal)
-  
-  tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
-  colnames(tempASD) <- c('ID','FC')
-  tempASD$Grp <- 'ASD'
-  tempASD <- merge(tempASD, asdDemoFinal)
-  
-  glmFrame <- rbind(tempTD, tempASD)
-  glmFrame$FC <- as.numeric(glmFrame$FC)
-  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  #fcGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) + ScanGA))$Eta2_partial
-  
-  
-  tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  adjustMeans <- emmeans(tempGLM,'Grp')
-  
-  fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-  fcIntxGLM$TD.Mean[i] <-as.data.frame(adjustMeans)$emmean[2]
-  fcIntxGLM$TD.SE[i] <- as.data.frame(adjustMeans)$SE[2]
-  fcIntxGLM$ASD.Mean[i] <- as.data.frame(adjustMeans)$emmean[1]
-  fcIntxGLM$ASD.SE[i] <- as.data.frame(adjustMeans)$SE[1]
-  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  # fcIntxGLM$pEta2[i] <- effectsize::eta_squared(lm(data=glmFrame, `FC` ~ factor(Grp) * ScanGA))$Eta2_partial
-  
-}
-
-fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
-fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
-
-# subset(fcGLM, Grp.p <.05)
-# subset(fcGLM, Grp.p <.01)
-# subset(fcGLM, Grp.p <.001)
-
-subset(fcGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
-
-
-fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
-
-subset(fcIntxGLM, Grp.p.adjust <.05)
-subset(fcIntxGLM, Intx.p.adjust <.05)
-
-
-write.table(fcGLM, paste0(baseDir,'/functional/output/Visual_WholeTable.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.05), paste0(baseDir,'/functional/output/Visual_P05.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.01), paste0(baseDir,'/functional/output/Visual_P01.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p <.001), paste0(baseDir,'/functional/output/Visual_P001.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/Visual_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-
-write.table(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), paste0(baseDir,'/functional/output/Visual_Intx_P05FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(baseDir,'/functional/output/Visual_Intx_P10FDR.csv'), col.names=T, row.names=F, sep=',')
-write.table(fcIntxGLM, paste0(baseDir,'/functional/output/Visual_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
-
-
-network_Visual_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
-  #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
-  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-  scale_color_manual(values=c('#bb0000','#0000bb')) +
-  geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
-  ylab('Connectivity Strength') + xlab('Subcortical Connections') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.y = element_line(color = 'dark gray'),
-        panel.grid.major.x = element_line(color = 'dark gray'),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-
-showFigure(network_Visual_bars, 'network_Visual_bars', width = 10, height = 6)
 
 
 #### Network Connectivity Figures ----
