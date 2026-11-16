@@ -35,6 +35,16 @@ figureFileTypes <- c('tiff', 'pdf', 'svg', 'eps')
 figures <- list()
 
 
+## Group Colors ----
+
+# The Low Risk (TD) and High Risk (ASD) colors used in every figure. Lighter tints for bars, points and lines are derived from these.
+groupColors <- c(low = '#2166AC', high = '#B2182B')
+
+# Chord diagram links: opacity as a hex alpha ('aa' = 67%, '55' = 33%) and the width of each link's outline.
+# Lower the opacity or the outline width for lighter-looking chords.
+chordLinkAlpha <- 'aa'
+chordLinkBorderWidth <- 3
+
 ## Table Output Settings ----
 
 # Set saveTables to TRUE to write the result tables (CSV) to tableDir (existing files with the same name are overwritten).
@@ -244,6 +254,19 @@ reportSignificant <- function(tbl) {
   if ('Itx.p.Adj' %in% colnames(tbl)) { print(subset(tbl, Itx.p.Adj < .05)) }
 }
 
+
+# A lighter version of a color: mix it with white (amount 0 = the color, 1 = white), with an optional hex alpha such as '55'
+tintColor <- function(color, amount, alpha = '') {
+  rgbValues <- col2rgb(color)[, 1]
+  mixed <- rgbValues * (1 - amount) + 255 * amount
+  paste0(rgb(mixed[1], mixed[2], mixed[3], maxColorValue = 255), alpha)
+}
+
+# Tints of the group colors: filled bars, translucent points, fitted lines, and network bars
+groupBarFill <- c(low = tintColor(groupColors[['low']], .64), high = tintColor(groupColors[['high']], .64))
+groupPointFill <- c(low = tintColor(groupColors[['low']], .64, '55'), high = tintColor(groupColors[['high']], .64, '55'))
+groupLineColor <- c(low = tintColor(groupColors[['low']], .2), high = tintColor(groupColors[['high']], .2))
+networkBarFill <- c(low = tintColor(groupColors[['low']], .5, 'cc'), high = tintColor(groupColors[['high']], .5, 'cc'))
 
 # Keep a table in resultTables[[name]] and, if saveTables is TRUE, write it to tableDir/<name>.csv
 saveTable <- function(tbl, name) {
@@ -769,7 +792,7 @@ plotRoiGroup <- function(roi) {
 
   ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
     scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
-    scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+    scale_fill_manual(values=c(groupBarFill[['low']], groupBarFill[['high']])) +
     geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=1) +
     geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
     ylab(axisInfo$label) +
@@ -788,9 +811,9 @@ plotRoiInteraction <- function(roi) {
     scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
     scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
     scale_shape_manual(values=c(23,21)) +   # Low Risk = diamond, High Risk = circle (as before)
-    scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+    scale_fill_manual(values=c(groupPointFill[['low']], groupPointFill[['high']])) +
     geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
-    scale_color_manual(values=c('#72a3e8','#e37575')) +
+    scale_color_manual(values=c(groupLineColor[['low']], groupLineColor[['high']])) +
     geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
     ylab(axisInfo$label) + xlab('Gestational Age (Weeks)') +
     themeRegionalFigure(showXTitle = TRUE)
@@ -806,14 +829,14 @@ riskLegendPanel <- function(type) {
 
   if (type == 'group') {
     legendPlot +
-      annotate('rect', xmin = .16, xmax = .32, ymin = .53, ymax = .69, fill = '#a3c0e9', colour = 'black', linewidth = 1) +
-      annotate('rect', xmin = .16, xmax = .32, ymin = .31, ymax = .47, fill = '#e09999', colour = 'black', linewidth = 1)
+      annotate('rect', xmin = .16, xmax = .32, ymin = .53, ymax = .69, fill = groupBarFill[['low']], colour = 'black', linewidth = 1) +
+      annotate('rect', xmin = .16, xmax = .32, ymin = .31, ymax = .47, fill = groupBarFill[['high']], colour = 'black', linewidth = 1)
   } else {
     legendPlot +
-      annotate('segment', x = .13, xend = .35, y = .61, yend = .61, colour = '#72a3e8', linewidth = 2) +
-      annotate('point', x = .24, y = .61, shape = 23, size = 7, fill = '#a3c0e955', colour = 'black', stroke = .75) +
-      annotate('segment', x = .13, xend = .35, y = .39, yend = .39, colour = '#e37575', linewidth = 2) +
-      annotate('point', x = .24, y = .39, shape = 21, size = 7, fill = '#e0999955', colour = 'black', stroke = .75)
+      annotate('segment', x = .13, xend = .35, y = .61, yend = .61, colour = groupLineColor[['low']], linewidth = 2) +
+      annotate('point', x = .24, y = .61, shape = 23, size = 7, fill = groupPointFill[['low']], colour = 'black', stroke = .75) +
+      annotate('segment', x = .13, xend = .35, y = .39, yend = .39, colour = groupLineColor[['high']], linewidth = 2) +
+      annotate('point', x = .24, y = .39, shape = 21, size = 7, fill = groupPointFill[['high']], colour = 'black', stroke = .75)
   }
 }
 
@@ -1429,12 +1452,15 @@ chordDiagram.Base$MeanDiff[is.na(chordDiagram.Base$MeanDiff)] <- 0
 chordDiagram.Base$ASDConn[is.na(chordDiagram.Base$ASDConn)] <- 0
 chordDiagram.Base$TDConn[is.na(chordDiagram.Base$TDConn)] <- 0
 
+chordColorASD <- paste0(groupColors[['high']], chordLinkAlpha)
+chordColorTD <- paste0(groupColors[['low']], chordLinkAlpha)
+
 chordDiagram.Base$ASDCol <- '#00000000'
-chordDiagram.Base$ASDCol[chordDiagram.Base$ASDConn==1] <-'#a60000aa'
+chordDiagram.Base$ASDCol[chordDiagram.Base$ASDConn==1] <- chordColorASD
 chordDiagram.Base$ASDCol[!(chordDiagram.Base$ConnFull %in% wholeBrainTableFDR$ROI)] <- '#00000000'
 
 chordDiagram.Base$TDCol <- '#00000000'
-chordDiagram.Base$TDCol[chordDiagram.Base$TDConn==1] <- '#0050bfaa'
+chordDiagram.Base$TDCol[chordDiagram.Base$TDConn==1] <- chordColorTD
 chordDiagram.Base$TDCol[!(chordDiagram.Base$ConnFull %in% wholeBrainTableFDR$ROI)] <- '#00000000'
 
 
@@ -1513,7 +1539,7 @@ drawChord <- function(links, connCol, colorCol, labelSize = .8, canvas = c(1.5, 
   chordArgs <- list(links[,c('ToAbbrev','FromAbbrev',connCol)],
                     order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
                     col=links[[colorCol]], symmetric = TRUE, scale=TRUE,
-                    link.border=links[[colorCol]], link.lwd=3,
+                    link.border=links[[colorCol]], link.lwd=chordLinkBorderWidth,
                     annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
   if ('link.visible' %in% names(formals(circlize::chordDiagram))) {
     chordArgs$link.visible <- links[[colorCol]] != '#00000000'
@@ -1538,9 +1564,9 @@ showBaseFigure('wholebrain_chord_ASD', width = 9, height = 9, drawFun = function
 showBaseFigure('wholebrain_chord_TD', width = 9, height = 9, drawFun = function() drawChord(chordTDLinks, 'TDConn', 'TDCol'))
 
 
-asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$TFromAbbrev)
+asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == chordColorASD,]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == chordColorASD,]$TFromAbbrev)
 
-tdConnections <- c(chordDiagram.Base[chordDiagram.Base$TDCol == '#0050bfaa',]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$TDCol == '#0050bfaa',]$TFromAbbrev)
+tdConnections <- c(chordDiagram.Base[chordDiagram.Base$TDCol == chordColorTD,]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$TDCol == chordColorTD,]$TFromAbbrev)
 
 
 sort(table(asdConnections))
@@ -1635,10 +1661,10 @@ lobeHeatmapPlot <- function(counts, high, limits = NULL, low = '#ffffff') {
 lobeHeatmapLimits <- c(0, 25)
 
 # Low Risk (TD) is blue and High Risk (ASD) is red, as in the other figures
-wholebrain_lobeHeatmap_TD <- lobeHeatmapPlot(allConnDescSig.TD, high = '#0050bf', limits = lobeHeatmapLimits)
+wholebrain_lobeHeatmap_TD <- lobeHeatmapPlot(allConnDescSig.TD, high = groupColors[['low']], limits = lobeHeatmapLimits)
 showFigure(wholebrain_lobeHeatmap_TD, 'wholebrain_lobeHeatmap_TD', width = 7, height = 7)
 
-wholebrain_lobeHeatmap_ASD <- lobeHeatmapPlot(allConnDescSig.ASD, high = '#a60000', limits = lobeHeatmapLimits)
+wholebrain_lobeHeatmap_ASD <- lobeHeatmapPlot(allConnDescSig.ASD, high = groupColors[['high']], limits = lobeHeatmapLimits)
 showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, height = 7)
 
 
@@ -1867,8 +1893,8 @@ plotNetworkBars <- function(fcGLM, spec) {
     barPlot <- barPlot + scale_y_continuous(limits=spec$yLimits, breaks=spec$yBreaks, expand=c(0,0))
   }
   barPlot <- barPlot +
-    scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-    scale_color_manual(values=c('#bb0000','#0000bb'))
+    scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
+    scale_color_manual(values=c(groupColors[['low']], groupColors[['high']]))
   if (spec$zeroLine) { barPlot <- barPlot + geom_hline(yintercept = 0, linewidth=1.5) }
   barPlot +
     geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
@@ -1986,8 +2012,8 @@ plotFrame$SE <- as.numeric(plotFrame$SE)
 
 network_combined_bars_p10 <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
   #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
-  scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
-  scale_color_manual(values=c('#bb0000','#0000bb')) +
+  scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
+  scale_color_manual(values=c(groupColors[['low']], groupColors[['high']])) +
   geom_hline(yintercept = 0, lwd=1) +
   geom_bar(stat='identity', position=position_dodge2(0.2), aes(color=Grp,fill=Grp)) +
   # geom_errorbar(position=position_dodge2(0.2), aes(ymin=Mean-SE, ymax=Mean+SE), size=.2) +
