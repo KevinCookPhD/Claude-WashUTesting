@@ -64,6 +64,13 @@ coordinatesAreAFNI <- TRUE
 # matched to); FALSE puts the front at the top.
 glassAxialPosteriorAtTop <- TRUE
 
+# How the brain is drawn so that nodes and edges look inside it: the brain is cut into this many depth layers, and each node and
+# piece of an edge is drawn between the layers at its own depth, so deeper ones are veiled by the layers in front of them.
+glassDepthLayers <- 6
+
+# How opaque the glass is where the most surface overlaps (0 = invisible, 1 = solid). Lower it for a lighter brain.
+glassBrainOpacity <- .8
+
 # The four networks shown on the network glass brain: node color and legend name
 networkNodeColors <- c(CRB = '#F2B134', DMN = '#E8305E', Limbic = '#14C28D', SubCort = '#1A8BB5')
 networkNodeLabels <- c(CRB = 'Cerebellar', DMN = 'Default Mode', Limbic = 'Limbic', SubCort = 'Subcortical')
@@ -402,13 +409,18 @@ standardCoordinates <- function(xyz, fromAFNI = coordinatesAreAFNI) {
 
 # How each glass brain view maps the coordinates onto the page. Lateral = left side of the head (front on the left),
 # posterior = seen from behind, axial = seen from above or below (see glassAxialPosteriorAtTop).
-glassViews <- list(lateral   = list(h = list(axis = 'Y', sign = -1), v = list(axis = 'Z', sign = 1)),
-                   posterior = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Z', sign = 1)),
-                   axial     = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Y', sign = ifelse(glassAxialPosteriorAtTop, -1, 1))))
+glassViews <- list(lateral   = list(h = list(axis = 'Y', sign = -1), v = list(axis = 'Z', sign = 1),
+                                    d = list(axis = 'X', sign = 1)),                      # viewer on the left, so the right is farther
+                   posterior = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Z', sign = 1),
+                                    d = list(axis = 'Y', sign = 1)),                      # viewer behind, so the front is farther
+                   axial     = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Y', sign = ifelse(glassAxialPosteriorAtTop, -1, 1)),
+                                    d = list(axis = 'Z', sign = ifelse(glassAxialPosteriorAtTop, 1, -1))))   # from below: the top is farther
 
-# The translucent brain behind the nodes: the mesh surface area behind each pixel (smoothed), for every view.
-# Folds show through where the surface overlaps itself, which gives the glass look.
-glassBackgrounds <- function(mesh, pixels = 300, blur = 1.4, pad = 4) {
+# The translucent brain behind the nodes, cut into glassDepthLayers depth layers (far to near) for every view.
+# Each layer holds the mesh surface area (smoothed) at that depth; folds show where the surface overlaps itself.
+# The layers are drawn so that, stacked together, they look exactly like one translucent brain, which lets nodes and edges
+# be placed between them.
+glassBackgrounds <- function(mesh, pixels = 300, blur = 1.4, pad = 4, layers = glassDepthLayers) {
   vertices <- standardCoordinates(mesh$vertices)
   tri <- mesh$faces
   a <- as.matrix(vertices[tri[, 2], ] - vertices[tri[, 1], ])
@@ -422,38 +434,81 @@ glassBackgrounds <- function(mesh, pixels = 300, blur = 1.4, pad = 4) {
   lapply(glassViews, function(view) {
     h <- vertices[[view$h$axis]] * view$h$sign
     v <- vertices[[view$v$axis]] * view$v$sign
+    depth <- vertices[[view$d$axis]] * view$d$sign                         # larger = farther from the viewer
     hBreaks <- seq(min(h) - pad, max(h) + pad, length.out = pixels)
     vBreaks <- seq(min(v) - pad, max(v) + pad, length.out = pixels)
     pixel <- (findInterval(h, hBreaks, all.inside = TRUE) - 1L) * pixels + findInterval(v, vBreaks, all.inside = TRUE)
-    density <- matrix(0, pixels, pixels)                                   # rows = vertical, columns = horizontal
-    summed <- tapply(vertexArea, pixel, sum)
-    density[as.integer(names(summed))] <- summed
-    density <- smooth(t(smooth(t(density))))
+
+    # depth layers with equal surface area, far (1) to near (layers)
+    depthBounds <- as.numeric(quantile(rep(depth, times = 1), probs = seq(1, 0, length.out = layers + 1)))   # far to near, decreasing
+    depthBounds <- sort(depthBounds, decreasing = TRUE); depthBounds[1] <- depthBounds[1] + 1e-6; depthBounds[layers + 1] <- depthBounds[layers + 1] - 1e-6
+    layerOf <- findInterval(-depth, -depthBounds, all.inside = TRUE)       # 1 = farthest
+
+    densities <- lapply(seq_len(layers), function(k) {
+      d <- matrix(0, pixels, pixels)                                       # rows = vertical, columns = horizontal
+      inLayer <- layerOf == k
+      summed <- tapply(vertexArea[inLayer], pixel[inLayer], sum)
+      d[as.integer(names(summed))] <- summed
+      smooth(t(smooth(t(d))))
+    })
+    total <- Reduce(`+`, densities)
+    # opacity of the whole brain at each pixel, as before; each layer gets its share so that the layers together equal it
+    wholeAlpha <- glassBrainOpacity * pmin(1, (total / quantile(total[total > 0], .97))^.6)
     tiles <- expand.grid(h = hBreaks, v = vBreaks)
-    tiles$alpha <- as.vector(t(density))
-    tiles$alpha <- .7 * pmin(1, (tiles$alpha / quantile(tiles$alpha[tiles$alpha > 0], .97))^.6)   # .7 = how dark the glass is
-    tiles[tiles$alpha > 0.005, ]
+    layerTiles <- lapply(densities, function(d) {
+      share <- ifelse(total > 0, d / total, 0)
+      tl <- tiles
+      tl$alpha <- as.vector(t(1 - (1 - wholeAlpha)^share))
+      tl[tl$alpha > 0.003, ]
+    })
+    list(layers = layerTiles, bounds = depthBounds)
   })
 }
 
-# One glass brain view: the translucent brain, edges, and nodes.
+# One glass brain view: the translucent brain in depth layers, with edges and nodes drawn between the layers at their own depth.
 #   view = 'lateral', 'posterior' or 'axial';  backgrounds = the result of glassBackgrounds();  coords = standardCoordinates() of the regions
 #   nodes = data frame with the region number (id) and the node color (fill);  edges = data frame with region numbers a and b and dir ('low' or 'high')
-glassBrainView <- function(view, backgrounds, coords, nodes, edges = NULL, nodeSize = 2, edgeWidth = 1) {
+glassBrainView <- function(view, backgrounds, coords, nodes, edges = NULL, nodeSize = 2, edgeWidth = 1, edgePieces = 8) {
   vw <- glassViews[[view]]
+  bg <- backgrounds[[view]]
+  nLayers <- length(bg$layers)
   hOf <- function(ids) coords[[vw$h$axis]][ids] * vw$h$sign
   vOf <- function(ids) coords[[vw$v$axis]][ids] * vw$v$sign
+  dOf <- function(ids) coords[[vw$d$axis]][ids] * vw$d$sign
+  layerOf <- function(depth) findInterval(-depth, -bg$bounds, all.inside = TRUE)    # 1 = farthest
 
-  p <- ggplot() + geom_raster(data = backgrounds[[view]], aes(h, v, alpha = alpha), fill = '#555555') + scale_alpha_identity()
+  # edges cut into short pieces, each placed at its own depth (so an edge fades where it passes behind the brain surface)
+  pieces <- NULL
   if (!is.null(edges) && nrow(edges) > 0) {
-    edgeData <- data.frame(x = hOf(edges$a), y = vOf(edges$a), xend = hOf(edges$b), yend = vOf(edges$b), dir = edges$dir)
-    p <- p + geom_segment(data = edgeData, aes(x, y, xend = xend, yend = yend, color = dir), linewidth = edgeWidth, alpha = .8, lineend = 'round') +
-      scale_color_manual(values = c(low = groupLineColor[['low']], high = groupLineColor[['high']]), guide = 'none')
+    t0 <- rep(seq(0, 1, length.out = edgePieces + 1)[-(edgePieces + 1)], times = nrow(edges))
+    t1 <- rep(seq(0, 1, length.out = edgePieces + 1)[-1], times = nrow(edges))
+    e <- edges[rep(seq_len(nrow(edges)), each = edgePieces), ]
+    lerp <- function(from, to, t) from + (to - from) * t
+    pieces <- data.frame(x = lerp(hOf(e$a), hOf(e$b), t0), y = lerp(vOf(e$a), vOf(e$b), t0),
+                         xend = lerp(hOf(e$a), hOf(e$b), t1), yend = lerp(vOf(e$a), vOf(e$b), t1), dir = e$dir,
+                         depth = lerp(dOf(e$a), dOf(e$b), (t0 + t1) / 2))
+    pieces$layer <- layerOf(pieces$depth)
   }
-  nodeData <- data.frame(h = hOf(nodes$id), v = vOf(nodes$id), fill = nodes$fill)
-  p + geom_point(data = nodeData, aes(h, v), size = nodeSize + .7, color = '#202020', alpha = .3) +
-    geom_point(data = nodeData, aes(h, v, fill = fill), size = nodeSize, shape = 21, color = '#303030', stroke = .4) +
-    scale_fill_identity() + coord_fixed() + theme_void()
+  nodeData <- data.frame(h = hOf(nodes$id), v = vOf(nodes$id), fill = nodes$fill, layer = layerOf(dOf(nodes$id)))
+  highlight <- .35 * nodeSize / 3                                            # sphere highlight offset (mm)
+
+  p <- ggplot()
+  for (k in seq_len(nLayers)) {
+    p <- p + geom_raster(data = bg$layers[[k]], aes(h, v, alpha = alpha), fill = '#555555')
+    if (!is.null(pieces) && any(pieces$layer == k)) {
+      pk <- pieces[pieces$layer == k, ]
+      p <- p + geom_segment(data = pk, aes(x, y, xend = xend, yend = yend), linewidth = edgeWidth + .5, alpha = .25, color = '#303030', lineend = 'round') +
+        geom_segment(data = pk, aes(x, y, xend = xend, yend = yend, color = dir), linewidth = edgeWidth, alpha = .85, lineend = 'round')
+    }
+    if (any(nodeData$layer == k)) {
+      nk <- nodeData[nodeData$layer == k, ]
+      p <- p + geom_point(data = nk, aes(h, v, fill = fill), size = nodeSize, shape = 21, color = '#303030', stroke = .4) +
+        geom_point(data = nk, aes(h - highlight, v + highlight), size = nodeSize * .32, shape = 16, color = 'white', alpha = .5)
+    }
+  }
+  p + scale_alpha_identity() + scale_fill_identity() +
+    scale_color_manual(values = c(low = groupLineColor[['low']], high = groupLineColor[['high']]), guide = 'none') +
+    coord_fixed() + theme_void()
 }
 
 # Load the region coordinates and draw the translucent brain (once; later calls do nothing). Creates roiCoordinates and glassBrainBackgrounds.
