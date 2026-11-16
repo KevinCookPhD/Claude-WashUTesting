@@ -731,7 +731,7 @@ for(i in 1:ncol(tissueData)){
   glmTissueVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
   glmTissueVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
   glmTissueVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmTissueVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  glmTissueVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
   
   
   #Normed volume - no interaction
@@ -760,7 +760,7 @@ for(i in 1:ncol(tissueData)){
   glmTissueNormedVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
   glmTissueNormedVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
   glmTissueNormedVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmTissueNormedVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  glmTissueNormedVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
   
 }
 
@@ -904,7 +904,7 @@ for(i in 1:ncol(regionalData)){
   glmRegionalVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
   glmRegionalVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
   glmRegionalVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmRegionalVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  glmRegionalVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
   
 
   #Normed volume - no interaction
@@ -2372,7 +2372,7 @@ for(i in 1:(ncol(ctData)-1)){
   glmCTTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
   glmCTTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
   glmCTTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmCTTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CT ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  glmCTTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CT ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
   
   
   #Normed CT - no interaction
@@ -2401,7 +2401,7 @@ for(i in 1:(ncol(ctData)-1)){
   glmCTNormedTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
   glmCTNormedTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
   glmCTNormedTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmCTNormedTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CTNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
+  glmCTNormedTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CTNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
 
 }
 
