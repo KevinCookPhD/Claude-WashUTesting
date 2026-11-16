@@ -1483,9 +1483,32 @@ compressChordLinks <- function(links, colorCol, valueCol, invisibleColor = '#000
 chordASDLinks <- compressChordLinks(chordDiagram.Base, 'ASDCol', 'ASDConn')
 chordTDLinks <- compressChordLinks(chordDiagram.Base, 'TDCol', 'TDConn')
 
+# Full region names for the chord diagram, keyed by the abbreviation without its hemisphere suffix (e.g. 'ACG' for 'ACG.L').
+# Regions not listed here keep their abbreviation.
+roiFullNames <- c(ACG = 'Anterior Cingulate', IFGoperc = 'Inferior Operculum', IFGtriang = 'Inferior Triangle', MFG = 'Middle Frontal',
+                  ORBinf = 'Inferior Orbital', ORBmed = 'Medial Orbital', ORBmid = 'Middle Orbital', ORBsupb = 'Superior Orbital',
+                  PreCG = 'Precentral', REC = 'Rectus', SFGdor = 'Superior Frontal (Dorsal)', SFGmed = 'Superior Frontal (Medial)',
+                  SMA = 'Supplemental Motor',
+                  INS = 'Insula', IPL = 'Intraparietal Lobule', MCG = 'Middle Cingulate', PCG = 'Paracentral Lobule',
+                  PCL = 'Paracentral Lobule', PCUN = 'Precuneus', PoCG = 'Postcentral', SMG = 'Supramarginal',
+                  SPG = 'Superior Parietal', HES = "Heschl's",
+                  FFG = 'Fusiform', ITG = 'Inferior Temporal', MTG = 'Middle Temporal', STG = 'Superior Temporal',
+                  TPOmid = 'Temporal Pole', TPOsup = 'Superior Temporal Pole',
+                  CAL = 'Calcarine', CUN = 'Cuneus', LING = 'Lingual', IOG = 'Inferior Occipital', MOG = 'Middle Occipital',
+                  SOG = 'Superior Occipital',
+                  AMY = 'Amygdala', CAU = 'Caudate', HIP = 'Hippocampus', PAL = 'Pallidum', PHG = 'Parahippocampal',
+                  PUT = 'Putamen', THA = 'Thalamus', CRB = 'Cerebellum', BS = 'Brainstem')
+
+roiFullName <- function(sector) {
+  abbrev <- sub('\\.[LR]$', '', sector)
+  ifelse(abbrev %in% names(roiFullNames), roiFullNames[abbrev], sector)
+}
+
 # Draw a chord diagram from compressed links. connCol = column with the link values, colorCol = column with the link colors.
 # Transparent links are not drawn (link.visible), which leaves the layout unchanged but is much faster.
-drawChord <- function(links, connCol, colorCol) {
+# The left hemisphere is on the left of the picture; sectors are labeled with full region names outside the ring, and
+# 'Left' / 'Right' are written underneath. labelSize scales the region names; canvas = half-width and half-height of the drawing area.
+drawChord <- function(links, connCol, colorCol, labelSize = .8, canvas = c(1.5, 1.5)) {
   chordArgs <- list(links[,c('ToAbbrev','FromAbbrev',connCol)],
                     order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
                     col=links[[colorCol]], symmetric = TRUE, scale=TRUE,
@@ -1496,17 +1519,22 @@ drawChord <- function(links, connCol, colorCol) {
   }
 
   circos.clear()
-  circos.par(start.degree=81, gap.after=gapSizes)
+  # counter-clockwise from 99 degrees is the mirror image of the old layout (clockwise from 81), putting the left hemisphere on the left
+  circos.par(start.degree=99, clock.wise=FALSE, gap.after=gapSizes, canvas.xlim=c(-canvas[1], canvas[1]), canvas.ylim=c(-canvas[2], canvas[2]),
+             points.overflow.warning=FALSE)   # the names sit just outside the ring on purpose
   do.call(chordDiagram, chordArgs)
   circos.track(track.index = 1, panel.fun = function(x, y) {
-    circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
-                facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
+    # names start a fixed distance outside the ring (the same gap for every region, on both sides)
+    circos.text(CELL_META$xcenter, CELL_META$ylim[2] + mm_y(1.5), roiFullName(CELL_META$sector.index),
+                facing = "clockwise", niceFacing = TRUE, adj = c(0, .5), cex = labelSize)
   }, bg.border = NA) # here set bg.border to NA is important
+  text(c(-.8, .8), -(canvas[2] - .08), c('Left', 'Right'), cex = labelSize * 2, xpd = NA)
+  circos.clear()
 }
 
-showBaseFigure('wholebrain_chord_ASD', width = 8, height = 8, drawFun = function() drawChord(chordASDLinks, 'ASDConn', 'ASDCol'))
+showBaseFigure('wholebrain_chord_ASD', width = 9, height = 9, drawFun = function() drawChord(chordASDLinks, 'ASDConn', 'ASDCol'))
 
-showBaseFigure('wholebrain_chord_TD', width = 8, height = 8, drawFun = function() drawChord(chordTDLinks, 'TDConn', 'TDCol'))
+showBaseFigure('wholebrain_chord_TD', width = 9, height = 9, drawFun = function() drawChord(chordTDLinks, 'TDConn', 'TDCol'))
 
 
 asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$TFromAbbrev)
@@ -1561,61 +1589,106 @@ for (lobeTable in names(lobeCountNames)) {
 }
 
 
-meltTDConn <- allConnDescSig.TD
+# Lobe colors (the same colors as the chord diagram sectors)
+lobeColors <- c(Frontal = '#efa973', Parietal = '#d9c97e', Temporal = '#a9dd8c', Occipital = '#79f09f',
+                Subcortical = '#89d4c1', Cerebellum = '#96a5d7', Brainstem = '#a67de8')
 
-meltTDConn$ROWNAMES <- rownames(allConnDescSig.TD)
-tdConnPlot <- melt(meltTDConn, id.vars='ROWNAMES')
-colnames(tdConnPlot) <- c('Row','Col','Num')
+# Lower-triangle heatmap of the lobe-by-lobe connection counts: counts in the tiles, a colored strip for each lobe beside
+# the axis labels, and a small colorbar in the empty upper-right corner.
+#   counts = 7 x 7 table (rows and columns in lobeNames order);  low/high = ends of the color scale
+#   limits = fill scale limits (NULL = 0 to the largest count)
+lobeHeatmapPlot <- function(counts, high, limits = NULL, low = '#ffffff') {
+  nLobes <- length(lobeNames)
+  tiles <- data.frame(row = rep(seq_len(nLobes), each = nLobes), col = rep(seq_len(nLobes), times = nLobes),
+                      num = as.vector(t(as.matrix(counts))))
+  tiles <- tiles[tiles$col <= tiles$row,]                 # lower triangle, including the diagonal
+  tiles$y <- nLobes - tiles$row + 1                       # row 1 at the top
+  if (is.null(limits)) { limits <- c(0, max(tiles$num)) }
 
-tdConnPlot$Row <- factor(tdConnPlot$Row, levels=lobeNames)
-tdConnPlot$Col <- factor(tdConnPlot$Col, levels=rev(lobeNames))
+  # colorbar: gradient (same interpolation as the tiles), tick marks, and a title
+  gradientColors <- scales::seq_gradient_pal(low, high)(seq(1, 0, length.out = 100))
+  barX <- c(5.55, 5.85); barY <- c(5.15, 6.75)
+  ticks <- pretty(limits, n = 5); ticks <- ticks[ticks >= limits[1] & ticks <= limits[2]]
+  tickY <- barY[1] + (ticks - limits[1]) / diff(limits) * diff(barY)
 
-wholebrain_lobeHeatmap_TD <- ggplot(tdConnPlot, aes(x=Row, y=Col)) +
-  scale_fill_gradient(low='#ffffff', high='#0050bf') +
-  geom_tile(aes(fill=Num), color='#000000') +
-  geom_text(aes(label=Num), color='#000000')  +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_blank(),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major = element_blank(),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'Right',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-showFigure(wholebrain_lobeHeatmap_TD, 'wholebrain_lobeHeatmap_TD', width = 8.95, height = 8)
+  ggplot(tiles, aes(x = col, y = y)) +
+    geom_tile(aes(fill = num), color = '#bfbfbf', linewidth = .4) +
+    geom_text(aes(label = num), color = 'black', size = 5.5, fontface = 'bold') +
+    scale_fill_gradient(low = low, high = high, limits = limits, guide = 'none') +
+    # row labels and strips (left)
+    annotate('rect', xmin = .22, xmax = .42, ymin = nLobes - seq_len(nLobes) + .5, ymax = nLobes - seq_len(nLobes) + 1.5,
+             fill = lobeColors[lobeNames], colour = '#808080', linewidth = .3) +
+    annotate('text', x = .12, y = nLobes - seq_len(nLobes) + 1, label = lobeNames, hjust = 1, size = 4.6) +
+    # column labels and strips (bottom)
+    annotate('rect', xmin = seq_len(nLobes) - .5, xmax = seq_len(nLobes) + .5, ymin = .08, ymax = .28,
+             fill = lobeColors[lobeNames], colour = '#808080', linewidth = .3) +
+    annotate('text', x = seq_len(nLobes), y = .02, label = lobeNames, angle = 90, hjust = 1, size = 4.6) +
+    # colorbar
+    annotation_raster(as.raster(matrix(gradientColors, ncol = 1)), xmin = barX[1], xmax = barX[2], ymin = barY[1], ymax = barY[2]) +
+    annotate('rect', xmin = barX[1], xmax = barX[2], ymin = barY[1], ymax = barY[2], fill = NA, colour = 'black', linewidth = .3) +
+    annotate('segment', x = barX[2], xend = barX[2] + .08, y = tickY, yend = tickY, linewidth = .3) +
+    annotate('text', x = barX[2] + .12, y = tickY, label = ticks, hjust = 0, size = 3.4) +
+    annotate('text', x = barX[2] + .6, y = mean(barY) + .15, label = 'Significant\nConnections', hjust = 0, size = 3.8, lineheight = .95) +
+    coord_fixed(xlim = c(.5, nLobes + .5), ylim = c(.5, nLobes + .5), expand = FALSE, clip = 'off') +
+    theme_void() +
+    theme(plot.margin = margin(t = 8, r = 40, b = 100, l = 105, unit = 'pt'))
+}
+
+# Low Risk (TD) is blue and High Risk (ASD) is red, as in the other figures
+wholebrain_lobeHeatmap_TD <- lobeHeatmapPlot(allConnDescSig.TD, high = '#0050bf')
+showFigure(wholebrain_lobeHeatmap_TD, 'wholebrain_lobeHeatmap_TD', width = 7, height = 7)
+
+wholebrain_lobeHeatmap_ASD <- lobeHeatmapPlot(allConnDescSig.ASD, high = '#a60000', limits = c(0, 25))
+showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, height = 7)
 
 
-meltASDConn <- allConnDescSig.ASD
-meltASDConn$ROWNAMES <- rownames(allConnDescSig.ASD)
-asdConnPlot <- melt(meltASDConn, id.vars='ROWNAMES')
-colnames(asdConnPlot) <- c('Row','Col','Num')
+### Whole Brain Composite Figure ----
 
-asdConnPlot$Row <- factor(asdConnPlot$Row, levels=lobeNames)
-asdConnPlot$Col <- factor(asdConnPlot$Col, levels=rev(lobeNames))
+# Low Risk (left half: A, B, C) and High Risk (right half: D, E, F). In each half: glass brains (A / D, placeholders for now),
+# the lobe heatmap (B / E) and the chord diagram (C / F).
 
-wholebrain_lobeHeatmap_ASD <- ggplot(asdConnPlot, aes(x=Row, y=Col)) +
-  scale_fill_gradient(limits=c(0,25), low='#ffffff', high='#a60000') +
-  geom_tile(aes(fill=Num), color='#000000') +
-  geom_text(aes(label=Num), color='#000000')  +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_blank(),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major = element_blank(),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'Right',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 8.95, height = 8)
+# Dashed placeholder box for a glass-brain image. x, y = lower-left corner and width, height as fractions of the figure.
+glassBrainPlaceholder <- function(x, y, width, height, label) {
+  grid::grid.roundrect(x = grid::unit(x, 'npc'), y = grid::unit(y, 'npc'), width = grid::unit(width, 'npc'), height = grid::unit(height, 'npc'),
+                       just = c('left', 'bottom'), r = grid::unit(.02, 'snpc'),
+                       gp = grid::gpar(col = '#999999', fill = '#f4f4f4', lty = 'dashed', lwd = 2))
+  grid::grid.text(label, x = grid::unit(x + width/2, 'npc'), y = grid::unit(y + height/2, 'npc'), gp = grid::gpar(col = '#888888', fontsize = 14))
+}
+
+drawWholeBrainComposite <- function() {
+  # start a base-graphics page first, so that base graphics (the chord diagrams) draw onto it instead of starting a new page
+  # and erasing what grid (the heatmaps and boxes) has already drawn
+  plot.new()
+
+  halves <- list(list(title = 'Low Risk', x0 = 0, heatmap = wholebrain_lobeHeatmap_TD, links = chordTDLinks,
+                      conn = 'TDConn', color = 'TDCol', letters = c('A.', 'B.', 'C.')),
+                 list(title = 'High Risk', x0 = .5, heatmap = wholebrain_lobeHeatmap_ASD, links = chordASDLinks,
+                      conn = 'ASDConn', color = 'ASDCol', letters = c('D.', 'E.', 'F.')))
+
+  for (half in halves) {
+    # A / D: glass brain placeholders (lateral view above, posterior view below)
+    glassBrainPlaceholder(half$x0 + .012, .705, .165, .195, 'Glass brain\n(lateral view)')
+    glassBrainPlaceholder(half$x0 + .012, .495, .165, .195, 'Glass brain\n(posterior view)')
+
+    # B / E: lobe heatmap
+    print(half$heatmap, newpage = FALSE,
+          vp = grid::viewport(x = grid::unit(half$x0 + .185, 'npc'), y = grid::unit(.50, 'npc'), width = grid::unit(.315, 'npc'),
+                              height = grid::unit(.455, 'npc'), just = c('left', 'bottom')))
+
+    # C / F: chord diagram in the lower half
+    par(fig = c(half$x0, half$x0 + .5, 0, .5), new = TRUE, mar = c(0, 0, 0, 0))
+    drawChord(half$links, half$conn, half$color, labelSize = .6, canvas = c(1.75, 1.4))
+
+    # heading and panel letters
+    grid::grid.text(half$title, x = grid::unit(half$x0 + .25, 'npc'), y = grid::unit(.972, 'npc'), gp = grid::gpar(fontsize = 44))
+    letterGp <- grid::gpar(fontsize = 30, fontface = 'bold')
+    grid::grid.text(half$letters[1], x = grid::unit(half$x0 + .008, 'npc'), y = grid::unit(.945, 'npc'), just = c('left', 'top'), gp = letterGp)
+    grid::grid.text(half$letters[2], x = grid::unit(half$x0 + .185, 'npc'), y = grid::unit(.945, 'npc'), just = c('left', 'top'), gp = letterGp)
+    grid::grid.text(half$letters[3], x = grid::unit(half$x0 + .008, 'npc'), y = grid::unit(.485, 'npc'), just = c('left', 'top'), gp = letterGp)
+  }
+}
+
+showBaseFigure('wholebrain_composite', width = 16, height = 13, drawFun = drawWholeBrainComposite)
 
 
 ## 3c. Smaller Network Approach ----
