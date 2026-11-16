@@ -770,7 +770,7 @@ plotRoiGroup <- function(roi) {
   ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
     scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
     scale_fill_manual(values=c('#a3c0e9','#e09999')) +
-    geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+    geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=1) +
     geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
     ylab(axisInfo$label) +
     themeRegionalFigure(showXTitle = FALSE)
@@ -800,14 +800,14 @@ plotRoiInteraction <- function(roi) {
 # type = 'group' (filled bars) or 'intx' (diamond / circle with a line)
 riskLegendPanel <- function(type) {
   legendPlot <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
-    annotate('rect', xmin = .08, xmax = .92, ymin = .2, ymax = .8, fill = 'white', colour = 'black', linewidth = 2) +
+    annotate('rect', xmin = .08, xmax = .92, ymin = .2, ymax = .8, fill = 'white', colour = 'black', linewidth = 1) +
     annotate('text', x = .40, y = .61, label = 'Low Risk', hjust = 0, size = 7.5) +
     annotate('text', x = .40, y = .39, label = 'High Risk', hjust = 0, size = 7.5)
 
   if (type == 'group') {
     legendPlot +
-      annotate('rect', xmin = .16, xmax = .32, ymin = .53, ymax = .69, fill = '#a3c0e9', colour = 'black', linewidth = 2) +
-      annotate('rect', xmin = .16, xmax = .32, ymin = .31, ymax = .47, fill = '#e09999', colour = 'black', linewidth = 2)
+      annotate('rect', xmin = .16, xmax = .32, ymin = .53, ymax = .69, fill = '#a3c0e9', colour = 'black', linewidth = 1) +
+      annotate('rect', xmin = .16, xmax = .32, ymin = .31, ymax = .47, fill = '#e09999', colour = 'black', linewidth = 1)
   } else {
     legendPlot +
       annotate('segment', x = .13, xend = .35, y = .61, yend = .61, colour = '#72a3e8', linewidth = 2) +
@@ -823,7 +823,7 @@ regionalFigureSize <- function(nROIs) {
   list(width = 3.5 * min(4, nPanels), height = 3.5 * ceiling(nPanels / 4))
 }
 
-# Arrange one plot per ROI plus a legend in a grid (4 columns wide). Prints a message and draws nothing if no ROI qualifies.
+# Arrange one plot per ROI in a grid (4 columns wide) with the legend in the bottom-right cell. Prints a message and draws nothing if no ROI qualifies.
 regionalFigure <- function(rois, plotFun, label, legendType) {
   if (length(rois) == 0) {
     message('No regions to plot for: ', label)
@@ -831,8 +831,14 @@ regionalFigure <- function(rois, plotFun, label, legendType) {
   }
   message(label, ': ', length(rois), ' region(s): ', paste(rois, collapse=', '))
   plots <- lapply(rois, plotFun)
-  plots[[length(plots) + 1]] <- riskLegendPanel(legendType)
-  ggpubr::ggarrange(plotlist = plots, nrow = ceiling(length(plots)/4), ncol = min(4, length(plots)), legend = 'none')
+
+  # the legend always sits in the bottom-right cell; any unused cells before it are left blank
+  nCols <- min(4, length(plots) + 1)
+  nRows <- ceiling((length(plots) + 1) / nCols)
+  blankPanel <- ggplot() + theme_void()
+  slots <- c(plots, rep(list(blankPanel), nCols * nRows - length(plots) - 1), list(riskLegendPanel(legendType)))
+
+  ggpubr::ggarrange(plotlist = slots, nrow = nRows, ncol = nCols, legend = 'none')
 }
 
 
