@@ -885,7 +885,7 @@ for(i in 1:ncol(regionalData)){
   glmRegionalVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
   glmRegionalVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
   glmRegionalVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmRegionalVolTable$Grp.B[i] <- 
+  glmRegionalVolTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
   glmRegionalVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
   glmRegionalVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
   glmRegionalVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
