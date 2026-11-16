@@ -1776,34 +1776,36 @@ roiNumber <- function(roi) as.numeric(vapply(strsplit(roi, '.', fixed = TRUE), f
 # One entry per network:
 #   match         - function(roi names) -> TRUE for regions in the network
 #   xLabel        - x-axis label of the bar chart
-#   yLimits/yBreaks - y-axis of the bar chart (yLimits NULL = automatic)
 #   zeroLine      - draw a line at 0 on the bar chart
+# Networks with more connections than this are drawn without bar outlines
+networkBarOutlineMax <- 60
+
 networkSpecs <- list(
 
   CRB = list(match = function(roi) grepl('CRB', roi),
-             xLabel = 'Cerebellar Connections', yLimits = c(0,1.2), yBreaks = seq(0,2,.2), zeroLine = TRUE),
+             xLabel = 'Cerebellar Connections', zeroLine = TRUE),
 
   # Originally c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200); parahippocampal gyrus added (43,86,125)
   Limbic = list(match = function(roi) roiNumber(roi) %in% c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200,
                                                             43,86,125),
-                xLabel = 'Limbic Connections', yLimits = c(-.4,1.4), yBreaks = seq(-2,2,.2), zeroLine = FALSE),
+                xLabel = 'Limbic Connections', zeroLine = FALSE),
 
   # Originally also included 43,86,125 (hippocampus and parahippocampal gyrus); removed
   DMN = list(match = function(roi) roiNumber(roi) %in% c(4,11,18,22,23,34,40,42,48,53,70,85,88,96,100,102,104,106,123,124,128,137,150,152,156,163,168,171,176,178),
-             xLabel = 'Default Mode Connections', yLimits = c(-.6,1), yBreaks = seq(-2,2,.2), zeroLine = FALSE),
+             xLabel = 'Default Mode Connections', zeroLine = FALSE),
 
   SomMot = list(match = function(roi) grepl('PreCG', roi) | grepl('PoCG', roi) | grepl('SMA', roi),
-                xLabel = 'Sensorimotor Connections', yLimits = c(-.3,1.1), yBreaks = seq(-2,2,.2), zeroLine = FALSE),
+                xLabel = 'Sensorimotor Connections', zeroLine = FALSE),
 
   SubCort = list(match = function(roi) roiNumber(roi) %in% c(31,32,39,51,80,92,97,107,111,134,139,145,151),
-                 xLabel = 'Subcortical Connections', yLimits = c(-.2,1.2), yBreaks = seq(-2,2,.2), zeroLine = FALSE),
+                 xLabel = 'Subcortical Connections', zeroLine = FALSE),
 
   Auditory = list(match = function(roi) roiNumber(roi) %in% c(88,94,2,12,48,171,107,139,152,185),
-                  xLabel = 'Auditory Connections', yLimits = NULL, yBreaks = NULL, zeroLine = FALSE),
+                  xLabel = 'Auditory Connections', zeroLine = FALSE),
 
   Visual = list(match = function(roi) roiNumber(roi) %in% c(181,174,153,114,149,195,167,105,116,194,197,162,131,186,135,
                                                             72,60,19,52,35,75,25,15,42,30,91,87,98,57),
-                xLabel = 'Visual Connections', yLimits = NULL, yBreaks = NULL, zeroLine = FALSE)
+                xLabel = 'Visual Connections', zeroLine = FALSE)
 )
 
 # Fit both models for every connection (column) of the network.
@@ -1911,18 +1913,24 @@ plotNetworkBars <- function(fcGLM, spec) {
   longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
   pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
 
-  barPlot <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group)))
-  if (!is.null(spec$yLimits)) {
-    barPlot <- barPlot + scale_y_continuous(limits=spec$yLimits, breaks=spec$yBreaks, labels=fixedDecimalLabels, expand=c(0,0))
-  } else {
-    barPlot <- barPlot + scale_y_continuous(labels=fixedDecimalLabels)
-  }
-  barPlot <- barPlot +
+  # y axis fitted to this network's data: from the lowest bar (or 0) to the highest, on round tick marks.
+  # A network with few negative connections gets only a small negative range, not a symmetrical axis.
+  yBreaks <- pretty(c(0, longFCGLM$FC), n = 6)
+
+  barPlot <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+    scale_y_continuous(limits=range(yBreaks), breaks=yBreaks, labels=fixedDecimalLabels, expand=c(0,0)) +
     scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
     scale_color_manual(values=c(groupColors[['low']], groupColors[['high']]))
   if (spec$zeroLine) { barPlot <- barPlot + geom_hline(yintercept = 0, linewidth=1.5) }
+
+  # bar outlines are drawn only on smaller networks: on a big one the bars are so narrow that the outline swallows the fill
+  if (nrow(fcGLM) > networkBarOutlineMax) {
+    barLayer <- geom_bar(stat='identity', position='dodge', aes(fill=Group))
+  } else {
+    barLayer <- geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group))
+  }
   barPlot <- barPlot +
-    geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+    barLayer +
     ylab('Connectivity Strength') + xlab(spec$xLabel) +
     theme(axis.title.x = element_text(color = 'black', size = 16),
           axis.text.x = element_blank(),
