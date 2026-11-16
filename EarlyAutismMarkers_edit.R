@@ -31,6 +31,10 @@ saveFigures <- FALSE
 # File types to save, in this order. Choose any of: 'tiff', 'pdf', 'svg', 'eps'
 figureFileTypes <- c('tiff', 'pdf', 'svg', 'eps')
 
+# The individual pieces of a composite figure (the chord diagrams and heatmaps inside wholebrain_composite) are saved in this
+# subfolder of figDir; only the composite itself goes in figDir.
+componentFolder <- 'components'
+
 # Every ggplot figure is also kept here by name (e.g. figures[['regional_group_p05']]) so it can be re-shown or re-saved
 figures <- list()
 
@@ -69,18 +73,19 @@ rerun <- FALSE
 
 ## Helper Functions ----
 
-# Save a figure to figDir in each of figureFileTypes (only if saveFigures is TRUE).
+# Save a figure to figDir (or a subfolder of it, e.g. subfolder = componentFolder) in each of figureFileTypes (only if saveFigures is TRUE).
 # drawFun is a function with no arguments that draws the figure on the current device.
 # eps files are written without transparency (the eps format cannot hold it); svg and pdf keep it.
-saveFigure <- function(name, width, height, drawFun) {
+saveFigure <- function(name, width, height, drawFun, subfolder = NULL) {
   if (!saveFigures) { return(invisible(NULL)) }
 
   badTypes <- setdiff(figureFileTypes, c('tiff', 'pdf', 'svg', 'eps'))
   if (length(badTypes) > 0) { stop('Unknown figure file type(s): ', paste(badTypes, collapse=', '), ". Use 'tiff', 'pdf', 'svg', 'eps'.") }
 
-  dir.create(figDir, showWarnings = FALSE, recursive = TRUE)
+  saveDir <- if (is.null(subfolder)) figDir else file.path(figDir, subfolder)
+  dir.create(saveDir, showWarnings = FALSE, recursive = TRUE)
   for (type in figureFileTypes) {
-    file <- file.path(figDir, paste0(name, '.', type))
+    file <- file.path(saveDir, paste0(name, '.', type))
     switch(type,
            tiff = tiff(file, width = width, height = height, units = 'in', res = 600, compression = 'lzw'),
            pdf  = pdf(file, width = width, height = height),
@@ -94,19 +99,19 @@ saveFigure <- function(name, width, height, drawFun) {
   invisible(NULL)
 }
 
-# Show a ggplot/ggarrange figure, keep it in figures[[name]], and save it. Does nothing for a NULL figure.
-showFigure <- function(plotObj, name, width, height) {
+# Show a ggplot/ggarrange figure, keep it in figures[[name]], and save it (in `subfolder` of figDir if given). Does nothing for a NULL figure.
+showFigure <- function(plotObj, name, width, height, subfolder = NULL) {
   if (is.null(plotObj)) { return(invisible(NULL)) }
   figures[[name]] <<- plotObj
   print(plotObj)
-  saveFigure(name, width, height, function() print(plotObj))
+  saveFigure(name, width, height, function() print(plotObj), subfolder)
   invisible(plotObj)
 }
 
 # Same for a base-graphics figure (e.g. circlize chord diagram): drawFun draws it.
-showBaseFigure <- function(name, width, height, drawFun) {
+showBaseFigure <- function(name, width, height, drawFun, subfolder = NULL) {
   drawFun()
-  saveFigure(name, width, height, drawFun)
+  saveFigure(name, width, height, drawFun, subfolder)
   invisible(NULL)
 }
 
@@ -1577,9 +1582,9 @@ drawChord <- function(links, connCol, colorCol, labelSize = .8, canvas = c(1.5, 
   circos.clear()
 }
 
-showBaseFigure('wholebrain_chord_ASD', width = 9, height = 9, drawFun = function() drawChord(chordASDLinks, 'ASDConn', 'ASDCol'))
+showBaseFigure('wholebrain_chord_ASD', width = 9, height = 9, drawFun = function() drawChord(chordASDLinks, 'ASDConn', 'ASDCol'), subfolder = componentFolder)
 
-showBaseFigure('wholebrain_chord_TD', width = 9, height = 9, drawFun = function() drawChord(chordTDLinks, 'TDConn', 'TDCol'))
+showBaseFigure('wholebrain_chord_TD', width = 9, height = 9, drawFun = function() drawChord(chordTDLinks, 'TDConn', 'TDCol'), subfolder = componentFolder)
 
 
 asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == chordColorASD,]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == chordColorASD,]$FromAbbrev)
@@ -1680,10 +1685,10 @@ lobeHeatmapLimits <- c(0, 25)
 
 # Low Risk (TD) is blue and High Risk (ASD) is red, as in the other figures
 wholebrain_lobeHeatmap_TD <- lobeHeatmapPlot(allConnDescSig.TD, high = groupColors[['low']], limits = lobeHeatmapLimits)
-showFigure(wholebrain_lobeHeatmap_TD, 'wholebrain_lobeHeatmap_TD', width = 7, height = 7)
+showFigure(wholebrain_lobeHeatmap_TD, 'wholebrain_lobeHeatmap_TD', width = 7, height = 7, subfolder = componentFolder)
 
 wholebrain_lobeHeatmap_ASD <- lobeHeatmapPlot(allConnDescSig.ASD, high = groupColors[['high']], limits = lobeHeatmapLimits)
-showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, height = 7)
+showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, height = 7, subfolder = componentFolder)
 
 
 ### Whole Brain Composite Figure ----
