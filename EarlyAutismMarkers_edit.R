@@ -31,6 +31,17 @@ figureFileTypes <- c('tiff', 'pdf', 'svg', 'eps')
 figures <- list()
 
 
+## Table Output Settings ----
+
+# Set saveTables to TRUE to write the result tables (CSV) to tableDir (existing files with the same name are overwritten).
+saveTables <- FALSE
+
+# The tables folder sits next to the figures folder (paper/tables)
+tableDir <- file.path(dirname(figDir), 'tables')
+
+# Every exported table is also kept here by name (e.g. resultTables[['tissue_raw_main']]), whether or not it is saved
+resultTables <- list()
+
 ## Speed Settings ----
 
 # Number of CPU cores for the whole-brain models (1 = no parallel processing).
@@ -208,6 +219,28 @@ reportSignificant <- function(tbl) {
   if ('Itx.p.Adj' %in% colnames(tbl)) { print(subset(tbl, Itx.p.Adj < .05)) }
 }
 
+
+# Keep a table in resultTables[[name]] and, if saveTables is TRUE, write it to tableDir/<name>.csv
+saveTable <- function(tbl, name) {
+  resultTables[[name]] <<- tbl
+  if (saveTables) {
+    dir.create(tableDir, showWarnings = FALSE, recursive = TRUE)
+    write.csv(tbl, file.path(tableDir, paste0(name, '.csv')), row.names = FALSE)
+  }
+  invisible(tbl)
+}
+
+# Save a result table and, next to it, <name>_sigFDR: the rows where the group (or interaction) effect passes FDR at .05.
+# Works for the ROI tables (Grp.p.Adj / Itx.p.Adj) and the connectivity tables (Grp.p.adjust / Intx.p.adjust).
+saveResultTable <- function(tbl, name) {
+  saveTable(tbl, name)
+  adjCols <- intersect(c('Grp.p.Adj', 'Itx.p.Adj', 'Grp.p.adjust', 'Intx.p.adjust'), colnames(tbl))
+  if (length(adjCols) > 0) {
+    passes <- Reduce(`|`, lapply(adjCols, function(col) tbl[[col]] < .05 & !is.na(tbl[[col]])))
+    saveTable(tbl[passes,], paste0(name, '_sigFDR'))
+  }
+  invisible(tbl)
+}
 
 # Fingerprint of any R objects (used to tell whether a cached result is still valid)
 objectHash <- function(...) {
@@ -434,6 +467,8 @@ dropList <- c('pl_10028_02', 'pl_10149_01', 'pl_10149_02', 'pl_10151_01',
 
 fetalMatched <- fetalMatched[!c(fetalMatched$longID %in% dropList),]
 
+saveTable(fetalMatched, 'structural_matchedSample')
+
 
 length(unique(subset(fetalMatched, mchat_result=='Pass')$shortID))
 length(unique(subset(fetalMatched, mchat_result=='Fail')$shortID))
@@ -524,15 +559,19 @@ glmTissueNormedVolTable.Itx <- tissueModels$NormedItx
 
 glmTissueVolTable <- addFDR(glmTissueVolTable)
 reportSignificant(glmTissueVolTable)
+saveResultTable(glmTissueVolTable, 'tissue_raw_main')
 
 glmTissueVolTable.Itx <- addFDR(glmTissueVolTable.Itx)
 reportSignificant(glmTissueVolTable.Itx)
+saveResultTable(glmTissueVolTable.Itx, 'tissue_raw_intx')
 
 glmTissueNormedVolTable <- addFDR(glmTissueNormedVolTable)
 reportSignificant(glmTissueNormedVolTable)
+saveResultTable(glmTissueNormedVolTable, 'tissue_normed_main')
 
 glmTissueNormedVolTable.Itx <- addFDR(glmTissueNormedVolTable.Itx)
 reportSignificant(glmTissueNormedVolTable.Itx)
+saveResultTable(glmTissueNormedVolTable.Itx, 'tissue_normed_intx')
 
 
 ## 2c. Regional Volumes ----
@@ -609,15 +648,19 @@ glmRegionalNormedVolTable.Itx <- regionalModels$NormedItx
 
 glmRegionalVolTable <- addFDR(glmRegionalVolTable)
 reportSignificant(glmRegionalVolTable)
+saveResultTable(glmRegionalVolTable, 'regional_raw_main')
 
 glmRegionalVolTable.Itx <- addFDR(glmRegionalVolTable.Itx)
 reportSignificant(glmRegionalVolTable.Itx)
+saveResultTable(glmRegionalVolTable.Itx, 'regional_raw_intx')
 
 glmRegionalNormedVolTable <- addFDR(glmRegionalNormedVolTable)
 reportSignificant(glmRegionalNormedVolTable)
+saveResultTable(glmRegionalNormedVolTable, 'regional_normed_main')
 
 glmRegionalNormedVolTable.Itx <- addFDR(glmRegionalNormedVolTable.Itx)
 reportSignificant(glmRegionalNormedVolTable.Itx)
+saveResultTable(glmRegionalNormedVolTable.Itx, 'regional_normed_intx')
 
 
 #### Regional Figure ----
@@ -822,15 +865,19 @@ glmCTNormedTable.Itx <- ctModels$NormedItx
 
 glmCTTable <- addFDR(glmCTTable)
 reportSignificant(glmCTTable)
+saveResultTable(glmCTTable, 'ct_raw_main')
 
 glmCTTable.Itx <- addFDR(glmCTTable.Itx)
 reportSignificant(glmCTTable.Itx)
+saveResultTable(glmCTTable.Itx, 'ct_raw_intx')
 
 glmCTNormedTable <- addFDR(glmCTNormedTable)
 reportSignificant(glmCTNormedTable)
+saveResultTable(glmCTNormedTable, 'ct_normed_main')
 
 glmCTNormedTable.Itx <- addFDR(glmCTNormedTable.Itx)
 reportSignificant(glmCTNormedTable.Itx)
+saveResultTable(glmCTNormedTable.Itx, 'ct_normed_intx')
 
 
 
@@ -900,6 +947,8 @@ sd(asdBirthAge)
 tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00748_02',]
 tdDemoFinal <- tdDemoFinal[tdDemoFinal$ID != 'fetus_00556_01',]
 asdDemoFinal <- asdDemoFinal[asdDemoFinal$ID != 'pl_0028_02',]
+
+saveTable(rbind(asdDemoFinal, tdDemoFinal), 'functional_matchedSample')
 
 
 #DO demos here!
@@ -1072,6 +1121,9 @@ print(subset(fcGLM, Grp.p.adjust <.05))
 
 print(subset(fcIntxGLM, Grp.p.adjust <.05))
 print(subset(fcIntxGLM, Intx.p.adjust <.05))
+
+saveResultTable(fcGLM, 'wholebrain_main')
+saveResultTable(fcIntxGLM, 'wholebrain_intx')
 
 
 SigROIList <- subset(fcIntxGLM, Grp.p.adjust <.05)$ROI
@@ -1454,6 +1506,12 @@ allConnDescSig <- countLobePairs(lobeIndex1[isSig], lobeIndex2[isSig])
 allConnDescSig.TD <- countLobePairs(lobeIndex1[tdHigher], lobeIndex2[tdHigher])
 allConnDescSig.ASD <- countLobePairs(lobeIndex1[isSig & !tdHigher], lobeIndex2[isSig & !tdHigher])
 
+# 7 x 7 lobe-by-lobe connection counts (the lobe names are the row names, so they become a column)
+lobeCountNames <- c(allConnDesc = 'all', allConnDescSig = 'sig', allConnDescSig.TD = 'sigTD', allConnDescSig.ASD = 'sigASD')
+for (lobeTable in names(lobeCountNames)) {
+  saveTable(cbind(Lobe = rownames(get(lobeTable)), get(lobeTable)), paste0('wholebrain_lobeCounts_', lobeCountNames[[lobeTable]]))
+}
+
 
 meltTDConn <- allConnDescSig.TD
 
@@ -1676,6 +1734,8 @@ runNetworkAnalysis <- function(name, spec) {
   print(subset(fcIntxGLM, Intx.p.adjust <.05))
 
   writeNetworkTables(name, fcGLM, fcIntxGLM)
+  saveResultTable(fcGLM, paste0('network_', name, '_main'))
+  saveResultTable(fcIntxGLM, paste0('network_', name, '_intx'))
   list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
 }
 
