@@ -705,6 +705,16 @@ significantROIs <- function(tbl, pAdjCol, threshold) {
   tbl$ROI[which(tbl[[pAdjCol]] < threshold)]
 }
 
+# Axis numbers with a fixed number of decimals (never scientific notation): the fewest decimals that show every tick exactly
+fixedDecimalLabels <- function(breaks) {
+  digits <- 0
+  while (digits < 8 && any(abs(breaks * 10^digits - round(breaks * 10^digits)) > 1e-8, na.rm = TRUE)) { digits <- digits + 1 }
+  formatC(breaks, format = 'f', digits = digits)
+}
+
+# Break a long axis label onto two lines so it fits beside the panel
+wrapAxisLabel <- function(label, width = 28) paste(strwrap(label, width = width), collapse = '\n')
+
 # Axis label and y-axis settings for one ROI: the hand-tuned values if it is in regionalFigureROIs, otherwise automatic.
 # type is 'group' or 'intx'; maxValue is the largest value that must fit on the y axis (used only for automatic limits).
 roiAxis <- function(roi, type, maxValue) {
@@ -712,10 +722,10 @@ roiAxis <- function(roi, type, maxValue) {
   yMaxCol <- paste0(type, 'YMax'); breakMaxCol <- paste0(type, 'BreakMax'); stepCol <- paste0(type, 'BreakStep')
 
   if (nrow(spec) == 1) {
-    list(label = spec$label, limits = c(0, spec[[yMaxCol]]), breaks = seq(0, spec[[breakMaxCol]], spec[[stepCol]]))
+    list(label = wrapAxisLabel(spec$label), limits = c(0, spec[[yMaxCol]]), breaks = seq(0, spec[[breakMaxCol]], spec[[stepCol]]))
   } else {
     breaks <- pretty(c(0, maxValue * 1.1), n = 6)
-    list(label = paste(gsub('_', ' ', roi), 'Volume'), limits = c(0, max(breaks)), breaks = breaks)
+    list(label = wrapAxisLabel(paste(gsub('_', ' ', roi), 'Volume')), limits = c(0, max(breaks)), breaks = breaks)
   }
 }
 
@@ -758,7 +768,7 @@ plotRoiGroup <- function(roi) {
   axisInfo <- roiAxis(roi, 'group', max(meansTablePlot$emmean + meansTablePlot$SE))
 
   ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
-    scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, expand=c(0,0)) +
+    scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
     scale_fill_manual(values=c('#a3c0e9','#e09999')) +
     geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
     geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
@@ -775,26 +785,53 @@ plotRoiInteraction <- function(roi) {
   axisInfo <- roiAxis(roi, 'intx', max(tempAnalyses$VolNormed, na.rm=TRUE))
 
   ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-    scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, expand=c(0,0)) +
+    scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
     scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
     scale_shape_manual(values=c(23,21)) +   # Low Risk = diamond, High Risk = circle (as before)
     scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
     geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
     scale_color_manual(values=c('#72a3e8','#e37575')) +
     geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-    ylab(axisInfo$label) + xlab('Gestional Age (Weeks)') +
+    ylab(axisInfo$label) + xlab('Gestational Age (Weeks)') +
     themeRegionalFigure(showXTitle = TRUE)
 }
 
-# Arrange one plot per ROI in a grid (4 columns wide). Prints a message and draws nothing if no ROI qualifies.
-regionalFigure <- function(rois, plotFun, label) {
+# A boxed legend (Low Risk / High Risk) drawn as its own panel, like the key in the older hand-formatted figure.
+# type = 'group' (filled bars) or 'intx' (diamond / circle with a line)
+riskLegendPanel <- function(type) {
+  legendPlot <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+    annotate('rect', xmin = .08, xmax = .92, ymin = .2, ymax = .8, fill = 'white', colour = 'black', linewidth = 2) +
+    annotate('text', x = .40, y = .61, label = 'Low Risk', hjust = 0, size = 7.5) +
+    annotate('text', x = .40, y = .39, label = 'High Risk', hjust = 0, size = 7.5)
+
+  if (type == 'group') {
+    legendPlot +
+      annotate('rect', xmin = .16, xmax = .32, ymin = .53, ymax = .69, fill = '#a3c0e9', colour = 'black', linewidth = 2) +
+      annotate('rect', xmin = .16, xmax = .32, ymin = .31, ymax = .47, fill = '#e09999', colour = 'black', linewidth = 2)
+  } else {
+    legendPlot +
+      annotate('segment', x = .13, xend = .35, y = .61, yend = .61, colour = '#72a3e8', linewidth = 2) +
+      annotate('point', x = .24, y = .61, shape = 23, size = 7, fill = '#a3c0e955', colour = 'black', stroke = .75) +
+      annotate('segment', x = .13, xend = .35, y = .39, yend = .39, colour = '#e37575', linewidth = 2) +
+      annotate('point', x = .24, y = .39, shape = 21, size = 7, fill = '#e0999955', colour = 'black', stroke = .75)
+  }
+}
+
+# Size (inches) of a figure with one panel per ROI plus the legend: 4 panels per row, 3.5 in per panel
+regionalFigureSize <- function(nROIs) {
+  nPanels <- nROIs + 1
+  list(width = 3.5 * min(4, nPanels), height = 3.5 * ceiling(nPanels / 4))
+}
+
+# Arrange one plot per ROI plus a legend in a grid (4 columns wide). Prints a message and draws nothing if no ROI qualifies.
+regionalFigure <- function(rois, plotFun, label, legendType) {
   if (length(rois) == 0) {
     message('No regions to plot for: ', label)
     return(invisible(NULL))
   }
   message(label, ': ', length(rois), ' region(s): ', paste(rois, collapse=', '))
   plots <- lapply(rois, plotFun)
-  names(plots) <- rois
+  plots[[length(plots) + 1]] <- riskLegendPanel(legendType)
   ggpubr::ggarrange(plotlist = plots, nrow = ceiling(length(plots)/4), ncol = min(4, length(plots)), legend = 'none')
 }
 
@@ -811,8 +848,9 @@ names(groupROIs) <- names(intxROIs) <- paste0('p', figureThresholds)
 
 for (k in seq_along(figureThresholds)) {
   thrTag <- paste0('p', sprintf('%02d', round(figureThresholds[k]*100)))
-  showFigure(regionalFigure(groupROIs[[k]], plotRoiGroup, paste('Group effect, p.adj <', figureThresholds[k])),
-             paste0('regional_group_', thrTag), width = 14, height = 7)
+  figSize <- regionalFigureSize(length(groupROIs[[k]]))
+  showFigure(regionalFigure(groupROIs[[k]], plotRoiGroup, paste('Group effect, p.adj <', figureThresholds[k]), 'group'),
+             paste0('regional_group_', thrTag), width = figSize$width, height = figSize$height)
 }
 
 
@@ -820,8 +858,9 @@ for (k in seq_along(figureThresholds)) {
 
 for (k in seq_along(figureThresholds)) {
   thrTag <- paste0('p', sprintf('%02d', round(figureThresholds[k]*100)))
-  showFigure(regionalFigure(intxROIs[[k]], plotRoiInteraction, paste('Interaction, p.adj <', figureThresholds[k])),
-             paste0('regional_intx_', thrTag), width = 14, height = 7)
+  figSize <- regionalFigureSize(length(intxROIs[[k]]))
+  showFigure(regionalFigure(intxROIs[[k]], plotRoiInteraction, paste('Interaction, p.adj <', figureThresholds[k]), 'intx'),
+             paste0('regional_intx_', thrTag), width = figSize$width, height = figSize$height)
 }
 
 
