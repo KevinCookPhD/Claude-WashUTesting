@@ -1302,37 +1302,24 @@ ACG.R = '#efa973',
 ACG.R = '#efa973')
 
 
-allConnLength <- nrow(fullFCList)*nrow(fullFCList)
+# One row per (to, from) region pair, 'from' varying fastest. A connection's MeanDiff is its TD - ASD mean difference
+# from the whole-brain table, or 0 if the pair is not in the table exactly once.
+chordLabels <- fullFCList[,1]
+nChordLabels <- length(chordLabels)
+chordPairs <- expand.grid(from = seq_len(nChordLabels), to = seq_len(nChordLabels))
 
-chordDiagram.Base <- as.data.frame(matrix(ncol=7, nrow=allConnLength))
-colnames(chordDiagram.Base) <- c('ConnFull', 'ConnAbbrev','ToFull', 'ToAbbrev','FromFull', 'FromAbbrev','MeanDiff')
+chordDiagram.Base <- data.frame(
+  ConnFull = paste0(chordLabels[chordPairs$to],'.',chordPairs$to,'_',chordLabels[chordPairs$from],'.',chordPairs$from),
+  ConnAbbrev = paste0(chordLabels[chordPairs$to],'_',chordLabels[chordPairs$from]),
+  ToFull = paste0(chordLabels[chordPairs$to],'.',chordPairs$to),
+  ToAbbrev = chordLabels[chordPairs$to],
+  FromFull = paste0(chordLabels[chordPairs$from],'.',chordPairs$from),
+  FromAbbrev = chordLabels[chordPairs$from],
+  stringsAsFactors = FALSE)
 
-t<-1
-for(i in 1:nrow(fullFCList)){
-  for(j in 1:nrow(fullFCList)){
-    
-    print(paste0(i,' - ',j))
-    
-    chordDiagram.Base$ConnAbbrev[t] <- paste0(fullFCList[i,],'_',fullFCList[j,])
-    chordDiagram.Base$ConnFull[t] <- paste0(fullFCList[i,],'.',i,'_',fullFCList[j,],'.',j)
-    
-    chordDiagram.Base$ToAbbrev[t] <- fullFCList[i,]
-    chordDiagram.Base$ToFull[t] <- paste0(fullFCList[i,],'.',i)
-    
-    chordDiagram.Base$FromAbbrev[t] <- fullFCList[j,]
-    chordDiagram.Base$FromFull[t] <- paste0(fullFCList[j,],'.',j)
-    
-    targetRow <- subset(wholeBrainTable, ROI == paste0(fullFCList[i,],'.',i,'_',fullFCList[j,],'.',j))
-    
-    if(nrow(targetRow)==1) {
-      chordDiagram.Base$MeanDiff[t] <- targetRow$TD.Mean - targetRow$ASD.Mean 
-    } else {
-      chordDiagram.Base$MeanDiff[t] <- 0
-    }
-    
-    t <- t+1
-  }
-}
+tableRow <- match(chordDiagram.Base$ConnFull, wholeBrainTable$ROI)
+inTableOnce <- !is.na(tableRow) & !(chordDiagram.Base$ConnFull %in% wholeBrainTable$ROI[duplicated(wholeBrainTable$ROI)])
+chordDiagram.Base$MeanDiff <- ifelse(inTableOnce, wholeBrainTable$TD.Mean[tableRow] - wholeBrainTable$ASD.Mean[tableRow], 0)
 
 chordDiagram.Base$ASDConn <- as.numeric(chordDiagram.Base$MeanDiff < 0)
 chordDiagram.Base$TDConn <- as.numeric(chordDiagram.Base$MeanDiff > 0)
