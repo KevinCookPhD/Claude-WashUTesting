@@ -1408,61 +1408,38 @@ sort(table(tdConnections))
 ## DESCRIPTIVE FOR REGIONAL CONNECTIVITY
 
 lobeNames <- c('Frontal','Parietal','Temporal','Occipital','Subcortical','Cerebellum','Brainstem')
-allConnDesc <- as.data.frame(matrix(nrow=7, ncol=7, 0))
-colnames(allConnDesc) <- lobeNames
-rownames(allConnDesc) <-lobeNames
-allConnDescSig <- allConnDesc
-allConnDescSig.TD <- allConnDesc
-allConnDescSig.ASD <- allConnDesc
 
-
-for(i in 1:nrow(wholeBrainTable)){
-  
-  targetConn <- wholeBrainTable$ROI[i]
-  
-  targetROI1 <- strsplit(targetConn,'_',useBytes=T)[[1]][1]
-  targetROI2 <- strsplit(targetConn,'_',useBytes=T)[[1]][2]
-  
-  targetROI1Name <- paste0(strsplit(targetROI1,'.',fixed=T)[[1]][1],'.',strsplit(targetROI1,'.',fixed=T)[[1]][2])
-  targetROI2Name <- paste0(strsplit(targetROI2,'.',fixed=T)[[1]][1],'.',strsplit(targetROI2,'.',fixed=T)[[1]][2])
-  
-  #Need to manually code Brainstem beacause it's not labeled with a L or R
-  if(substr(targetROI1Name,0,2)=='BS') {targetROI1Name <- 'BS'}
-  if(substr(targetROI2Name,0,2)=='BS') {targetROI2Name <- 'BS'}
-  
-  abbrevNet <- NetList[NetList$Name_Abrv %in% targetROI1Name,]
-  lobe1 <-abbrevNet$Lobe[1]
-  abbrevNet <- NetList[NetList$Name_Abrv %in% targetROI2Name,]
-  lobe2 <-abbrevNet$Lobe[1]
-  
-  index1 <- grep(lobe1, lobeNames)
-  index2 <- grep(lobe2, lobeNames)
-  
-  allConnDesc[index1, index2] <- allConnDesc[index1, index2] + 1
-  allConnDesc[index2, index1] <- allConnDesc[index2, index1] + 1
-  
-  # Just include significant for all groups
-  
-  if(wholeBrainTable$ROI[i] %in% wholeBrainTableFDR$ROI){
-   
-    targetRow <- wholeBrainTableFDR[wholeBrainTableFDR$ROI %in% wholeBrainTable$ROI[i],]
-    
-    allConnDescSig[index1, index2] <- allConnDescSig[index1, index2] + 1
-    allConnDescSig[index2, index1] <- allConnDescSig[index2, index1] + 1
-    
-    if(targetRow$TD.Mean > targetRow$ASD.Mean) {
-    
-    allConnDescSig.TD[index1, index2] <- allConnDescSig.TD[index1, index2] + 1
-    allConnDescSig.TD[index2, index1] <- allConnDescSig.TD[index2, index1] + 1
-    
-    } else {
-    
-    allConnDescSig.ASD[index1, index2] <- allConnDescSig.ASD[index1, index2] + 1
-    allConnDescSig.ASD[index2, index1] <- allConnDescSig.ASD[index2, index1] + 1
-      
-    }
-  }
+# Row of lobeNames for an ROI such as 'CAU.L.39': its first two '.'-separated fields ('CAU.L') are looked up in the
+# network table. The brainstem has no L/R, so any name starting 'BS' is just 'BS'. NA if the ROI is not in the table.
+roiLobeIndex <- function(roiPart) {
+  fields <- strsplit(roiPart, '.', fixed=T)
+  roiName <- paste0(vapply(fields, function(x) x[1], character(1)), '.', vapply(fields, function(x) x[2], character(1)))
+  roiName[substr(roiName,0,2)=='BS'] <- 'BS'
+  match(NetList$Lobe[match(roiName, NetList$Name_Abrv)], lobeNames)
 }
+
+# 7 x 7 lobe-by-lobe count of connections. A connection adds 1 to both (lobe1, lobe2) and (lobe2, lobe1), so a
+# connection within one lobe adds 2 to that lobe's diagonal cell.
+countLobePairs <- function(index1, index2) {
+  keep <- !is.na(index1) & !is.na(index2)
+  pairCounts <- table(factor(index1[keep], levels=seq_along(lobeNames)), factor(index2[keep], levels=seq_along(lobeNames)))
+  counts <- matrix(as.numeric(pairCounts + t(pairCounts)), nrow=7, ncol=7, dimnames=list(lobeNames, lobeNames))
+  as.data.frame(counts)
+}
+
+connParts <- strsplit(wholeBrainTable$ROI, '_', useBytes=T)
+lobeIndex1 <- roiLobeIndex(vapply(connParts, function(x) x[1], character(1)))
+lobeIndex2 <- roiLobeIndex(vapply(connParts, function(x) x[2], character(1)))
+
+# Significant connections (FDR) and whether TD or ASD has the higher mean
+sigRow <- match(wholeBrainTable$ROI, wholeBrainTableFDR$ROI)
+isSig <- !is.na(sigRow)
+tdHigher <- isSig & ((wholeBrainTableFDR$TD.Mean[sigRow] > wholeBrainTableFDR$ASD.Mean[sigRow]) %in% TRUE)
+
+allConnDesc <- countLobePairs(lobeIndex1, lobeIndex2)
+allConnDescSig <- countLobePairs(lobeIndex1[isSig], lobeIndex2[isSig])
+allConnDescSig.TD <- countLobePairs(lobeIndex1[tdHigher], lobeIndex2[tdHigher])
+allConnDescSig.ASD <- countLobePairs(lobeIndex1[isSig & !tdHigher], lobeIndex2[isSig & !tdHigher])
 
 
 meltTDConn <- allConnDescSig.TD
