@@ -59,6 +59,76 @@ formatFCStudyID <- function(ID) {
   if (all(abbrev == 'f')) as.numeric(out) else out
 }
 
+# Prepare the analysis data frame for one ROI of a volume measure (tissue or regional).
+# roiColumn: one-column data frame of the ROI's volumes (rownames = longID)
+# matched:   the matched subject frame (fetalMatched)
+# rawData:   data frame with longID and TBV, used for the normalized volume
+# excludeIDs: longIDs to drop;  dropInf: drop rows where the normalized volume is Inf
+prepVolumeAnalysis <- function(roiColumn, matched, rawData, excludeIDs, dropInf = FALSE) {
+  colnames(roiColumn) <- 'Volume'
+  roiColumn$Volume <- as.numeric(roiColumn$Volume)
+
+  tempAnalyses <- merge(matched[,c('shortID','longID','scanAge', 'mchat_result')], roiColumn, by="row.names")
+  tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
+  tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
+  tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+
+  tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% excludeIDs),]
+  tempAnalyses <- merge(tempAnalyses, rawData, by='longID', all.x=T, all.y=F)
+  tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
+  if (dropInf) { tempAnalyses <- tempAnalyses[!tempAnalyses$VolNormed==Inf,] }
+
+  tempAnalyses
+}
+
+# Fit the four standard models for one ROI: raw and normalized outcome, each with and
+# without the group x scanAge interaction (random intercept per subject).
+# Returns a list of four one-row data frames: Raw, RawItx, Normed, NormedItx.
+# pEta2 is the group term for the main-effects models and the interaction term for the Itx models.
+fitRoiModels <- function(tempAnalyses, roi, rawVar, normVar) {
+
+  lmeCtrl <- lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')
+
+  fitRow <- function(yVar, interaction) {
+    op <- if (interaction) '*' else '+'
+    model <- lme(fixed = as.formula(paste(yVar, '~ mchat_result', op, 'scanAge')), data = tempAnalyses,
+                 random = ~1|factor(shortID), control = lmeCtrl)
+    tTable <- summary(model)$tTable
+    eta <- effectsize::eta_squared(model)$Eta2_partial
+
+    passMean <- mean(tempAnalyses[[yVar]][which(tempAnalyses$mchat_result == 'Pass')])
+    failMean <- mean(tempAnalyses[[yVar]][which(tempAnalyses$mchat_result == 'Fail')])
+
+    out <- data.frame(ROI = roi, TD.Mean = passMean, ASD.Mean = failMean, TD.ASD.Diff = passMean - failMean,
+                      Grp.B = tTable[2,1], Grp.p = tTable[2,5], scanGA.B = tTable[3,1], scanGA.p = tTable[3,5],
+                      stringsAsFactors = FALSE)
+    if (interaction) {
+      out$Itx.B <- tTable[4,1]
+      out$Itx.p <- tTable[4,5]
+      out$pEta2 <- eta[3]
+    } else {
+      out$pEta2 <- eta[1]
+    }
+    out
+  }
+
+  list(Raw = fitRow(rawVar, FALSE), RawItx = fitRow(rawVar, TRUE),
+       Normed = fitRow(normVar, FALSE), NormedItx = fitRow(normVar, TRUE))
+}
+
+# Run fitRoiModels over every ROI. prepFun(i) must return the analysis data frame for ROI number i.
+# Returns the four result tables (Raw, RawItx, Normed, NormedItx), one row per ROI.
+runRoiModels <- function(roiNames, prepFun, rawVar, normVar) {
+  results <- lapply(seq_along(roiNames), function(i) fitRoiModels(prepFun(i), roiNames[i], rawVar, normVar))
+  combine <- function(nm) {
+    tbl <- do.call(rbind, lapply(results, `[[`, nm))
+    rownames(tbl) <- NULL
+    tbl
+  }
+  list(Raw = combine('Raw'), RawItx = combine('RawItx'), Normed = combine('Normed'), NormedItx = combine('NormedItx'))
+}
+
+
 # 1. SHARED DATA ----
 
 ## Behavioral Data (MCHAT) ----
@@ -313,91 +383,16 @@ tissueData <- subset(tissueData, select = -c(longID))
 
 
 # Analyze trajectories across tissue ROI
-glmTissueVolTable <- as.data.frame(matrix(ncol=9, nrow=ncol(tissueData)))
-colnames(glmTissueVolTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
+tissueModels <- runRoiModels(colnames(tissueData),
+                             function(i) prepVolumeAnalysis(tissueData[,i, drop=FALSE], fetalMatched, tissueDataRaw,
+                                                            excludeIDs=c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),
+                             rawVar='Volume', normVar='VolNormed')
 
-glmTissueVolTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(tissueData)))
-colnames(glmTissueVolTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
+glmTissueVolTable <- tissueModels$Raw
+glmTissueVolTable.Itx <- tissueModels$RawItx
+glmTissueNormedVolTable <- tissueModels$Normed
+glmTissueNormedVolTable.Itx <- tissueModels$NormedItx
 
-glmTissueNormedVolTable <- as.data.frame(matrix(ncol=9, nrow=ncol(tissueData)))
-colnames(glmTissueNormedVolTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
-
-glmTissueNormedVolTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(tissueData)))
-colnames(glmTissueNormedVolTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
-
-for(i in 1:ncol(tissueData)){
-  
-  tissueVolumeROI <- tissueData[,i, drop=FALSE]
-  colnames(tissueVolumeROI) <- 'Volume'
-  tissueVolumeROI$Volume <- as.numeric(tissueVolumeROI$Volume)
-  
-  tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], tissueVolumeROI, by="row.names")
-  tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-  tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-  tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-  
-  tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
-  tempAnalyses <- merge(tempAnalyses,tissueDataRaw, by='longID', all.x=T, all.y=F)
-  tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-  
-  #Raw volume - no interaction
-  tempModel <- lme(data=tempAnalyses, Volume ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmTissueVolTable$ROI[i] <- colnames(tissueData)[i]
-  glmTissueVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
-  glmTissueVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmTissueVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmTissueVolTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmTissueVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmTissueVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmTissueVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmTissueVolTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
-  
-  #Raw volume - interaction
-  tempModel <- lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmTissueVolTable.Itx$ROI[i] <- colnames(tissueData)[i]
-  glmTissueVolTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
-  glmTissueVolTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmTissueVolTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmTissueVolTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmTissueVolTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmTissueVolTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmTissueVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmTissueVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
-  glmTissueVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmTissueVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
-  
-  
-  #Normed volume - no interaction
-  tempModel <- lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmTissueNormedVolTable$ROI[i] <- colnames(tissueData)[i]
-  glmTissueNormedVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)
-  glmTissueNormedVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
-  glmTissueNormedVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
-  glmTissueNormedVolTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmTissueNormedVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmTissueNormedVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmTissueNormedVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmTissueNormedVolTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
-  
-  #Normed volume - interaction
-  tempModel <- lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmTissueNormedVolTable.Itx$ROI[i] <- colnames(tissueData)[i]
-  glmTissueNormedVolTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)
-  glmTissueNormedVolTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
-  glmTissueNormedVolTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
-  glmTissueNormedVolTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmTissueNormedVolTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmTissueNormedVolTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmTissueNormedVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmTissueNormedVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
-  glmTissueNormedVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmTissueNormedVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
-  
-}
 
 
 glmTissueVolTable$Grp.p.Adj <- p.adjust(glmTissueVolTable$Grp.p, method='fdr')
@@ -480,97 +475,17 @@ if(IncludeCerebellarParcellation){
 
 
 # Analyze trajectories across regional ROI
-library(nlme)
+# NOTE: this analysis excludes two participants; the tissue analysis excludes three (fetus_02178_01 is kept here)
+regionalModels <- runRoiModels(colnames(regionalData),
+                               function(i) prepVolumeAnalysis(regionalData[,i, drop=FALSE], fetalMatched, regionalDataRaw,
+                                                              excludeIDs=c('rescue_0175_01', 'rescue_0184_01'), dropInf=TRUE),
+                               rawVar='Volume', normVar='VolNormed')
 
-glmRegionalVolTable <- as.data.frame(matrix(ncol=9, nrow=ncol(regionalData)))
-colnames(glmRegionalVolTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
+glmRegionalVolTable <- regionalModels$Raw
+glmRegionalVolTable.Itx <- regionalModels$RawItx
+glmRegionalNormedVolTable <- regionalModels$Normed
+glmRegionalNormedVolTable.Itx <- regionalModels$NormedItx
 
-glmRegionalVolTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(regionalData)))
-colnames(glmRegionalVolTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
-
-glmRegionalNormedVolTable <- as.data.frame(matrix(ncol=9, nrow=ncol(regionalData)))
-colnames(glmRegionalNormedVolTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
-
-glmRegionalNormedVolTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(regionalData)))
-colnames(glmRegionalNormedVolTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
-
-
-#NOTE: Multiple Length error is due to the partial eta sq calcualtion -- NOT THE GLM
-for(i in 1:ncol(regionalData)){
-  
-  regionalVolumeROI <- regionalData[,i, drop=FALSE]
-  colnames(regionalVolumeROI) <- 'Volume'
-  regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
-  
-  tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
-  tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-  tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-  tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-  
-#  tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),] #*Why are these being dropped?????*
-  tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'rescue_0184_01')),] #*Why are these being dropped?????*
-  tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
-  tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-  tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-  
-  #Raw volume - no interaction
-  tempModel <- lme(data=tempAnalyses, Volume ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmRegionalVolTable$ROI[i] <- colnames(regionalData)[i]
-  glmRegionalVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
-  glmRegionalVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmRegionalVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmRegionalVolTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmRegionalVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmRegionalVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmRegionalVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmRegionalVolTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
-  
-  #Raw volume - interaction
-  tempModel <- lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmRegionalVolTable.Itx$ROI[i] <- colnames(regionalData)[i]
-  glmRegionalVolTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)
-  glmRegionalVolTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmRegionalVolTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$Volume)-mean(subset(tempAnalyses, mchat_result=='Fail')$Volume)
-  glmRegionalVolTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmRegionalVolTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmRegionalVolTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmRegionalVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmRegionalVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
-  glmRegionalVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmRegionalVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, Volume ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
-  
-
-  #Normed volume - no interaction
-  tempModel <- lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmRegionalNormedVolTable$ROI[i] <- colnames(regionalData)[i]
-  glmRegionalNormedVolTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)
-  glmRegionalNormedVolTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
-  glmRegionalNormedVolTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
-  glmRegionalNormedVolTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmRegionalNormedVolTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmRegionalNormedVolTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmRegionalNormedVolTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmRegionalNormedVolTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
-  
-  #Normed volume - interaction
-  tempModel <- lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmRegionalNormedVolTable.Itx$ROI[i] <- colnames(regionalData)[i]
-  glmRegionalNormedVolTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)
-  glmRegionalNormedVolTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
-  glmRegionalNormedVolTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$VolNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$VolNormed)
-  glmRegionalNormedVolTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmRegionalNormedVolTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmRegionalNormedVolTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmRegionalNormedVolTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmRegionalNormedVolTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
-  glmRegionalNormedVolTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmRegionalNormedVolTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
-  
-}
 
 
 glmRegionalVolTable$Grp.p.Adj <- p.adjust(glmRegionalVolTable$Grp.p, method='fdr')
@@ -943,92 +858,28 @@ ctData$GlobalCT <- t(read.csv(paste0(baseDir,'/anatomical/CT_Global_Thickness.cs
 
 
 # Analyze trajectories across CT ROI
-
-glmCTTable <- as.data.frame(matrix(ncol=9, nrow=ncol(ctData)-1))
-colnames(glmCTTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
-
-glmCTTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(ctData)-1))
-colnames(glmCTTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
-
-glmCTNormedTable <- as.data.frame(matrix(ncol=9, nrow=ncol(ctData)-1))
-colnames(glmCTNormedTable) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','pEta2')
-
-glmCTNormedTable.Itx <- as.data.frame(matrix(ncol=11, nrow=ncol(ctData)-1))
-colnames(glmCTNormedTable.Itx) <- c('ROI', 'TD.Mean', 'ASD.Mean','TD.ASD.Diff','Grp.B','Grp.p','scanGA.B','scanGA.p','Itx.B','Itx.p','pEta2')
-
-
-for(i in 1:(ncol(ctData)-1)){
-  
+prepCTAnalysis <- function(i) {
   ctVolumeROI <- ctData[,i, drop=FALSE]
   colnames(ctVolumeROI) <- 'CT'
   ctVolumeROI$CT <- as.numeric(ctVolumeROI$CT)
   ctVolumeROI$GlobalCT <- ctData$GlobalCT
-  
+
   tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], ctVolumeROI, by="row.names")
   tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
   tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
   tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-  
-  tempAnalyses$CTNormed <- tempAnalyses$CT/tempAnalyses$GlobalCT
-  
-  #Raw CT - no interaction
-  tempModel <- lme(data=tempAnalyses, CT ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmCTTable$ROI[i] <- colnames(ctData)[i]
-  glmCTTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CT)
-  glmCTTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$CT)
-  glmCTTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CT)-mean(subset(tempAnalyses, mchat_result=='Fail')$CT)
-  glmCTTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmCTTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmCTTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmCTTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmCTTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CT ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
-  
-  #Raw CT - interaction
-  tempModel <- lme(data=tempAnalyses, CT ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmCTTable.Itx$ROI[i] <- colnames(ctData)[i]
-  glmCTTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CT)
-  glmCTTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$CT)
-  glmCTTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CT)-mean(subset(tempAnalyses, mchat_result=='Fail')$CT)
-  glmCTTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmCTTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmCTTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmCTTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmCTTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
-  glmCTTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmCTTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CT ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
-  
-  
-  #Normed CT - no interaction
-  tempModel <- lme(data=tempAnalyses, CTNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmCTNormedTable$ROI[i] <- colnames(ctData)[i]
-  glmCTNormedTable$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CTNormed)
-  glmCTNormedTable$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$CTNormed)
-  glmCTNormedTable$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CTNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$CTNormed)
-  glmCTNormedTable$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmCTNormedTable$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmCTNormedTable$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmCTNormedTable$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmCTNormedTable$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CTNormed ~ mchat_result + scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial
-  
-  #Normed CT - interaction
-  tempModel <- lme(data=tempAnalyses, CTNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  glmCTNormedTable.Itx$ROI[i] <- colnames(ctData)[i]
-  glmCTNormedTable.Itx$TD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CTNormed)
-  glmCTNormedTable.Itx$ASD.Mean[i] <- mean(subset(tempAnalyses, mchat_result=='Fail')$CTNormed)
-  glmCTNormedTable.Itx$TD.ASD.Diff[i] <- mean(subset(tempAnalyses, mchat_result=='Pass')$CTNormed)-mean(subset(tempAnalyses, mchat_result=='Fail')$CTNormed)
-  glmCTNormedTable.Itx$Grp.B[i] <- summary(tempModel)$tTable[2,1]
-  glmCTNormedTable.Itx$Grp.p[i] <- summary(tempModel)$tTable[2,5]
-  glmCTNormedTable.Itx$scanGA.B[i] <- summary(tempModel)$tTable[3,1]
-  glmCTNormedTable.Itx$scanGA.p[i] <- summary(tempModel)$tTable[3,5]
-  glmCTNormedTable.Itx$Itx.B[i] <- summary(tempModel)$tTable[4,1]
-  glmCTNormedTable.Itx$Itx.p[i] <- summary(tempModel)$tTable[4,5]
-  glmCTNormedTable.Itx$pEta2[i] <- effectsize::eta_squared(lme(data=tempAnalyses, CTNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')))$Eta2_partial[3]
 
+  tempAnalyses$CTNormed <- tempAnalyses$CT/tempAnalyses$GlobalCT
+  tempAnalyses
 }
+
+ctModels <- runRoiModels(colnames(ctData)[1:(ncol(ctData)-1)], prepCTAnalysis, rawVar='CT', normVar='CTNormed')
+
+glmCTTable <- ctModels$Raw
+glmCTTable.Itx <- ctModels$RawItx
+glmCTNormedTable <- ctModels$Normed
+glmCTNormedTable.Itx <- ctModels$NormedItx
+
 
 
 glmCTTable$Grp.p.Adj <- p.adjust(glmCTTable$Grp.p, method='fdr')
