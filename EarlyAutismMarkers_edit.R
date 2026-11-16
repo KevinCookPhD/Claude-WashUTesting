@@ -129,6 +129,21 @@ runRoiModels <- function(roiNames, prepFun, rawVar, normVar) {
 }
 
 
+# FDR-correct the p-values in an ROI results table (adds Grp.p.Adj, scanGA.p.Adj, and Itx.p.Adj for interaction tables).
+addFDR <- function(tbl) {
+  tbl$Grp.p.Adj <- p.adjust(tbl$Grp.p, method='fdr')
+  tbl$scanGA.p.Adj <- p.adjust(tbl$scanGA.p, method='fdr')
+  if ('Itx.p' %in% colnames(tbl)) { tbl$Itx.p.Adj <- p.adjust(tbl$Itx.p, method='fdr') }
+  tbl
+}
+
+# Print the ROIs that survive FDR (group effect, plus interaction effect for interaction tables).
+reportSignificant <- function(tbl) {
+  print(subset(tbl, Grp.p.Adj < .05))
+  if ('Itx.p.Adj' %in% colnames(tbl)) { print(subset(tbl, Itx.p.Adj < .05)) }
+}
+
+
 # 1. SHARED DATA ----
 
 ## Behavioral Data (MCHAT) ----
@@ -395,32 +410,19 @@ glmTissueNormedVolTable.Itx <- tissueModels$NormedItx
 
 
 
-glmTissueVolTable$Grp.p.Adj <- p.adjust(glmTissueVolTable$Grp.p, method='fdr')
-glmTissueVolTable$scanGA.p.Adj <- p.adjust(glmTissueVolTable$scanGA.p, method='fdr')
+# FDR correction and significant ROIs
 
-subset(glmTissueVolTable, Grp.p.Adj < .05)
+glmTissueVolTable <- addFDR(glmTissueVolTable)
+reportSignificant(glmTissueVolTable)
 
+glmTissueVolTable.Itx <- addFDR(glmTissueVolTable.Itx)
+reportSignificant(glmTissueVolTable.Itx)
 
-glmTissueVolTable.Itx$Grp.p.Adj <- p.adjust(glmTissueVolTable.Itx$Grp.p, method='fdr')
-glmTissueVolTable.Itx$scanGA.p.Adj <- p.adjust(glmTissueVolTable.Itx$scanGA.p, method='fdr')
-glmTissueVolTable.Itx$Itx.p.Adj <- p.adjust(glmTissueVolTable.Itx$Itx.p, method='fdr')
+glmTissueNormedVolTable <- addFDR(glmTissueNormedVolTable)
+reportSignificant(glmTissueNormedVolTable)
 
-subset(glmTissueVolTable.Itx, Grp.p.Adj < .05)
-subset(glmTissueVolTable.Itx, Itx.p.Adj < .05)
-
-
-glmTissueNormedVolTable$Grp.p.Adj <- p.adjust(glmTissueNormedVolTable$Grp.p, method='fdr')
-glmTissueNormedVolTable$scanGA.p.Adj <- p.adjust(glmTissueNormedVolTable$scanGA.p, method='fdr')
-
-subset(glmTissueNormedVolTable, Grp.p.Adj < .05)
-
-
-glmTissueNormedVolTable.Itx$Grp.p.Adj <- p.adjust(glmTissueNormedVolTable.Itx$Grp.p, method='fdr')
-glmTissueNormedVolTable.Itx$scanGA.p.Adj <- p.adjust(glmTissueNormedVolTable.Itx$scanGA.p, method='fdr')
-glmTissueNormedVolTable.Itx$Itx.p.Adj <- p.adjust(glmTissueNormedVolTable.Itx$Itx.p, method='fdr')
-
-subset(glmTissueNormedVolTable.Itx, Grp.p.Adj < .05)
-subset(glmTissueNormedVolTable.Itx, Itx.p.Adj < .05)
+glmTissueNormedVolTable.Itx <- addFDR(glmTissueNormedVolTable.Itx)
+reportSignificant(glmTissueNormedVolTable.Itx)
 
 
 ## 2c. Regional Volumes ----
@@ -488,32 +490,19 @@ glmRegionalNormedVolTable.Itx <- regionalModels$NormedItx
 
 
 
-glmRegionalVolTable$Grp.p.Adj <- p.adjust(glmRegionalVolTable$Grp.p, method='fdr')
-glmRegionalVolTable$scanGA.p.Adj <- p.adjust(glmRegionalVolTable$scanGA.p, method='fdr')
+# FDR correction and significant ROIs
 
-subset(glmRegionalVolTable, Grp.p.Adj < .05)
+glmRegionalVolTable <- addFDR(glmRegionalVolTable)
+reportSignificant(glmRegionalVolTable)
 
+glmRegionalVolTable.Itx <- addFDR(glmRegionalVolTable.Itx)
+reportSignificant(glmRegionalVolTable.Itx)
 
-glmRegionalVolTable.Itx$Grp.p.Adj <- p.adjust(glmRegionalVolTable.Itx$Grp.p, method='fdr')
-glmRegionalVolTable.Itx$scanGA.p.Adj <- p.adjust(glmRegionalVolTable.Itx$scanGA.p, method='fdr')
-glmRegionalVolTable.Itx$Itx.p.Adj <- p.adjust(glmRegionalVolTable.Itx$Itx.p, method='fdr')
+glmRegionalNormedVolTable <- addFDR(glmRegionalNormedVolTable)
+reportSignificant(glmRegionalNormedVolTable)
 
-subset(glmRegionalVolTable.Itx, Grp.p.Adj < .05)
-subset(glmRegionalVolTable.Itx, Itx.p.Adj < .05)
-
-
-glmRegionalNormedVolTable$Grp.p.Adj <- p.adjust(glmRegionalNormedVolTable$Grp.p, method='fdr')
-glmRegionalNormedVolTable$scanGA.p.Adj <- p.adjust(glmRegionalNormedVolTable$scanGA.p, method='fdr')
-
-subset(glmRegionalNormedVolTable, Grp.p.Adj < .05)
-
-
-glmRegionalNormedVolTable.Itx$Grp.p.Adj <- p.adjust(glmRegionalNormedVolTable.Itx$Grp.p, method='fdr')
-glmRegionalNormedVolTable.Itx$scanGA.p.Adj <- p.adjust(glmRegionalNormedVolTable.Itx$scanGA.p, method='fdr')
-glmRegionalNormedVolTable.Itx$Itx.p.Adj <- p.adjust(glmRegionalNormedVolTable.Itx$Itx.p, method='fdr')
-
-subset(glmRegionalNormedVolTable.Itx, Grp.p.Adj < .05)
-subset(glmRegionalNormedVolTable.Itx, Itx.p.Adj < .05)
+glmRegionalNormedVolTable.Itx <- addFDR(glmRegionalNormedVolTable.Itx)
+reportSignificant(glmRegionalNormedVolTable.Itx)
 
 
 #### Regional Figure ----
@@ -882,32 +871,19 @@ glmCTNormedTable.Itx <- ctModels$NormedItx
 
 
 
-glmCTTable$Grp.p.Adj <- p.adjust(glmCTTable$Grp.p, method='fdr')
-glmCTTable$scanGA.p.Adj <- p.adjust(glmCTTable$scanGA.p, method='fdr')
+# FDR correction and significant ROIs
 
-subset(glmCTTable, Grp.p.Adj < .05)
+glmCTTable <- addFDR(glmCTTable)
+reportSignificant(glmCTTable)
 
+glmCTTable.Itx <- addFDR(glmCTTable.Itx)
+reportSignificant(glmCTTable.Itx)
 
-glmCTTable.Itx$Grp.p.Adj <- p.adjust(glmCTTable.Itx$Grp.p, method='fdr')
-glmCTTable.Itx$scanGA.p.Adj <- p.adjust(glmCTTable.Itx$scanGA.p, method='fdr')
-glmCTTable.Itx$Itx.p.Adj <- p.adjust(glmCTTable.Itx$Itx.p, method='fdr')
+glmCTNormedTable <- addFDR(glmCTNormedTable)
+reportSignificant(glmCTNormedTable)
 
-subset(glmCTTable.Itx, Grp.p.Adj < .05)
-subset(glmCTTable.Itx, Itx.p.Adj < .05)
-
-
-glmCTNormedTable$Grp.p.Adj <- p.adjust(glmCTNormedTable$Grp.p, method='fdr')
-glmCTNormedTable$scanGA.p.Adj <- p.adjust(glmCTNormedTable$scanGA.p, method='fdr')
-
-subset(glmCTNormedTable, Grp.p.Adj < .05)
-
-
-glmCTNormedTable.Itx$Grp.p.Adj <- p.adjust(glmCTNormedTable.Itx$Grp.p, method='fdr')
-glmCTNormedTable.Itx$scanGA.p.Adj <- p.adjust(glmCTNormedTable.Itx$scanGA.p, method='fdr')
-glmCTNormedTable.Itx$Itx.p.Adj <- p.adjust(glmCTNormedTable.Itx$Itx.p, method='fdr')
-
-subset(glmCTNormedTable.Itx, Grp.p.Adj < .05)
-subset(glmCTNormedTable.Itx, Itx.p.Adj < .05)
+glmCTNormedTable.Itx <- addFDR(glmCTNormedTable.Itx)
+reportSignificant(glmCTNormedTable.Itx)
 
 
 
