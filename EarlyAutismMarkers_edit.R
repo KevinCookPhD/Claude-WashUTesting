@@ -44,6 +44,21 @@ formatID <- function(study_id, study) {
 }
 
 
+# Convert a functional-data ID (e.g. 'fetus_02151_02', 'rescue_0175_01', 'pl_10149_01')
+# into the study_id used in combinedASDData.csv (2151, 'RES-175', 'PL-149').
+# Vectorized: pass the ID column. Returns numeric if every ID is a fetus ID, otherwise character.
+formatFCStudyID <- function(ID) {
+  ID <- as.character(ID)
+  abbrev <- substr(ID, 0, 1)
+  num <- as.numeric(vapply(strsplit(ID, '_', fixed = TRUE), function(x) x[2], character(1)))
+
+  out <- ifelse(abbrev == 'f', as.character(num),
+         ifelse(abbrev == 'r', paste0('RES-', sprintf("%03d", num)),
+                               paste0('PL-', sprintf("%03d", num))))
+
+  if (all(abbrev == 'f')) as.numeric(out) else out
+}
+
 # 1. SHARED DATA ----
 
 ## Behavioral Data (MCHAT) ----
@@ -1116,29 +1131,7 @@ asdDemoFinal <- asdDemoFinal[asdDemoFinal$ID != 'pl_0028_02',]
 #DO demos here!
 fcMatchedDataTemp <- rbind(asdDemoFinal, tdDemoFinal)
 
-fcMatchedDataTemp$study_id <- NA
-for(i in 1:nrow(fcMatchedDataTemp)) {
-  
-  tempID <- fcMatchedDataTemp$ID[i]
-  
-  studyAbbrev <- substr(tempID,0,1)
-  
-  if(studyAbbrev == 'f')
-  {
-    
-    fcMatchedDataTemp$study_id[i] <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
-    
-  } else if(studyAbbrev == 'r') {
-    
-    tempNum <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
-    fcMatchedDataTemp$study_id[i] <- paste0('RES-',sprintf("%03d", tempNum))
-    
-  } else {
-    tempNum <- as.numeric(strsplit(tempID,'_', fixed=T)[[1]][2])
-    fcMatchedDataTemp$study_id[i] <- paste0('PL-',sprintf("%03d", tempNum))
-
-  }
-}
+fcMatchedDataTemp$study_id <- formatFCStudyID(fcMatchedDataTemp$ID)
 
 
 testDataFC <- read.csv(paste0(baseDir,'/functional/combinedASDData.csv'),stringsAsFactors=F)
