@@ -35,7 +35,7 @@ figures <- list()
 
 # Save a figure to figDir in each of figureFileTypes (only if saveFigures is TRUE).
 # drawFun is a function with no arguments that draws the figure on the current device.
-# eps files are written with cairo_ps so semi-transparent colors are kept.
+# eps files are written without transparency (the eps format cannot hold it); svg and pdf keep it.
 saveFigure <- function(name, width, height, drawFun) {
   if (!saveFigures) { return(invisible(NULL)) }
 
@@ -49,8 +49,11 @@ saveFigure <- function(name, width, height, drawFun) {
            tiff = tiff(file, width = width, height = height, units = 'in', res = 600, compression = 'lzw'),
            pdf  = pdf(file, width = width, height = height),
            svg  = svg(file, width = width, height = height),
-           eps  = cairo_ps(file, width = width, height = height, onefile = FALSE, fallback_resolution = 600))
-    tryCatch(drawFun(), finally = dev.off())
+           eps  = postscript(file, width = width, height = height, horizontal = FALSE, onefile = FALSE, paper = 'special'))
+    # the eps device warns once per figure that semi-transparency is unsupported; that is expected, so hide it
+    tryCatch(withCallingHandlers(drawFun(), warning = function(w) {
+               if (type == 'eps' && grepl('semi-transparency', conditionMessage(w))) invokeRestart('muffleWarning')
+             }), finally = dev.off())
   }
   invisible(NULL)
 }
