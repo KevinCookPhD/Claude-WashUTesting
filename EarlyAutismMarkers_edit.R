@@ -52,12 +52,16 @@ chordLinkBorderWidth <- 3
 ## Glass Brain Settings ----
 
 # Files for the glass brain figures (the region coordinates and the brain surface are in the same fetal atlas space)
-roiCoordinateFile <- file.path(baseDir, 'functional', 'old_r200.node.txt')       # one row per region: x y z
+roiCoordinateFile <- file.path(baseDir, 'functional', 'nodeTable.node')            # one row per region; the first three columns are x y z
 brainMeshFile <- file.path(baseDir, 'anatomical', 'Segmentation_inner_cortex.mz3')  # brain surface mesh
 
 # The coordinates and mesh are in AFNI orientation (x: positive = left, y: positive = posterior). TRUE converts them to the
 # standard orientation (x: right, y: anterior, z: superior) before drawing.
 coordinatesAreAFNI <- TRUE
+
+# The top (axial) view: TRUE puts the back of the head at the top of the picture (as in the BrainNet Viewer figures this was
+# matched to); FALSE puts the front at the top.
+glassAxialPosteriorAtTop <- TRUE
 
 # The four networks shown on the network glass brain: node color and legend name
 networkNodeColors <- c(CRB = '#F2B134', DMN = '#E8305E', Limbic = '#14C28D', SubCort = '#1A8BB5')
@@ -391,15 +395,15 @@ readMz3 <- function(file) {
 # Coordinates (columns x, y, z) as a data frame with columns X (right), Y (anterior), Z (superior).
 # AFNI orientation has x positive to the left and y positive to the posterior, so those two are flipped.
 standardCoordinates <- function(xyz, fromAFNI = coordinatesAreAFNI) {
-  xyz <- as.matrix(xyz)
+  xyz <- as.matrix(xyz[, 1:3])        # first three columns only (a BrainNet .node file also has color, size and label columns)
   data.frame(X = xyz[, 1] * ifelse(fromAFNI, -1, 1), Y = xyz[, 2] * ifelse(fromAFNI, -1, 1), Z = xyz[, 3])
 }
 
 # How each glass brain view maps the coordinates onto the page. Lateral = left side of the head (front on the left),
-# posterior = seen from behind, axial = seen from above (front at the top).
+# posterior = seen from behind, axial = seen from above or below (see glassAxialPosteriorAtTop).
 glassViews <- list(lateral   = list(h = list(axis = 'Y', sign = -1), v = list(axis = 'Z', sign = 1)),
                    posterior = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Z', sign = 1)),
-                   axial     = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Y', sign = 1)))
+                   axial     = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Y', sign = ifelse(glassAxialPosteriorAtTop, -1, 1))))
 
 # The translucent brain behind the nodes: the mesh surface area behind each pixel (smoothed), for every view.
 # Folds show through where the surface overlaps itself, which gives the glass look.
@@ -1820,6 +1824,8 @@ loadGlassBrain()
 wholeBrainEdges <- connectionRegions(wholeBrainTableFDR$ROI)
 wholeBrainEdges$dir <- ifelse(wholeBrainTableFDR$TD.Mean > wholeBrainTableFDR$ASD.Mean, 'low', 'high')
 allRegionNodes <- data.frame(id = seq_len(nrow(roiCoordinates)), fill = '#505050')
+message('Whole-brain glass brains: ', sum(wholeBrainEdges$dir == 'low', na.rm = TRUE), ' Low > High Risk edges and ',
+        sum(wholeBrainEdges$dir == 'high', na.rm = TRUE), ' High > Low Risk edges')
 
 wholeBrainGlass <- function(direction) {
   edges <- wholeBrainEdges[which(wholeBrainEdges$dir == direction),]
@@ -2218,6 +2224,9 @@ networkGlassEdges <- do.call(rbind, lapply(names(networkNodeColors), function(ne
   edges$dir <- ifelse(tbl$TD.Mean > tbl$ASD.Mean, 'low', 'high')
   edges
 }))
+
+message('Network glass brain: ', sum(networkGlassEdges$dir == 'low', na.rm = TRUE), ' Low > High Risk edges and ',
+        sum(networkGlassEdges$dir == 'high', na.rm = TRUE), ' High > Low Risk edges')
 
 # Legend: one chip per network (node color with a lighter tint), then what the blue and red edges mean
 networkLegendPanel <- function() {
