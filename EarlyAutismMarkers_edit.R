@@ -1,16 +1,3 @@
-# ---- Original Quarto YAML header ----
-# title: "EarlyAutismMarkers"
-# format:
-#   html:
-#     page-layout: full
-#     toc: true
-#     toc-title: Contents
-#     css: styles.css
-#     theme: cyborg
-# editor: visual
-# ---
-
-
 # Initialize Environment ----
 
 
@@ -27,7 +14,6 @@ figDir <- "C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing
 
 # figDir <- file.path(getwd(), "paper", "figures")
 
-setwd(baseDir)
 knitr::opts_knit$set(root.dir = normalizePath(baseDir))
 library(ggplot2)
 library(ggpubr)
