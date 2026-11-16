@@ -1777,9 +1777,6 @@ roiNumber <- function(roi) as.numeric(vapply(strsplit(roi, '.', fixed = TRUE), f
 #   match         - function(roi names) -> TRUE for regions in the network
 #   xLabel        - x-axis label of the bar chart
 #   zeroLine      - draw a line at 0 on the bar chart
-# Networks with more connections than this are drawn without bar outlines
-networkBarOutlineMax <- 60
-
 networkSpecs <- list(
 
   CRB = list(match = function(roi) grepl('CRB', roi),
@@ -1923,14 +1920,8 @@ plotNetworkBars <- function(fcGLM, spec) {
     scale_color_manual(values=c(groupColors[['low']], groupColors[['high']]))
   if (spec$zeroLine) { barPlot <- barPlot + geom_hline(yintercept = 0, linewidth=1.5) }
 
-  # bar outlines are drawn only on smaller networks: on a big one the bars are so narrow that the outline swallows the fill
-  if (nrow(fcGLM) > networkBarOutlineMax) {
-    barLayer <- geom_bar(stat='identity', position='dodge', aes(fill=Group))
-  } else {
-    barLayer <- geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group))
-  }
   barPlot <- barPlot +
-    barLayer +
+    geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
     ylab('Connectivity Strength') + xlab(spec$xLabel) +
     theme(axis.title.x = element_text(color = 'black', size = 16),
           axis.text.x = element_blank(),
