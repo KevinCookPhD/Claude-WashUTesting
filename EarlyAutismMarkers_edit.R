@@ -579,12 +579,13 @@ plotRoiGroup <- function(roiRow) {
 # Interaction figure: normalized volume by gestational age, with a fitted line per risk group
 plotRoiInteraction <- function(roiRow) {
   tempAnalyses <- prepRegionalFigureData(roiRow$roi)
-  colnames(tempAnalyses)[5] <- 'Autism Risk'
+  # Low Risk first so it gets the first (blue) color, matching the group figure
+  tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
 
   ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
     scale_y_continuous(limits=c(0, roiRow$intxYMax), breaks=seq(0, roiRow$intxBreakMax, roiRow$intxBreakStep), expand=c(0,0)) +
     scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-    scale_shape_manual(values=c(21,23)) +
+    scale_shape_manual(values=c(23,21)) +   # Low Risk = diamond, High Risk = circle (as before)
     scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
     geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
     scale_color_manual(values=c('#72a3e8','#e37575')) +
