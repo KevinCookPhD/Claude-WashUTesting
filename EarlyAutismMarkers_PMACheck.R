@@ -41,8 +41,10 @@ regionOfSignificanceMethod <- 'fdr'
 regionOfSignificanceAlpha <- .05
 regionMaxPanels <- 24                     # most panels drawn per network in the region-of-significance figure
 
-# Networks to analyze: the a priori networks set in EarlyAutismMarkers_edit.R (networksOfInterest); all of networkSpecs if that is missing
-pmaNetworks <- if (exists('networksOfInterest')) networksOfInterest else names(networkSpecs)
+# Networks to analyze: the a priori networks set in EarlyAutismMarkers_edit.R (networksOfInterest)
+if (!exists('networksOfInterest')) { stop("networksOfInterest is not defined. Re-run the Setup of the current EarlyAutismMarkers_edit.R (it defines networksOfInterest) first.") }
+pmaNetworks <- networksOfInterest
+message('PMACheck networks: ', paste(pmaNetworks, collapse = ', '))
 
 # Make sure the data and functions from EarlyAutismMarkers_edit.R are available ----
 

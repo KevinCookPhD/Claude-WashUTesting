@@ -39,7 +39,11 @@ nmNeeded <- c('tdFC', 'asdFC', 'tdDemoFinal', 'asdDemoFinal', 'connROIs', 'netwo
 nmMissing <- nmNeeded[!vapply(nmNeeded, exists, logical(1))]
 if (length(nmMissing) > 0) { stop('Run EarlyAutismMarkers_edit.R first. These objects are missing: ', paste(nmMissing, collapse = ', ')) }
 if (!networkScore %in% c('mean', 'absmean')) { stop("networkScore must be 'mean' or 'absmean'") }
-if (is.null(networkMeanNetworks)) { networkMeanNetworks <- if (exists('networksOfInterest')) networksOfInterest else names(networkSpecs) }
+if (is.null(networkMeanNetworks)) {
+  if (!exists('networksOfInterest')) { stop("networksOfInterest is not defined. Re-run the Setup of the current EarlyAutismMarkers_edit.R (it defines networksOfInterest) first, or set networkMeanNetworks above.") }
+  networkMeanNetworks <- networksOfInterest
+}
+message('NetworkMeans networks: ', paste(networkMeanNetworks, collapse = ', '))
 
 # Which connections belong to a network or a network pair ----
 
