@@ -1634,11 +1634,14 @@ lobeHeatmapPlot <- function(counts, high, limits = NULL, low = '#ffffff') {
     theme(plot.margin = margin(t = 8, r = 40, b = 100, l = 105, unit = 'pt'))
 }
 
+# Both heatmaps use the same color scale, 0 to 25, so their colors and colorbars can be compared directly
+lobeHeatmapLimits <- c(0, 25)
+
 # Low Risk (TD) is blue and High Risk (ASD) is red, as in the other figures
-wholebrain_lobeHeatmap_TD <- lobeHeatmapPlot(allConnDescSig.TD, high = '#0050bf')
+wholebrain_lobeHeatmap_TD <- lobeHeatmapPlot(allConnDescSig.TD, high = '#0050bf', limits = lobeHeatmapLimits)
 showFigure(wholebrain_lobeHeatmap_TD, 'wholebrain_lobeHeatmap_TD', width = 7, height = 7)
 
-wholebrain_lobeHeatmap_ASD <- lobeHeatmapPlot(allConnDescSig.ASD, high = '#a60000', limits = c(0, 25))
+wholebrain_lobeHeatmap_ASD <- lobeHeatmapPlot(allConnDescSig.ASD, high = '#a60000', limits = lobeHeatmapLimits)
 showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, height = 7)
 
 
