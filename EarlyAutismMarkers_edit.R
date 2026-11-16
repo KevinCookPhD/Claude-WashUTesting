@@ -569,7 +569,7 @@ glassBrainRgl <- function(view, nodes, edges = NULL, size = 'network') {
   if (!is.null(edges) && nrow(edges) > 0) {
     for (k in seq_len(nrow(edges))) {
       rgl::shade3d(rgl::cylinder3d(rbind(xyz[edges$a[k], ], xyz[edges$b[k], ]), radius = glassTubeRadius[[size]], sides = 16),
-                   color = glassEdgeColors[[edges$dir[k]]], alpha = .9, specular = 'black')
+                   color = glassEdgeColors[[edges$dir[k]]], alpha = 1, specular = 'black')
     }
   }
   rgl::spheres3d(xyz[nodes$id, , drop = FALSE], radius = glassNodeRadius[[size]], color = nodes$fill, specular = 'black', shininess = 1)
