@@ -266,12 +266,10 @@ regionalDir <- file.path(baseDir, "anatomical", "regionalVolumes_Individual")
 vermisVol <- read.csv(file.path(dirname(baseDir), "_Earlier_Iteration_NeurodevelopmentalRisk", "data", "anatomicalData", "vermisParcVolumes_071026.csv"), stringsAsFactors=F)
 vermisVol$totalVermis <- vermisVol$supVerm + vermisVol$infVerm + vermisVol$midVerm
 
-setwd(tissueDir)
-tissueFiles <- list.files()
+tissueFiles <- list.files(tissueDir)
 fetalFailID[!(fetalFailID %in% substr(tissueFiles, 0, nchar(tissueFiles)-19))]
 
-setwd(regionalDir)
-regionalFiles <- list.files()
+regionalFiles <- list.files(regionalDir)
 fetalFailID[!(fetalFailID %in% substr(regionalFiles, 0, nchar(regionalFiles)-21))]
 
 
@@ -806,9 +804,6 @@ subset(glmTissueNormedVolTable.Itx, Itx.p.Adj < .05)
 
 # ----
 
-#Need to set new WD for this block to see individual anatomical files
-setwd(paste0(baseDir,'/anatomical/regionalVolumes_Individual'))
-
 # Combine the regional volumes into a single data frame
 regionalData <- as.data.frame(matrix(ncol = 87, nrow= nrow(fetalMatched)))
 rownames(regionalData) <- fetalMatched$longID
@@ -820,7 +815,7 @@ for(i in 1:nrow(regionalData)){
   targetID <- rownames(regionalData)[i]
   targetFile <- regionalFiles[substr(regionalFiles, 0, nchar(regionalFiles)-18) %in% targetID]
   if(length(targetFile) == 0) {next}
-  tempData <- read.table(targetFile)
+  tempData <- read.table(file.path(regionalDir, targetFile))
   ncolData <- ncol(tempData)
   regionalData[i,1:(ncolData-2)] <- tempData[2,3:ncolData]
   
