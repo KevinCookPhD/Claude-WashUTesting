@@ -9,11 +9,6 @@ baseDir <- 'C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncin
 
 figDir <- "C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/04_Projects/01_Active/FASD_FetalASDRisk/paper/figures"
 
-#  WORK LAPTOP
-# baseDir <- file.path(getwd(), "data")
-
-# figDir <- file.path(getwd(), "paper", "figures")
-
 library(ggplot2)
 library(ggpubr)
 # library(lmerTest)
