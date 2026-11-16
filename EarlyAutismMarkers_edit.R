@@ -49,6 +49,20 @@ groupColors <- c(low = '#2166AC', high = '#B2182B')
 chordLinkAlpha <- 'aa'
 chordLinkBorderWidth <- 3
 
+## Glass Brain Settings ----
+
+# Files for the glass brain figures (the region coordinates and the brain surface are in the same fetal atlas space)
+roiCoordinateFile <- file.path(baseDir, 'functional', 'old_r200.node.txt')       # one row per region: x y z
+brainMeshFile <- file.path(baseDir, 'anatomical', 'Segmentation_inner_cortex.mz3')  # brain surface mesh
+
+# The coordinates and mesh are in AFNI orientation (x: positive = left, y: positive = posterior). TRUE converts them to the
+# standard orientation (x: right, y: anterior, z: superior) before drawing.
+coordinatesAreAFNI <- TRUE
+
+# The four networks shown on the network glass brain: node color and legend name
+networkNodeColors <- c(CRB = '#F2B134', DMN = '#E8305E', Limbic = '#14C28D', SubCort = '#1A8BB5')
+networkNodeLabels <- c(CRB = 'Cerebellar', DMN = 'Default Mode', Limbic = 'Limbic', SubCort = 'Subcortical')
+
 ## Table Output Settings ----
 
 # Set saveTables to TRUE to write the result tables (CSV) to tableDir (existing files with the same name are overwritten).
@@ -353,6 +367,111 @@ connectionLabel <- function(ids) {
   ambiguous <- duplicated(base) | duplicated(base, fromLast = TRUE)
   numbers <- vapply(regions, function(x) paste0(' (#', regionNumber(x[1]), ', #', regionNumber(x[2]), ')'), character(1))
   ifelse(ambiguous, paste0(base, numbers), base)
+}
+
+# ---- Glass brain helpers ----
+
+# Read a brain surface mesh in MZ3 format (the format used by Surf Ice / MRIcroGL), in base R. Returns the vertex coordinates
+# (one row per vertex) and the triangles (three vertex numbers per row).
+readMz3 <- function(file) {
+  con <- gzfile(file, 'rb')
+  on.exit(close(con))
+  magic <- readBin(con, 'integer', 1, size = 2, signed = FALSE)
+  attrs <- readBin(con, 'integer', 1, size = 2, signed = FALSE)
+  nFace <- readBin(con, 'integer', 1, size = 4)
+  nVert <- readBin(con, 'integer', 1, size = 4)
+  nSkip <- readBin(con, 'integer', 1, size = 4)
+  if (magic != 23117) { stop('Not an MZ3 mesh file: ', file) }
+  if (nSkip > 0) { readBin(con, 'raw', nSkip) }
+  faces <- matrix(readBin(con, 'integer', nFace * 3, size = 4), ncol = 3, byrow = TRUE) + 1L
+  vertices <- matrix(readBin(con, 'numeric', nVert * 3, size = 4), ncol = 3, byrow = TRUE)
+  list(vertices = vertices, faces = faces)
+}
+
+# Coordinates (columns x, y, z) as a data frame with columns X (right), Y (anterior), Z (superior).
+# AFNI orientation has x positive to the left and y positive to the posterior, so those two are flipped.
+standardCoordinates <- function(xyz, fromAFNI = coordinatesAreAFNI) {
+  xyz <- as.matrix(xyz)
+  data.frame(X = xyz[, 1] * ifelse(fromAFNI, -1, 1), Y = xyz[, 2] * ifelse(fromAFNI, -1, 1), Z = xyz[, 3])
+}
+
+# How each glass brain view maps the coordinates onto the page. Lateral = left side of the head (front on the left),
+# posterior = seen from behind, axial = seen from above (front at the top).
+glassViews <- list(lateral   = list(h = list(axis = 'Y', sign = -1), v = list(axis = 'Z', sign = 1)),
+                   posterior = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Z', sign = 1)),
+                   axial     = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Y', sign = 1)))
+
+# The translucent brain behind the nodes: the mesh surface area behind each pixel (smoothed), for every view.
+# Folds show through where the surface overlaps itself, which gives the glass look.
+glassBackgrounds <- function(mesh, pixels = 300, blur = 1.4, pad = 4) {
+  vertices <- standardCoordinates(mesh$vertices)
+  tri <- mesh$faces
+  a <- as.matrix(vertices[tri[, 2], ] - vertices[tri[, 1], ])
+  b <- as.matrix(vertices[tri[, 3], ] - vertices[tri[, 1], ])
+  triArea <- .5 * sqrt((a[, 2] * b[, 3] - a[, 3] * b[, 2])^2 + (a[, 3] * b[, 1] - a[, 1] * b[, 3])^2 + (a[, 1] * b[, 2] - a[, 2] * b[, 1])^2)
+  vertexArea <- as.vector(tapply(rep(triArea / 3, 3), c(tri), sum))      # a third of each adjacent triangle
+
+  kernel <- dnorm(seq(-4, 4), 0, blur); kernel <- kernel / sum(kernel)
+  smooth <- function(m) { m <- t(apply(m, 1, function(r) stats::filter(r, kernel, sides = 2))); m[is.na(m)] <- 0; m }
+
+  lapply(glassViews, function(view) {
+    h <- vertices[[view$h$axis]] * view$h$sign
+    v <- vertices[[view$v$axis]] * view$v$sign
+    hBreaks <- seq(min(h) - pad, max(h) + pad, length.out = pixels)
+    vBreaks <- seq(min(v) - pad, max(v) + pad, length.out = pixels)
+    pixel <- (findInterval(h, hBreaks, all.inside = TRUE) - 1L) * pixels + findInterval(v, vBreaks, all.inside = TRUE)
+    density <- matrix(0, pixels, pixels)                                   # rows = vertical, columns = horizontal
+    summed <- tapply(vertexArea, pixel, sum)
+    density[as.integer(names(summed))] <- summed
+    density <- smooth(t(smooth(t(density))))
+    tiles <- expand.grid(h = hBreaks, v = vBreaks)
+    tiles$alpha <- as.vector(t(density))
+    tiles$alpha <- .7 * pmin(1, (tiles$alpha / quantile(tiles$alpha[tiles$alpha > 0], .97))^.6)   # .7 = how dark the glass is
+    tiles[tiles$alpha > 0.005, ]
+  })
+}
+
+# One glass brain view: the translucent brain, edges, and nodes.
+#   view = 'lateral', 'posterior' or 'axial';  backgrounds = the result of glassBackgrounds();  coords = standardCoordinates() of the regions
+#   nodes = data frame with the region number (id) and the node color (fill);  edges = data frame with region numbers a and b and dir ('low' or 'high')
+glassBrainView <- function(view, backgrounds, coords, nodes, edges = NULL, nodeSize = 2, edgeWidth = 1) {
+  vw <- glassViews[[view]]
+  hOf <- function(ids) coords[[vw$h$axis]][ids] * vw$h$sign
+  vOf <- function(ids) coords[[vw$v$axis]][ids] * vw$v$sign
+
+  p <- ggplot() + geom_raster(data = backgrounds[[view]], aes(h, v, alpha = alpha), fill = '#555555') + scale_alpha_identity()
+  if (!is.null(edges) && nrow(edges) > 0) {
+    edgeData <- data.frame(x = hOf(edges$a), y = vOf(edges$a), xend = hOf(edges$b), yend = vOf(edges$b), dir = edges$dir)
+    p <- p + geom_segment(data = edgeData, aes(x, y, xend = xend, yend = yend, color = dir), linewidth = edgeWidth, alpha = .8, lineend = 'round') +
+      scale_color_manual(values = c(low = groupLineColor[['low']], high = groupLineColor[['high']]), guide = 'none')
+  }
+  nodeData <- data.frame(h = hOf(nodes$id), v = vOf(nodes$id), fill = nodes$fill)
+  p + geom_point(data = nodeData, aes(h, v), size = nodeSize + .7, color = '#202020', alpha = .3) +
+    geom_point(data = nodeData, aes(h, v, fill = fill), size = nodeSize, shape = 21, color = '#303030', stroke = .4) +
+    scale_fill_identity() + coord_fixed() + theme_void()
+}
+
+# Load the region coordinates and draw the translucent brain (once; later calls do nothing). Creates roiCoordinates and glassBrainBackgrounds.
+# The brain surface is cached, since it does not change.
+loadGlassBrain <- function() {
+  for (file in c(roiCoordinateFile, brainMeshFile)) {
+    if (!file.exists(file)) { stop('Glass brain file not found: ', file, '\nSet roiCoordinateFile and brainMeshFile in the Glass Brain Settings at the top of the script.') }
+  }
+  if (!exists('roiCoordinates', envir = globalenv())) {
+    roiCoordinates <<- standardCoordinates(read.table(roiCoordinateFile))
+  }
+  if (!exists('glassBrainBackgrounds', envir = globalenv())) {
+    glassBrainBackgrounds <<- cached('glass_brain_backgrounds',
+                                     inputs = list(unname(tools::md5sum(brainMeshFile)), deparse(glassBackgrounds), deparse(glassViews), coordinatesAreAFNI),
+                                     compute = function() glassBackgrounds(readMz3(brainMeshFile)))
+  }
+  invisible(NULL)
+}
+
+# Region numbers at the two ends of each connection ID such as 'CAU.L.39_THA.R.139'
+connectionRegions <- function(ids) {
+  regionNumbers <- lapply(strsplit(ids, '_', fixed = TRUE), function(x) as.integer(sub('.*\\.', '', x)))
+  data.frame(a = vapply(regionNumbers, `[`, integer(1), 1), b = vapply(regionNumbers, `[`, integer(1), 2))
 }
 
 # Keep a table in resultTables[[name]] and, if saveTables is TRUE, write it to tableDir/<name>.csv
@@ -1691,9 +1810,34 @@ wholebrain_lobeHeatmap_ASD <- lobeHeatmapPlot(allConnDescSig.ASD, high = groupCo
 showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, height = 7, subfolder = componentFolder)
 
 
+### Whole Brain Glass Brains ----
+
+# Significant whole-brain connections (FDR) drawn on a translucent brain: lateral view above, posterior view below.
+# Low Risk (blue) = connections where Low Risk is higher; High Risk (red) = connections where High Risk is higher.
+
+loadGlassBrain()
+
+wholeBrainEdges <- connectionRegions(wholeBrainTableFDR$ROI)
+wholeBrainEdges$dir <- ifelse(wholeBrainTableFDR$TD.Mean > wholeBrainTableFDR$ASD.Mean, 'low', 'high')
+allRegionNodes <- data.frame(id = seq_len(nrow(roiCoordinates)), fill = '#505050')
+
+wholeBrainGlass <- function(direction) {
+  edges <- wholeBrainEdges[which(wholeBrainEdges$dir == direction),]
+  ggpubr::ggarrange(glassBrainView('lateral', glassBrainBackgrounds, roiCoordinates, allRegionNodes, edges, nodeSize = 1.6, edgeWidth = .9),
+                    glassBrainView('posterior', glassBrainBackgrounds, roiCoordinates, allRegionNodes, edges, nodeSize = 1.6, edgeWidth = .9),
+                    ncol = 1, nrow = 2)
+}
+
+wholebrain_glass_TD <- wholeBrainGlass('low')
+showFigure(wholebrain_glass_TD, 'wholebrain_glass_TD', width = 4.5, height = 9, subfolder = componentFolder)
+
+wholebrain_glass_ASD <- wholeBrainGlass('high')
+showFigure(wholebrain_glass_ASD, 'wholebrain_glass_ASD', width = 4.5, height = 9, subfolder = componentFolder)
+
+
 ### Whole Brain Composite Figure ----
 
-# Low Risk (left half: A, B, C) and High Risk (right half: D, E, F). In each half: glass brains (A / D, placeholders for now),
+# Low Risk (left half: A, B, C) and High Risk (right half: D, E, F). In each half: glass brains (A / D),
 # the lobe heatmap (B / E) and the chord diagram (C / F).
 
 # Dashed placeholder box for a glass-brain image. x, y = lower-left corner and width, height as fractions of the figure.
@@ -1710,14 +1854,15 @@ drawWholeBrainComposite <- function() {
   plot.new()
 
   halves <- list(list(title = 'Low Risk', x0 = 0, heatmap = wholebrain_lobeHeatmap_TD, links = chordTDLinks,
-                      conn = 'TDConn', color = 'TDCol', letters = c('A.', 'B.', 'C.')),
+                      conn = 'TDConn', color = 'TDCol', letters = c('A.', 'B.', 'C.'), glass = wholebrain_glass_TD),
                  list(title = 'High Risk', x0 = .5, heatmap = wholebrain_lobeHeatmap_ASD, links = chordASDLinks,
-                      conn = 'ASDConn', color = 'ASDCol', letters = c('D.', 'E.', 'F.')))
+                      conn = 'ASDConn', color = 'ASDCol', letters = c('D.', 'E.', 'F.'), glass = wholebrain_glass_ASD))
 
   for (half in halves) {
-    # A / D: glass brain placeholders (lateral view above, posterior view below)
-    glassBrainPlaceholder(half$x0 + .012, .705, .165, .195, 'Glass brain\n(lateral view)')
-    glassBrainPlaceholder(half$x0 + .012, .495, .165, .195, 'Glass brain\n(posterior view)')
+    # A / D: glass brains (lateral view above, posterior view below)
+    print(half$glass, newpage = FALSE,
+          vp = grid::viewport(x = grid::unit(half$x0 + .005, 'npc'), y = grid::unit(.49, 'npc'), width = grid::unit(.178, 'npc'),
+                              height = grid::unit(.45, 'npc'), just = c('left', 'bottom')))
 
     # B / E: lobe heatmap
     print(half$heatmap, newpage = FALSE,
@@ -2049,6 +2194,51 @@ network_combined_bars_p10 <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Gr
         legend.title=element_blank())
 
 showFigure(addRiskLegend(network_combined_bars_p10, 'network'), 'network_combined_bars_p10', width = 12, height = 6)
+
+
+#### Network Glass Brain ----
+
+# Nodes of the four networks colored by network; edges are the connections with p.adj < .10 (the same ones as the bar chart above),
+# blue where Low Risk is higher and red where High Risk is higher. Needs the network tables written by the network analyses.
+
+loadGlassBrain()
+
+regionLabels <- read.csv(paste0(baseDir,'/functional/100PerHemiLabels_Decimal.1D'), header=F)
+roiNames <- paste0(regionLabels$V1, '.', seq_len(nrow(regionLabels)))
+
+networkGlassNodes <- do.call(rbind, lapply(names(networkNodeColors), function(net) {
+  ids <- which(networkSpecs[[net]]$match(roiNames))
+  data.frame(id = ids, fill = networkNodeColors[[net]], network = net, stringsAsFactors = FALSE)
+}))
+
+networkGlassEdges <- do.call(rbind, lapply(names(networkNodeColors), function(net) {
+  tbl <- read.csv(paste0(baseDir,'/functional/output/', net, '_Intx_P10FDR.csv'), stringsAsFactors = FALSE)
+  if (nrow(tbl) == 0) { return(NULL) }
+  edges <- connectionRegions(tbl$ROI)
+  edges$dir <- ifelse(tbl$TD.Mean > tbl$ASD.Mean, 'low', 'high')
+  edges
+}))
+
+# Legend: one chip per network (node color with a lighter tint), then what the blue and red edges mean
+networkLegendPanel <- function() {
+  nNet <- length(networkNodeColors); yChip <- seq(.80, by = -.14, length.out = nNet)
+  tints <- vapply(networkNodeColors, tintColor, character(1), amount = .65)
+  ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed() + theme_void() +
+    annotate('rect', xmin = .02, xmax = .98, ymin = .04, ymax = .96, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('rect', xmin = .08, xmax = .14, ymin = yChip - .05, ymax = yChip + .05, fill = unname(networkNodeColors), colour = '#444444', linewidth = .4) +
+    annotate('rect', xmin = .14, xmax = .92, ymin = yChip - .05, ymax = yChip + .05, fill = unname(tints), colour = '#444444', linewidth = .4) +
+    annotate('text', x = .17, y = yChip, label = paste(networkNodeLabels[names(networkNodeColors)], 'Network'), hjust = 0, size = 4.2) +
+    annotate('segment', x = .04, xend = .96, y = .27, yend = .27, linewidth = .5) +
+    annotate('text', x = c(.27, .73), y = .20, label = c('Low > High Risk', 'High > Low Risk'), size = 3.6) +
+    annotate('segment', x = c(.12, .58), xend = c(.42, .88), y = .12, yend = .12, linewidth = 2.2,
+             colour = c(groupLineColor[['low']], groupLineColor[['high']]), lineend = 'round')
+}
+
+network_glass <- ggpubr::ggarrange(glassBrainView('axial', glassBrainBackgrounds, roiCoordinates, networkGlassNodes, networkGlassEdges, nodeSize = 3.2, edgeWidth = 1.4),
+                                   glassBrainView('posterior', glassBrainBackgrounds, roiCoordinates, networkGlassNodes, networkGlassEdges, nodeSize = 3.2, edgeWidth = 1.4),
+                                   glassBrainView('lateral', glassBrainBackgrounds, roiCoordinates, networkGlassNodes, networkGlassEdges, nodeSize = 3.2, edgeWidth = 1.4),
+                                   networkLegendPanel(), nrow = 2, ncol = 2)
+showFigure(network_glass, 'network_glass', width = 9, height = 9)
 
 
 # 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----
