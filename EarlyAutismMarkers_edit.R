@@ -306,6 +306,50 @@ addRiskLegend <- function(plotObj, legendType) {
   ggpubr::ggarrange(plotObj, riskLegendPanel(legendType, textSize = 5), ncol = 2, widths = c(5, 1.3), legend = 'none')
 }
 
+# Full region names (used on the chord diagram and the connection charts), keyed by the abbreviation without its hemisphere
+# suffix (e.g. 'ACG' for 'ACG.L').
+# Regions not listed here keep their abbreviation.
+roiFullNames <- c(ACG = 'Anterior Cingulate', IFGoperc = 'Inferior Operculum', IFGtriang = 'Inferior Triangle', MFG = 'Middle Frontal',
+                  ORBinf = 'Inferior Orbital', ORBmed = 'Medial Orbital', ORBmid = 'Middle Orbital', ORBsupb = 'Superior Orbital',
+                  PreCG = 'Precentral', REC = 'Rectus', SFGdor = 'Superior Frontal (Dorsal)', SFGmed = 'Superior Frontal (Medial)',
+                  SMA = 'Supplemental Motor',
+                  INS = 'Insula', IPL = 'Inferior Parietal Lobule', MCG = 'Middle Cingulate', PCG = 'Posterior Cingulate',
+                  PCL = 'Paracentral Lobule', PCUN = 'Precuneus', PoCG = 'Postcentral', SMG = 'Supramarginal',
+                  SPG = 'Superior Parietal', HES = "Heschl's",
+                  FFG = 'Fusiform', ITG = 'Inferior Temporal', MTG = 'Middle Temporal', STG = 'Superior Temporal',
+                  TPOmid = 'Temporal Pole', TPOsup = 'Superior Temporal Pole',
+                  CAL = 'Calcarine', CUN = 'Cuneus', LING = 'Lingual', IOG = 'Inferior Occipital', MOG = 'Middle Occipital',
+                  SOG = 'Superior Occipital',
+                  AMY = 'Amygdala', CAU = 'Caudate', HIP = 'Hippocampus', PAL = 'Pallidum', PHG = 'Parahippocampal',
+                  PUT = 'Putamen', THA = 'Thalamus', CRB = 'Cerebellum', BS = 'Brainstem')
+
+roiFullName <- function(sector) {
+  abbrev <- sub('\\.[LR]$', '', sector)
+  ifelse(abbrev %in% names(roiFullNames), roiFullNames[abbrev], sector)
+}
+
+# Label for a connection ID such as 'CAU.L.39_THA.R.139': both regions with hemisphere, on two lines,
+# e.g. "Left Caudate -\nRight Thalamus". Connections that would share a label within `ids` also get their region numbers,
+# e.g. "Left Cerebellum -\nRight Cerebellum (#13, #142)". Returns a vector the same length as ids.
+connectionLabel <- function(ids) {
+  regionLabel <- function(region) {
+    fields <- strsplit(region, '.', fixed = TRUE)[[1]]            # abbreviation, hemisphere (none for the brainstem), number
+    hasHemisphere <- length(fields) >= 3 && fields[2] %in% c('L', 'R')
+    name <- roiFullName(if (hasHemisphere) paste(fields[1], fields[2], sep = '.') else fields[1])
+    if (hasHemisphere) paste(c(L = 'Left', R = 'Right')[[fields[2]]], name) else name
+  }
+  regionNumber <- function(region) { fields <- strsplit(region, '.', fixed = TRUE)[[1]]; fields[length(fields)] }
+
+  regions <- strsplit(ids, '_', fixed = TRUE)
+  first <- vapply(regions, function(x) regionLabel(x[1]), character(1))
+  second <- vapply(regions, function(x) regionLabel(x[2]), character(1))
+  base <- paste0(first, ' -\n', second)
+
+  ambiguous <- duplicated(base) | duplicated(base, fromLast = TRUE)
+  numbers <- vapply(regions, function(x) paste0(' (#', regionNumber(x[1]), ', #', regionNumber(x[2]), ')'), character(1))
+  ifelse(ambiguous, paste0(base, numbers), base)
+}
+
 # Keep a table in resultTables[[name]] and, if saveTables is TRUE, write it to tableDir/<name>.csv
 saveTable <- function(tbl, name) {
   resultTables[[name]] <<- tbl
@@ -1520,27 +1564,6 @@ compressChordLinks <- function(links, colorCol, valueCol, invisibleColor = '#000
 chordASDLinks <- compressChordLinks(chordDiagram.Base, 'ASDCol', 'ASDConn')
 chordTDLinks <- compressChordLinks(chordDiagram.Base, 'TDCol', 'TDConn')
 
-# Full region names for the chord diagram, keyed by the abbreviation without its hemisphere suffix (e.g. 'ACG' for 'ACG.L').
-# Regions not listed here keep their abbreviation.
-roiFullNames <- c(ACG = 'Anterior Cingulate', IFGoperc = 'Inferior Operculum', IFGtriang = 'Inferior Triangle', MFG = 'Middle Frontal',
-                  ORBinf = 'Inferior Orbital', ORBmed = 'Medial Orbital', ORBmid = 'Middle Orbital', ORBsupb = 'Superior Orbital',
-                  PreCG = 'Precentral', REC = 'Rectus', SFGdor = 'Superior Frontal (Dorsal)', SFGmed = 'Superior Frontal (Medial)',
-                  SMA = 'Supplemental Motor',
-                  INS = 'Insula', IPL = 'Inferior Parietal Lobule', MCG = 'Middle Cingulate', PCG = 'Posterior Cingulate',
-                  PCL = 'Paracentral Lobule', PCUN = 'Precuneus', PoCG = 'Postcentral', SMG = 'Supramarginal',
-                  SPG = 'Superior Parietal', HES = "Heschl's",
-                  FFG = 'Fusiform', ITG = 'Inferior Temporal', MTG = 'Middle Temporal', STG = 'Superior Temporal',
-                  TPOmid = 'Temporal Pole', TPOsup = 'Superior Temporal Pole',
-                  CAL = 'Calcarine', CUN = 'Cuneus', LING = 'Lingual', IOG = 'Inferior Occipital', MOG = 'Middle Occipital',
-                  SOG = 'Superior Occipital',
-                  AMY = 'Amygdala', CAU = 'Caudate', HIP = 'Hippocampus', PAL = 'Pallidum', PHG = 'Parahippocampal',
-                  PUT = 'Putamen', THA = 'Thalamus', CRB = 'Cerebellum', BS = 'Brainstem')
-
-roiFullName <- function(sector) {
-  abbrev <- sub('\\.[LR]$', '', sector)
-  ifelse(abbrev %in% names(roiFullNames), roiFullNames[abbrev], sector)
-}
-
 # Draw a chord diagram from compressed links. connCol = column with the link values, colorCol = column with the link colors.
 # Transparent links are not drawn (link.visible), which leaves the layout unchanged but is much faster.
 # The left hemisphere is on the left of the picture; sectors are labeled with full region names outside the ring, and
@@ -2026,6 +2049,7 @@ plotFrame$SE <- as.numeric(plotFrame$SE)
 
 network_combined_bars_p10 <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
   scale_y_continuous(labels=fixedDecimalLabels) +
+  scale_x_discrete(labels=setNames(connectionLabel(plotOrder), plotOrder)) +
   scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
   scale_color_manual(values=c(groupColors[['low']], groupColors[['high']])) +
   geom_hline(yintercept = 0, lwd=1) +
