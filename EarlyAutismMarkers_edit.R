@@ -17,6 +17,10 @@ library(nlme)
 library(circlize)
 library(emmeans)
 
+# effectsize is called as effectsize::... (not loaded with library), so make sure it is installed
+if (!requireNamespace('effectsize', quietly = TRUE)) {
+  stop("Please install the 'effectsize' package first: install.packages('effectsize')")
+}
 
 
 ## Figure Output Settings ----
@@ -286,11 +290,7 @@ addFDRfc <- function(tbl) {
 ## Behavioral Data (MCHAT) ----
 
 
-# ----
-
 mchatData <- read.csv(paste0(baseDir,'/behavioral/MCHAT.csv'))
-
-
 
 
 # 2. STRUCTURAL ANALYSES (run after Setup + Shared Data) ----
@@ -301,15 +301,12 @@ mchatData <- read.csv(paste0(baseDir,'/behavioral/MCHAT.csv'))
 ### Anatomical Data ----
 
 
-# ----
-
 testData <- read.csv(paste0(baseDir,'/anatomical/combinedASDData.csv'),stringsAsFactors=F)
 testPreemie <- subset(testData, PretermStatus=='Preterm' & (Kidokoro <8 | is.na(Kidokoro)))
 testFetal <- subset(testData, PretermStatus=='Term' & CHDStatus !='CHD' & AnyFetal==T)
 
 testFetalPass <- subset(testFetal, mchat_result=='Pass')
 testFetalFail <- subset(testFetal, mchat_result=='Fail')
-
 
 
 fetalPassID <- formatID(testFetalPass$study_id, testFetalPass$study)
@@ -346,8 +343,6 @@ for(i in 1:nrow(anatTimePoints)){
 
 # TO AVOID ISSUES WITH HIGH RISK PREGNANCIES IN THE PL COHORT THE CODE HAS BEEN WRITTEN TO HARD CODE SOME PARTICIPANT LEVEL SWAPS TO REPLACE THE MCHAT PASSES FROM THE PLACENTA COHORT
 
-
-# ----
 
 fetalMchatMelt <- melt(testFetal, measure.vars=c('ScanAge1', 'ScanAge2'), id.vars=c('study_id', 'mchat_result','study'))
 fetalMchatMelt <- subset(fetalMchatMelt, mchat_result!='' & value!='')
@@ -523,11 +518,8 @@ contingency_table <- contingency_table[1:2, 2:9]
 chisq.test(contingency_table)
 
 
-
 ## 2b. Tissue Volumes ----
 
-
-# ----
 
 tissueDataRaw <- read.csv(paste0(baseDir,'/anatomical/tissueVolumes_12122025_compiled.csv'))
 tissueDataRaw$TBV <- rowSums(tissueDataRaw[,c('CorticalGrayMatter','CorticalWhiteMatter','Cerebellum','SubcorticalGray','Brainstem','AmygdalaHippocampus')], na.rm=T)
@@ -554,7 +546,6 @@ glmTissueNormedVolTable <- tissueModels$Normed
 glmTissueNormedVolTable.Itx <- tissueModels$NormedItx
 
 
-
 # FDR correction and significant ROIs
 
 glmTissueVolTable <- addFDR(glmTissueVolTable)
@@ -576,8 +567,6 @@ saveResultTable(glmTissueNormedVolTable.Itx, 'tissue_normed_intx')
 
 ## 2c. Regional Volumes ----
 
-
-# ----
 
 # Combine the regional volumes into a single data frame
 regionalData <- as.data.frame(matrix(ncol = 87, nrow= nrow(fetalMatched)))
@@ -643,7 +632,6 @@ glmRegionalNormedVolTable <- regionalModels$Normed
 glmRegionalNormedVolTable.Itx <- regionalModels$NormedItx
 
 
-
 # FDR correction and significant ROIs
 
 glmRegionalVolTable <- addFDR(glmRegionalVolTable)
@@ -672,8 +660,6 @@ saveResultTable(glmRegionalNormedVolTable.Itx, 'regional_normed_intx')
 # Change the thresholds here:
 figureThresholds <- c(.05, .10)
 
-
-# ----
 
 # Optional hand-tuned axes. ROIs listed here keep these y-axis limits and labels; any other ROI that
 # turns up as significant gets a label made from its column name and automatic y-axis limits.
@@ -818,11 +804,7 @@ for (k in seq_along(figureThresholds)) {
 }
 
 
-
 ## 2d. Cortical Thickness ----
-
-
-# ----
 
 
 ctDataRaw <- read.csv(paste0(baseDir,'/anatomical/CT_Ave_Thickness.csv'), header=F)
@@ -860,7 +842,6 @@ glmCTNormedTable <- ctModels$Normed
 glmCTNormedTable.Itx <- ctModels$NormedItx
 
 
-
 # FDR correction and significant ROIs
 
 glmCTTable <- addFDR(glmCTTable)
@@ -880,7 +861,6 @@ reportSignificant(glmCTNormedTable.Itx)
 saveResultTable(glmCTNormedTable.Itx, 'ct_normed_intx')
 
 
-
 # 3. FUNCTIONAL ANALYSES (run after Setup + Shared Data) ----
 
 
@@ -888,8 +868,6 @@ saveResultTable(glmCTNormedTable.Itx, 'ct_normed_intx')
 
 ### Functional Matching ----
 
-
-# ----
 
 #| echo: false
 
@@ -990,9 +968,6 @@ chisq.test(contingency_table)
 ### Functional Data ----
 
 
-# ----
-
-
 #| echo: false
 #| 
 allTDFC <- read.csv(paste0(baseDir,'/functional/UseableData/tdCorrSummary.csv'), row.names = 1)
@@ -1007,7 +982,6 @@ asdFC <- allASDFC[rownames(allASDFC) %in% asdDemoFinal$ID,]
 rm(list=c('allTDFC', 'allASDFC'))
 
 
-
 ## 3b. Whole Brain Approach ----
 
 # First step is to just do a whole brain search
@@ -1016,8 +990,6 @@ rm(list=c('allTDFC', 'allASDFC'))
 
 # It's more exploratory and FDR will kill us for sure
 
-
-# ----
 
 ##### WHOLE BRAIN LINEAR MODEL APPROACH #####
 
@@ -1138,11 +1110,8 @@ write.table(fcIntxGLM, paste0(baseDir,'/functional/output/WholeBrain_WholeTable.
 write.table(subset(fcIntxGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/WholeBrain_P05FDR.csv'), col.names=T, row.names=F, sep=',')
 
 
-
 ### Whole Brain Figures ----
 
-
-# ----
 
 wholeBrainTable <- read.csv(paste0(baseDir,'/functional/output/WholeBrain_WholeTable.csv'))
 wholeBrainTableFDR <- read.csv(paste0(baseDir,'/functional/output/WholeBrain_P05FDR.csv'))
@@ -1579,7 +1548,6 @@ showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 8.9
 # Biggest job, however, is to define the networks in a rigorous way
 
 
-# ----
 ## First -- divide out the connections into an ROI1 and ROI2 table
 
 connROIs <- as.data.frame(matrix(ncol=2, nrow=ncol(tdFC)))
@@ -1600,8 +1568,6 @@ for(i in 1:nrow(connROIs)){
 #   (1) FC ~ Grp + ScanGA   and   (2) FC ~ Grp * ScanGA   (random intercept per subject).
 # Each network writes its tables to functional/output and gets a bar chart (network_<name>_bars).
 
-
-# ----
 
 # ROI number = the third '.'-separated part of an ROI name (e.g. 'CAU.L.39' -> 39)
 roiNumber <- function(roi) as.numeric(vapply(strsplit(roi, '.', fixed = TRUE), function(x) x[3], character(1)))
@@ -1776,8 +1742,6 @@ plotNetworkBars <- function(fcGLM, spec) {
 ### Run Network Analyses ----
 
 
-# ----
-
 networkResults <- list()
 for (net in names(networkSpecs)) {
   networkResults[[net]] <- runNetworkAnalysis(net, networkSpecs[[net]])
@@ -1793,11 +1757,8 @@ deltaSS <- mean(networkResults$CRB$fcGLM$TD.Mean) - mean(networkResults$CRB$fcGL
 sigmaSS <- sd(networkResults$CRB$fcGLM$TD.Mean) - sd(networkResults$CRB$fcGLM$ASD.Mean)
 
 
-
 #### Network Connectivity Figures ----
 
-
-# ----
 
 # Read in the output of the above analyses for plotting
 FCTable.AllConn.DMN <- read.csv(paste0(baseDir,'/functional/output/DMN_Intx_Wholebrain.csv'), stringsAsFactors=F)
@@ -1898,12 +1859,8 @@ network_combined_bars_p10 <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Gr
 showFigure(network_combined_bars_p10, 'network_combined_bars_p10', width = 10, height = 6)
 
 
-
-
 # 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----
 
-
-# ----
 
 fetalMatched
 
