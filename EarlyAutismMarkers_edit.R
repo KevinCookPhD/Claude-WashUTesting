@@ -16,7 +16,6 @@
 
 # setup ----
 # added by rewrite_paths.R: 2026-10-26
-library(here)
 
 # HOME LAPTOP
 baseDir <- 'C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/04_Projects/01_Active/FASD_FetalASDRisk/data'
@@ -24,9 +23,9 @@ baseDir <- 'C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncin
 figDir <- "C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/04_Projects/01_Active/FASD_FetalASDRisk/paper/figures"
 
 #  WORK LAPTOP
-# baseDir <- here("data")
+# baseDir <- file.path(getwd(), "data")
 
-# figDir <- here("paper", "figures")
+# figDir <- file.path(getwd(), "paper", "figures")
 
 setwd(baseDir)
 knitr::opts_knit$set(root.dir = normalizePath(baseDir))
@@ -277,9 +276,9 @@ for(i in 1:nrow(testFetalFail)){
 }
 
 
-tissueDir <- here("data", "anatomical", "tissueVolumes_Individual")
-regionalDir <- here("data", "anatomical", "regionalVolumes_Individual")
-vermisVol <- read.csv(here("_Earlier_Iteration_NeurodevelopmentalRisk", "data", "anatomicalData", "vermisParcVolumes_071026.csv"), stringsAsFactors=F)
+tissueDir <- file.path(baseDir, "anatomical", "tissueVolumes_Individual")
+regionalDir <- file.path(baseDir, "anatomical", "regionalVolumes_Individual")
+vermisVol <- read.csv(file.path(dirname(baseDir), "_Earlier_Iteration_NeurodevelopmentalRisk", "data", "anatomicalData", "vermisParcVolumes_071026.csv"), stringsAsFactors=F)
 vermisVol$totalVermis <- vermisVol$supVerm + vermisVol$infVerm + vermisVol$midVerm
 
 setwd(tissueDir)
