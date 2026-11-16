@@ -986,6 +986,7 @@ fitWholeBrainChunk <- function(tdChunk, asdChunk, tdBase, asdBase) {
     # connections with any missing value are left as NA
     if(is.na(sum(glmFrame$FC))) { next }
 
+    # whole-brain group means are raw means (the network tables use model-adjusted means)
     tdMean <- mean(as.numeric(tempTD$FC), na.rm = T)
     asdMean <- mean(as.numeric(tempASD$FC), na.rm = T)
 
