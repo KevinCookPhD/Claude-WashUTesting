@@ -27,7 +27,7 @@
 #   'absmean' = average of their absolute values (strength regardless of sign)
 networkScore <- 'mean'
 
-# Networks to analyze (names in networkSpecs); NULL = all of them
+# Networks to analyze (names in networkSpecs); NULL = the a priori networks set in EarlyAutismMarkers_edit.R (networksOfInterest)
 networkMeanNetworks <- NULL
 
 # Subfolder (inside the figure and table folders) for everything this script writes
@@ -39,7 +39,7 @@ nmNeeded <- c('tdFC', 'asdFC', 'tdDemoFinal', 'asdDemoFinal', 'connROIs', 'netwo
 nmMissing <- nmNeeded[!vapply(nmNeeded, exists, logical(1))]
 if (length(nmMissing) > 0) { stop('Run EarlyAutismMarkers_edit.R first. These objects are missing: ', paste(nmMissing, collapse = ', ')) }
 if (!networkScore %in% c('mean', 'absmean')) { stop("networkScore must be 'mean' or 'absmean'") }
-if (is.null(networkMeanNetworks)) { networkMeanNetworks <- names(networkSpecs) }
+if (is.null(networkMeanNetworks)) { networkMeanNetworks <- if (exists('networksOfInterest')) networksOfInterest else names(networkSpecs) }
 
 # Which connections belong to a network or a network pair ----
 

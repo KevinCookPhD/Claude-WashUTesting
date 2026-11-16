@@ -87,6 +87,13 @@ glassBrainOpacity <- .8
 networkNodeColors <- c(CRB = '#F2B134', DMN = '#E8305E', Limbic = '#14C28D', SubCort = '#1A8BB5')
 networkNodeLabels <- c(CRB = 'Cerebellar', DMN = 'Default Mode', Limbic = 'Limbic', SubCort = 'Subcortical')
 
+## Network Settings ----
+
+# The a priori networks of interest. Only these are analyzed in the network sections (and in the PMACheck and NetworkMeans scripts),
+# so the FDR corrections across networks cover just these. The other networks defined in networkSpecs (SomMot, Auditory, Visual)
+# stay defined but are not run; add a name here to run it again.
+networksOfInterest <- c('CRB', 'Limbic', 'DMN', 'SubCort')
+
 ## Table Output Settings ----
 
 # Set saveTables to TRUE to write the result tables (CSV) to tableDir (existing files with the same name are overwritten).
@@ -2247,7 +2254,7 @@ plotNetworkBars <- function(fcGLM, spec) {
 
 
 networkResults <- list()
-for (net in names(networkSpecs)) {
+for (net in networksOfInterest) {
   networkResults[[net]] <- runNetworkAnalysis(net, networkSpecs[[net]])
   showFigure(plotNetworkBars(networkResults[[net]]$fcGLM, networkSpecs[[net]]),
              paste0('network_', net, '_bars'), width = 12, height = 6, subfolder = componentFolder)

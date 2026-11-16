@@ -41,6 +41,9 @@ regionOfSignificanceMethod <- 'fdr'
 regionOfSignificanceAlpha <- .05
 regionMaxPanels <- 24                     # most panels drawn per network in the region-of-significance figure
 
+# Networks to analyze: the a priori networks set in EarlyAutismMarkers_edit.R (networksOfInterest); all of networkSpecs if that is missing
+pmaNetworks <- if (exists('networksOfInterest')) networksOfInterest else names(networkSpecs)
+
 # Make sure the data and functions from EarlyAutismMarkers_edit.R are available ----
 
 pmaNeeded <- c('fetalMatched', 'tissueData', 'tissueDataRaw', 'tissueExclude', 'regionalData', 'regionalDataRaw', 'regionalExclude',
@@ -91,7 +94,7 @@ centeredDemos <- function(label) {
 # Network models for every network
 fitNetworkCentering <- function(label) {
   demos <- centeredDemos(label)
-  fits <- lapply(names(networkSpecs), function(net) {
+  fits <- lapply(pmaNetworks, function(net) {
     both <- networkSpecs[[net]]$match(connROIs$ROI1) & networkSpecs[[net]]$match(connROIs$ROI2)
     if (sum(both) == 0) { return(NULL) }
     tdNetwork <- tdFC[, both, drop = FALSE]
@@ -101,7 +104,7 @@ fitNetworkCentering <- function(label) {
                      compute = function() fitNetworkModels(tdNetwork, asdNetwork, demos$td, demos$asd))
     list(fcGLM = addFDRfc(models$fcGLM), fcIntxGLM = addFDRfc(models$fcIntxGLM))
   })
-  names(fits) <- names(networkSpecs)
+  names(fits) <- pmaNetworks
   fits[!vapply(fits, is.null, logical(1))]
 }
 
