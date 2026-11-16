@@ -1582,9 +1582,9 @@ showBaseFigure('wholebrain_chord_ASD', width = 9, height = 9, drawFun = function
 showBaseFigure('wholebrain_chord_TD', width = 9, height = 9, drawFun = function() drawChord(chordTDLinks, 'TDConn', 'TDCol'))
 
 
-asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == chordColorASD,]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == chordColorASD,]$TFromAbbrev)
+asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == chordColorASD,]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == chordColorASD,]$FromAbbrev)
 
-tdConnections <- c(chordDiagram.Base[chordDiagram.Base$TDCol == chordColorTD,]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$TDCol == chordColorTD,]$TFromAbbrev)
+tdConnections <- c(chordDiagram.Base[chordDiagram.Base$TDCol == chordColorTD,]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$TDCol == chordColorTD,]$FromAbbrev)
 
 
 sort(table(asdConnections))
