@@ -273,7 +273,7 @@ anatTimePoints$ID <- fetalFailID
 
 for(i in 1:nrow(anatTimePoints)){
   targetID <- anatTimePoints$ID[i]
-  anatTimePoints$tissueFiles[i] <- sum(substr(tissueFiles, 0, nchar(regionalFiles)-21) %in% targetID)
+  anatTimePoints$tissueFiles[i] <- sum(substr(tissueFiles, 0, nchar(tissueFiles)-19) %in% targetID)
   anatTimePoints$regionalFiles[i] <- sum(substr(regionalFiles, 0, nchar(regionalFiles)-21) %in% targetID)
 }
 
