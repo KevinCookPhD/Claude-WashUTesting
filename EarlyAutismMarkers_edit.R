@@ -1512,38 +1512,37 @@ roiNumber <- function(roi) as.numeric(vapply(strsplit(roi, '.', fixed = TRUE), f
 #   xLabel        - x-axis label of the bar chart
 #   yLimits/yBreaks - y-axis of the bar chart (yLimits NULL = automatic)
 #   zeroLine      - draw a line at 0 on the bar chart
-#   adjustedMeans - TRUE: interaction-table group means are model-adjusted (emmeans); FALSE: raw group means
 networkSpecs <- list(
 
   CRB = list(match = function(roi) grepl('CRB', roi),
-             xLabel = 'Cerebellar Connections', yLimits = c(0,1.2), yBreaks = seq(0,2,.2), zeroLine = TRUE, adjustedMeans = TRUE),
+             xLabel = 'Cerebellar Connections', yLimits = c(0,1.2), yBreaks = seq(0,2,.2), zeroLine = TRUE),
 
   # Originally c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200); parahippocampal gyrus added (43,86,125)
   Limbic = list(match = function(roi) roiNumber(roi) %in% c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200,
                                                             43,86,125),
-                xLabel = 'Limbic Connections', yLimits = c(-.4,1.4), yBreaks = seq(-2,2,.2), zeroLine = FALSE, adjustedMeans = FALSE),
+                xLabel = 'Limbic Connections', yLimits = c(-.4,1.4), yBreaks = seq(-2,2,.2), zeroLine = FALSE),
 
   # Originally also included 43,86,125 (hippocampus and parahippocampal gyrus); removed
   DMN = list(match = function(roi) roiNumber(roi) %in% c(4,11,18,22,23,34,40,42,48,53,70,85,88,96,100,102,104,106,123,124,128,137,150,152,156,163,168,171,176,178),
-             xLabel = 'Default Mode Connections', yLimits = c(-.6,1), yBreaks = seq(-2,2,.2), zeroLine = FALSE, adjustedMeans = TRUE),
+             xLabel = 'Default Mode Connections', yLimits = c(-.6,1), yBreaks = seq(-2,2,.2), zeroLine = FALSE),
 
   SomMot = list(match = function(roi) grepl('PreCG', roi) | grepl('PoCG', roi) | grepl('SMA', roi),
-                xLabel = 'Sensorimotor Connections', yLimits = c(-.3,1.1), yBreaks = seq(-2,2,.2), zeroLine = FALSE, adjustedMeans = TRUE),
+                xLabel = 'Sensorimotor Connections', yLimits = c(-.3,1.1), yBreaks = seq(-2,2,.2), zeroLine = FALSE),
 
   SubCort = list(match = function(roi) roiNumber(roi) %in% c(31,32,39,51,80,92,97,107,111,134,139,145,151),
-                 xLabel = 'Subcortical Connections', yLimits = c(-.2,1.2), yBreaks = seq(-2,2,.2), zeroLine = FALSE, adjustedMeans = TRUE),
+                 xLabel = 'Subcortical Connections', yLimits = c(-.2,1.2), yBreaks = seq(-2,2,.2), zeroLine = FALSE),
 
   Auditory = list(match = function(roi) roiNumber(roi) %in% c(88,94,2,12,48,171,107,139,152,185),
-                  xLabel = 'Auditory Connections', yLimits = NULL, yBreaks = NULL, zeroLine = FALSE, adjustedMeans = TRUE),
+                  xLabel = 'Auditory Connections', yLimits = NULL, yBreaks = NULL, zeroLine = FALSE),
 
   Visual = list(match = function(roi) roiNumber(roi) %in% c(181,174,153,114,149,195,167,105,116,194,197,162,131,186,135,
                                                             72,60,19,52,35,75,25,15,42,30,91,87,98,57),
-                xLabel = 'Visual Connections', yLimits = NULL, yBreaks = NULL, zeroLine = FALSE, adjustedMeans = TRUE)
+                xLabel = 'Visual Connections', yLimits = NULL, yBreaks = NULL, zeroLine = FALSE)
 )
 
 # Fit both models for every connection (column) of the network.
 # Returns the main-effects table (fcGLM) and the interaction table (fcIntxGLM).
-fitNetworkModels <- function(tdFCNetwork, asdFCNetwork, tdDemo, asdDemo, adjustedMeans) {
+fitNetworkModels <- function(tdFCNetwork, asdFCNetwork, tdDemo, asdDemo) {
 
   lmeCtrl <- lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')
 
@@ -1584,18 +1583,12 @@ fitNetworkModels <- function(tdFCNetwork, asdFCNetwork, tdDemo, asdDemo, adjuste
     tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
 
     fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-    if (adjustedMeans) {
-      adjustMeans <- as.data.frame(emmeans(tempGLM, 'Grp', data=glmFrame))
-      fcIntxGLM$TD.Mean[i] <- adjustMeans$emmean[2]
-      fcIntxGLM$TD.SE[i] <- adjustMeans$SE[2]
-      fcIntxGLM$ASD.Mean[i] <- adjustMeans$emmean[1]
-      fcIntxGLM$ASD.SE[i] <- adjustMeans$SE[1]
-    } else {
-      fcIntxGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-      fcIntxGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-      fcIntxGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-      fcIntxGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-    }
+    # group means in the interaction table are model-adjusted (emmeans)
+    adjustMeans <- as.data.frame(emmeans(tempGLM, 'Grp', data=glmFrame))
+    fcIntxGLM$TD.Mean[i] <- adjustMeans$emmean[2]
+    fcIntxGLM$TD.SE[i] <- adjustMeans$SE[2]
+    fcIntxGLM$ASD.Mean[i] <- adjustMeans$emmean[1]
+    fcIntxGLM$ASD.SE[i] <- adjustMeans$SE[1]
     fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
     fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
     fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
@@ -1635,7 +1628,7 @@ writeNetworkTables <- function(name, fcGLM, fcIntxGLM) {
 runNetworkAnalysis <- function(name, spec) {
   bothROIMatch <- spec$match(connROIs$ROI1) & spec$match(connROIs$ROI2)
 
-  models <- fitNetworkModels(tdFC[,bothROIMatch], asdFC[,bothROIMatch], tdDemoFinal, asdDemoFinal, spec$adjustedMeans)
+  models <- fitNetworkModels(tdFC[,bothROIMatch], asdFC[,bothROIMatch], tdDemoFinal, asdDemoFinal)
   fcGLM <- addFDRfc(models$fcGLM)
   fcIntxGLM <- addFDRfc(models$fcIntxGLM)
 
