@@ -507,14 +507,18 @@ reportSignificant(glmRegionalNormedVolTable.Itx)
 
 #### Regional Figure ----
 
-# Two sets of figures for the same ROIs:
-#   (1) group main effect: estimated marginal means (bars) for Low vs High Risk, from the group x scanAge model
-#   (2) interaction:       normalized volume across gestational age, with a line per risk group
+# Figures are built for whichever regions are significant (FDR-adjusted p, from the normalized interaction model table),
+# at two thresholds, for two effects:
+#   Group main effect: estimated marginal means (bars) for Low vs High Risk
+#   Interaction:       normalized volume across gestational age, with a line per risk group
+# Change the thresholds here:
+figureThresholds <- c(.05, .10)
 
 
 # ----
 
-# One row per ROI: column name in regionalData, axis label, and y-axis limits/breaks for each figure type
+# Optional hand-tuned axes. ROIs listed here keep these y-axis limits and labels; any other ROI that
+# turns up as significant gets a label made from its column name and automatic y-axis limits.
 # (yMax = upper y limit; breakMax and breakStep define the tick marks, seq(0, breakMax, breakStep))
 regionalFigureROIs <- data.frame(
   roi            = c('HPC_L', 'HPC_R', 'Amyg_L', 'FusiformAnt_GM_R', 'Caudate_R', 'Subthalamic_L', 'Lentiform_L'),
@@ -530,6 +534,25 @@ regionalFigureROIs <- data.frame(
 
 # Participants dropped from the figures (the regional stats above drop only the first and third)
 regionalFigureExclude <- c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')
+
+# ROIs whose adjusted p-value (pAdjCol) is below the threshold
+significantROIs <- function(tbl, pAdjCol, threshold) {
+  tbl$ROI[which(tbl[[pAdjCol]] < threshold)]
+}
+
+# Axis label and y-axis settings for one ROI: the hand-tuned values if it is in regionalFigureROIs, otherwise automatic.
+# type is 'group' or 'intx'; maxValue is the largest value that must fit on the y axis (used only for automatic limits).
+roiAxis <- function(roi, type, maxValue) {
+  spec <- regionalFigureROIs[regionalFigureROIs$roi == roi,]
+  yMaxCol <- paste0(type, 'YMax'); breakMaxCol <- paste0(type, 'BreakMax'); stepCol <- paste0(type, 'BreakStep')
+
+  if (nrow(spec) == 1) {
+    list(label = spec$label, limits = c(0, spec[[yMaxCol]]), breaks = seq(0, spec[[breakMaxCol]], spec[[stepCol]]))
+  } else {
+    breaks <- pretty(c(0, maxValue * 1.1), n = 6)
+    list(label = paste(gsub('_', ' ', roi), 'Volume'), limits = c(0, max(breaks)), breaks = breaks)
+  }
+}
 
 # Shared figure theme. The group (bar) figures have no x-axis title.
 themeRegionalFigure <- function(showXTitle = TRUE) {
@@ -557,8 +580,8 @@ prepRegionalFigureData <- function(roi) {
 }
 
 # Group main effect figure: model-estimated means (+/- SE) for Low vs High Risk
-plotRoiGroup <- function(roiRow) {
-  tempAnalyses <- prepRegionalFigureData(roiRow$roi)
+plotRoiGroup <- function(roi) {
+  tempAnalyses <- prepRegionalFigureData(roi)
 
   model <- lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
   meansTable <- emmeans::emmeans(model, ~ mchat_result, data=tempAnalyses)
@@ -567,52 +590,77 @@ plotRoiGroup <- function(roiRow) {
   colnames(meansTablePlot)[1] <- 'Autism Risk'
   meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
 
+  axisInfo <- roiAxis(roi, 'group', max(meansTablePlot$emmean + meansTablePlot$SE))
+
   ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
-    scale_y_continuous(limits=c(0, roiRow$groupYMax), breaks=seq(0, roiRow$groupBreakMax, roiRow$groupBreakStep), expand=c(0,0)) +
+    scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, expand=c(0,0)) +
     scale_fill_manual(values=c('#a3c0e9','#e09999')) +
     geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
     geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
-    ylab(roiRow$label) +
+    ylab(axisInfo$label) +
     themeRegionalFigure(showXTitle = FALSE)
 }
 
 # Interaction figure: normalized volume by gestational age, with a fitted line per risk group
-plotRoiInteraction <- function(roiRow) {
-  tempAnalyses <- prepRegionalFigureData(roiRow$roi)
+plotRoiInteraction <- function(roi) {
+  tempAnalyses <- prepRegionalFigureData(roi)
   # Low Risk first so it gets the first (blue) color, matching the group figure
   tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
 
+  axisInfo <- roiAxis(roi, 'intx', max(tempAnalyses$VolNormed, na.rm=TRUE))
+
   ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-    scale_y_continuous(limits=c(0, roiRow$intxYMax), breaks=seq(0, roiRow$intxBreakMax, roiRow$intxBreakStep), expand=c(0,0)) +
+    scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, expand=c(0,0)) +
     scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
     scale_shape_manual(values=c(23,21)) +   # Low Risk = diamond, High Risk = circle (as before)
     scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
     geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
     scale_color_manual(values=c('#72a3e8','#e37575')) +
     geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-    ylab(roiRow$label) + xlab('Gestional Age (Weeks)') +
+    ylab(axisInfo$label) + xlab('Gestional Age (Weeks)') +
     themeRegionalFigure(showXTitle = TRUE)
 }
 
-# Build every plot (named by ROI) for each figure type
-regionalGroupPlots <- lapply(seq_len(nrow(regionalFigureROIs)), function(i) plotRoiGroup(regionalFigureROIs[i,]))
-names(regionalGroupPlots) <- regionalFigureROIs$roi
+# Arrange one plot per ROI in a grid (4 columns wide). Prints a message and draws nothing if no ROI qualifies.
+regionalFigure <- function(rois, plotFun, label) {
+  if (length(rois) == 0) {
+    message('No regions to plot for: ', label)
+    return(invisible(NULL))
+  }
+  message(label, ': ', length(rois), ' region(s): ', paste(rois, collapse=', '))
+  plots <- lapply(rois, plotFun)
+  names(plots) <- rois
+  ggpubr::ggarrange(plotlist = plots, nrow = ceiling(length(plots)/4), ncol = min(4, length(plots)), legend = 'none')
+}
 
-regionalIntxPlots <- lapply(seq_len(nrow(regionalFigureROIs)), function(i) plotRoiInteraction(regionalFigureROIs[i,]))
-names(regionalIntxPlots) <- regionalFigureROIs$roi
+
+## Significant regions
+
+# Group effect and interaction p-values both come from the normalized interaction model table
+groupROIs <- lapply(figureThresholds, function(thr) significantROIs(glmRegionalNormedVolTable.Itx, 'Grp.p.Adj', thr))
+intxROIs <- lapply(figureThresholds, function(thr) significantROIs(glmRegionalNormedVolTable.Itx, 'Itx.p.Adj', thr))
+names(groupROIs) <- names(intxROIs) <- paste0('p', figureThresholds)
 
 
-## Group main effect figure
+## Group main effect figures
 
-#tiff(paste0(figDir,'/regionalVolumePlot_Group.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
-ggpubr::ggarrange(plotlist = regionalGroupPlots, nrow=2, ncol=4, legend = 'none')
+#tiff(paste0(figDir,'/regionalVolumePlot_Group_p05.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+regionalFigure(groupROIs[[1]], plotRoiGroup, paste('Group effect, p.adj <', figureThresholds[1]))
+#dev.off()
+
+#tiff(paste0(figDir,'/regionalVolumePlot_Group_p10.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+regionalFigure(groupROIs[[2]], plotRoiGroup, paste('Group effect, p.adj <', figureThresholds[2]))
 #dev.off()
 
 
-## Interaction figure
+## Interaction figures
 
-#tiff(paste0(figDir,'/regionalVolumePlot_Interactions.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
-ggpubr::ggarrange(plotlist = regionalIntxPlots, nrow=2, ncol=4, legend = 'none')
+#tiff(paste0(figDir,'/regionalVolumePlot_Interactions_p05.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+regionalFigure(intxROIs[[1]], plotRoiInteraction, paste('Interaction, p.adj <', figureThresholds[1]))
+#dev.off()
+
+#tiff(paste0(figDir,'/regionalVolumePlot_Interactions_p10.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+regionalFigure(intxROIs[[2]], plotRoiInteraction, paste('Interaction, p.adj <', figureThresholds[2]))
 #dev.off()
 
 
