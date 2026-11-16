@@ -209,6 +209,27 @@ runRoiModels <- function(roiNames, prepFun, rawVar, normVar) {
 }
 
 
+# Read a wide CSV whose first column holds the row names (used for the functional connectivity matrices).
+# read.csv is very slow on files with ~20,000 columns, so this uses data.table::fread when it is installed
+# (about 30x faster) and falls back to read.csv otherwise. The parsed result is cached, so an unchanged file
+# loads in well under a second on later runs. Returns the same data frame as read.csv(file, row.names = 1), except that
+# fread can differ from read.csv in the last binary digit (~1e-16) of a few values. Use useFread = FALSE for exact read.csv parsing.
+readWideCSV <- function(file, useFread = requireNamespace('data.table', quietly = TRUE)) {
+  cached(paste0('csv_', gsub('[^A-Za-z0-9]+', '_', basename(file))),
+         inputs = list(unname(tools::md5sum(file)), 'readWideCSV v1'),
+         compute = function() {
+           if (useFread) {
+             raw <- data.table::fread(file, data.table = FALSE, colClasses = list(character = 1))
+             out <- raw[, -1, drop = FALSE]
+             rownames(out) <- raw[[1]]
+             colnames(out) <- make.names(colnames(out), unique = TRUE)
+             out
+           } else {
+             read.csv(file, row.names = 1)
+           }
+         })
+}
+
 # FDR-correct the p-values in an ROI results table (adds Grp.p.Adj, scanGA.p.Adj, and Itx.p.Adj for interaction tables).
 addFDR <- function(tbl) {
   tbl$Grp.p.Adj <- p.adjust(tbl$Grp.p, method='fdr')
@@ -970,8 +991,8 @@ chisq.test(contingency_table)
 
 #| echo: false
 #| 
-allTDFC <- read.csv(paste0(baseDir,'/functional/UseableData/tdCorrSummary.csv'), row.names = 1)
-allASDFC <- read.csv(paste0(baseDir,'/functional/UseableData/asdCorrSummary_Expand.csv'), row.names = 1)
+allTDFC <- readWideCSV(paste0(baseDir,'/functional/UseableData/tdCorrSummary.csv'))
+allASDFC <- readWideCSV(paste0(baseDir,'/functional/UseableData/asdCorrSummary_Expand.csv'))
 
 rownames(allTDFC) <- substr(rownames(allTDFC),0,nchar(rownames(allTDFC))-28)
 #rownames(allASDFC) <- substr(rownames(allASDFC),0,nchar(rownames(allASDFC))-16)
