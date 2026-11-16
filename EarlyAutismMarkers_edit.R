@@ -2102,7 +2102,7 @@ networkResults <- list()
 for (net in names(networkSpecs)) {
   networkResults[[net]] <- runNetworkAnalysis(net, networkSpecs[[net]])
   showFigure(plotNetworkBars(networkResults[[net]]$fcGLM, networkSpecs[[net]]),
-             paste0('network_', net, '_bars'), width = 12, height = 6)
+             paste0('network_', net, '_bars'), width = 12, height = 6, subfolder = componentFolder)
 }
 
 #### Network Connectivity Figures ----
