@@ -31,6 +31,17 @@ figureFileTypes <- c('tiff', 'pdf', 'svg', 'eps')
 figures <- list()
 
 
+## Speed Settings ----
+
+# Number of CPU cores for the whole-brain models (1 = no parallel processing).
+nCores <- max(1, parallel::detectCores() - 1)
+
+# Slow steps save their results in cacheDir and reload them on later runs. A cache is reused only if its inputs
+# and the model code are unchanged; set rerun to TRUE to ignore every cache and recompute everything.
+cacheDir <- file.path(baseDir, 'cache')
+rerun <- FALSE
+
+
 ## Helper Functions ----
 
 # Save a figure to figDir in each of figureFileTypes (only if saveFigures is TRUE).
@@ -195,6 +206,45 @@ addFDR <- function(tbl) {
 reportSignificant <- function(tbl) {
   print(subset(tbl, Grp.p.Adj < .05))
   if ('Itx.p.Adj' %in% colnames(tbl)) { print(subset(tbl, Itx.p.Adj < .05)) }
+}
+
+
+# Fingerprint of any R objects (used to tell whether a cached result is still valid)
+objectHash <- function(...) {
+  tmp <- tempfile()
+  saveRDS(list(...), tmp, compress = FALSE)
+  hash <- unname(tools::md5sum(tmp))
+  unlink(tmp)
+  hash
+}
+
+# Return compute()'s result, saved in cacheDir under `name`. The saved copy is reused only when `inputs`
+# (a list of everything the result depends on) is unchanged and rerun is FALSE.
+cached <- function(name, inputs, compute) {
+  cacheFile <- file.path(cacheDir, paste0(name, '.rds'))
+  key <- objectHash(inputs)
+
+  if (!rerun && file.exists(cacheFile)) {
+    saved <- readRDS(cacheFile)
+    if (identical(saved$key, key)) {
+      message('Loaded cached result: ', name)
+      return(saved$value)
+    }
+    message('Cache out of date, recomputing: ', name)
+  }
+
+  value <- compute()
+  dir.create(cacheDir, showWarnings = FALSE, recursive = TRUE)
+  saveRDS(list(key = key, value = value), cacheFile)
+  value
+}
+
+# FDR-correct the p-values of a functional connectivity table (Grp.p.adjust, GA.p.adjust, and Intx.p.adjust for the interaction table)
+addFDRfc <- function(tbl) {
+  tbl$Grp.p.adjust <- p.adjust(tbl$Grp.p, method='fdr')
+  tbl$GA.p.adjust <- p.adjust(tbl$GA.p, method='fdr')
+  if ('Intx.p' %in% colnames(tbl)) { tbl$Intx.p.adjust <- p.adjust(tbl$Intx.p, method='fdr') }
+  tbl
 }
 
 
@@ -909,98 +959,110 @@ rm(list=c('allTDFC', 'allASDFC'))
 
 ##### WHOLE BRAIN LINEAR MODEL APPROACH #####
 
-fcGLM <- as.data.frame(matrix(ncol=8, nrow=ncol(tdFC)))
-colnames(fcGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean','Grp.B','Grp.p','GA.B','GA.p', 'nIncluded')
+# Fit both models for a chunk of connections (columns). Self-contained (no global objects) so it can run on a worker.
+# tdBase / asdBase: each group's demographics merged once, with rowIdx = the row of that participant in the FC matrix.
+fitWholeBrainChunk <- function(tdChunk, asdChunk, tdBase, asdBase) {
 
-fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFC)))
-colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean', 'TD.SE', 'ASD.SE','Grp.B','Grp.p','GA.B','GA.p', 'Intx.B','Intx.p', 'nIncluded')
+  lmeCtrl <- nlme::lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')
+  nConn <- ncol(tdChunk)
+  mainMat <- matrix(NA_real_, nConn, 7)   # TD.Mean, ASD.Mean, Grp.B, Grp.p, GA.B, GA.p, nIncluded
+  intxMat <- matrix(NA_real_, nConn, 11)  # TD.Mean, ASD.Mean, TD.SE, ASD.SE, Grp.B, Grp.p, GA.B, GA.p, Intx.B, Intx.p, nIncluded
 
-for(i in 1:nrow(fcGLM)){
- 
-  iteration <- paste("Current iteration: ", i," of ", nrow(fcGLM))
-  print(iteration) 
-  
-  tempTD <- as.data.frame(cbind(rownames(tdFC),tdFC[,i]))
-  colnames(tempTD) <- c('ID','FC')
-  tempTD$Grp <- 'TD'
-  tempTD <- merge(tempTD, tdDemoFinal)
-  
-  tempASD <- as.data.frame(cbind(rownames(asdFC),asdFC[,i]))
-  colnames(tempASD) <- c('ID','FC')
-  tempASD$Grp <- 'ASD'
-  tempASD <- merge(tempASD, asdDemoFinal)
-  
-  glmFrame <- rbind(tempTD, tempASD)
-  glmFrame$FC <- as.numeric(glmFrame$FC)
-  glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-  
-  # As an alternative, include the ones that have a missing here or there
-  # Lose three significant connections, but gain two more that are BS to Cun and to FFG
-  # glmFrame <- glmFrame[complete.cases(glmFrame),]
-  
-  if(is.na(sum(glmFrame$FC))) {
-    fcGLM$ROI[i] <- colnames(tdFC)[i]
-    fcIntxGLM$ROI[i] <- colnames(tdFC)[i]
-    next}
-  
-  tempGLM <- lme(data=glmFrame, FC ~ as.factor(Grp) + ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  
-  fcGLM$ROI[i] <- colnames(tdFC)[i]
-  fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcGLM$nIncluded[i] <- nrow(glmFrame)
-  
-  tempGLM <- lme(data=glmFrame, FC ~ as.factor(Grp) * ScanGA, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
-  
-  fcIntxGLM$ROI[i] <- colnames(tdFC)[i]
-  fcIntxGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-  fcIntxGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-  fcIntxGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-  fcIntxGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-  fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-  fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-  fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-  fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-  fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-  fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  fcIntxGLM$nIncluded[i] <- nrow(glmFrame)
-  
+  for(j in seq_len(nConn)){
+
+    tempTD <- tdBase
+    tempTD$FC <- tdChunk[tdBase$rowIdx, j]
+
+    tempASD <- asdBase
+    tempASD$FC <- asdChunk[asdBase$rowIdx, j]
+
+    glmFrame <- rbind(tempTD, tempASD)
+    glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+
+    # As an alternative, include the ones that have a missing here or there
+    # Lose three significant connections, but gain two more that are BS to Cun and to FFG
+    # glmFrame <- glmFrame[complete.cases(glmFrame),]
+
+    # connections with any missing value are left as NA
+    if(is.na(sum(glmFrame$FC))) { next }
+
+    tdMean <- mean(as.numeric(tempTD$FC), na.rm = T)
+    asdMean <- mean(as.numeric(tempASD$FC), na.rm = T)
+
+    tempGLM <- nlme::lme(data=glmFrame, FC ~ as.factor(Grp) + ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
+    tTable <- summary(tempGLM)$tTable
+    mainMat[j,] <- c(tdMean, asdMean, tTable[2,1], tTable[2,5], tTable[3,1], tTable[3,5], nrow(glmFrame))
+
+    tempGLM <- nlme::lme(data=glmFrame, FC ~ as.factor(Grp) * ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
+    tTable <- summary(tempGLM)$tTable
+    tdSE <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+    asdSE <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+    intxMat[j,] <- c(tdMean, asdMean, tdSE, asdSE, tTable[2,1], tTable[2,5], tTable[3,1], tTable[3,5],
+                     tTable[4,1], tTable[4,5], nrow(glmFrame))
+  }
+
+  list(main = mainMat, intx = intxMat)
 }
 
+# Run fitWholeBrainChunk over every connection, split across nCores workers (nCores = 1 runs in this session).
+# Returns the main-effects table (fcGLM) and the interaction table (fcIntxGLM), one row per connection.
+runWholeBrainModels <- function(tdFC, asdFC, tdDemo, asdDemo, nCores) {
 
-fcGLM$Grp.p.adjust <- p.adjust(fcGLM$Grp.p, method='fdr')
-fcGLM$GA.p.adjust <- p.adjust(fcGLM$GA.p, method='fdr')
+  # Merge each group's demographics once instead of once per connection
+  tdBase <- merge(data.frame(ID=rownames(tdFC), rowIdx=seq_len(nrow(tdFC)), Grp='TD', stringsAsFactors=FALSE), tdDemo)
+  asdBase <- merge(data.frame(ID=rownames(asdFC), rowIdx=seq_len(nrow(asdFC)), Grp='ASD', stringsAsFactors=FALSE), asdDemo)
+  tdMat <- as.matrix(tdFC)
+  asdMat <- as.matrix(asdFC)
 
-#subset(fcGLM, Grp.p <.001)
-#subset(fcGLM, GA.p <.05)
-subset(fcGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
+  nConn <- ncol(tdMat)
+  chunks <- parallel::splitIndices(nConn, max(1, min(nConn, nCores * 4)))
+  # each worker gets only its own columns
+  chunkData <- lapply(chunks, function(cols) list(td = tdMat[, cols, drop=FALSE], asd = asdMat[, cols, drop=FALSE]))
 
+  startTime <- Sys.time()
+  message('Fitting ', nConn, ' connections (', length(chunks), ' chunks, ', nCores, ' core(s))...')
+  if (nCores > 1) {
+    cl <- parallel::makeCluster(nCores)
+    on.exit(parallel::stopCluster(cl))
+    parallel::clusterExport(cl, c('tdBase', 'asdBase'), envir = environment())
+    parallel::clusterExport(cl, 'fitWholeBrainChunk', envir = globalenv())
+    workerFun <- function(d) fitWholeBrainChunk(d$td, d$asd, tdBase, asdBase)
+    environment(workerFun) <- globalenv()   # so only the exported objects (not this function's data) travel to the workers
+    results <- parallel::parLapply(cl, chunkData, workerFun)
+  } else {
+    results <- lapply(seq_along(chunkData), function(k) {
+      message('  chunk ', k, ' of ', length(chunkData))
+      fitWholeBrainChunk(chunkData[[k]]$td, chunkData[[k]]$asd, tdBase, asdBase)
+    })
+  }
+  message('Done in ', round(as.numeric(difftime(Sys.time(), startTime, units='mins')), 1), ' minutes')
 
-fcIntxGLM$Grp.p.adjust <- p.adjust(fcIntxGLM$Grp.p, method='fdr')
-fcIntxGLM$GA.p.adjust <- p.adjust(fcIntxGLM$GA.p, method='fdr')
-fcIntxGLM$Intx.p.adjust <- p.adjust(fcIntxGLM$Intx.p, method='fdr')
+  fcGLM <- data.frame(ROI = colnames(tdMat), do.call(rbind, lapply(results, `[[`, 'main')), stringsAsFactors = FALSE)
+  colnames(fcGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean','Grp.B','Grp.p','GA.B','GA.p', 'nIncluded')
 
-#subset(fcIntxGLM, Grp.p <.001)
-#subset(fcGLM, GA.p <.05)
-subset(fcIntxGLM, Grp.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
-subset(fcIntxGLM, Intx.p.adjust <.05)
-#subset(fcGLM, GA.p.adjust <.05)
+  fcIntxGLM <- data.frame(ROI = colnames(tdMat), do.call(rbind, lapply(results, `[[`, 'intx')), stringsAsFactors = FALSE)
+  colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean', 'TD.SE', 'ASD.SE','Grp.B','Grp.p','GA.B','GA.p', 'Intx.B','Intx.p', 'nIncluded')
+
+  list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
+}
+
+# The fit is cached: it is recomputed only if the connectivity data, demographics or the model code change (or rerun is TRUE)
+wholeBrainModels <- cached('wholebrain_models',
+                           inputs = list(tdFC, asdFC, tdDemoFinal, asdDemoFinal, deparse(fitWholeBrainChunk)),
+                           compute = function() runWholeBrainModels(tdFC, asdFC, tdDemoFinal, asdDemoFinal, nCores))
+
+fcGLM <- addFDRfc(wholeBrainModels$fcGLM)
+fcIntxGLM <- addFDRfc(wholeBrainModels$fcIntxGLM)
+
+print(subset(fcGLM, Grp.p.adjust <.05))
+
+print(subset(fcIntxGLM, Grp.p.adjust <.05))
+print(subset(fcIntxGLM, Intx.p.adjust <.05))
 
 
 SigROIList <- subset(fcIntxGLM, Grp.p.adjust <.05)$ROI
-ROIList1 <- vector()
-ROIList2 <- vector()
-for(i in 1:length(SigROIList)) {
-  ROIList1[i] <- strsplit(SigROIList[i], '_')[[1]][1]
-  ROIList2[i] <- strsplit(SigROIList[i], '_')[[1]][2]
-}
+ROIList1 <- vapply(strsplit(SigROIList, '_'), function(x) x[1], character(1))
+ROIList2 <- vapply(strsplit(SigROIList, '_'), function(x) x[2], character(1))
 
 ROIListFull <- c(ROIList1, ROIList2)
 # sort(table(ROIListFull))
@@ -1008,6 +1070,7 @@ ROIListFull <- c(ROIList1, ROIList2)
 
 write.table(fcIntxGLM, paste0(baseDir,'/functional/output/WholeBrain_WholeTable.csv'), col.names=T, row.names=F, sep=',')
 write.table(subset(fcIntxGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/WholeBrain_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+
 
 
 ### Whole Brain Figures ----
@@ -1598,14 +1661,6 @@ fitNetworkModels <- function(tdFCNetwork, asdFCNetwork, tdDemo, asdDemo) {
   }
 
   list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
-}
-
-# FDR-correct the p-values of a network table (Grp.p.adjust, GA.p.adjust, and Intx.p.adjust for the interaction table)
-addFDRfc <- function(tbl) {
-  tbl$Grp.p.adjust <- p.adjust(tbl$Grp.p, method='fdr')
-  tbl$GA.p.adjust <- p.adjust(tbl$GA.p, method='fdr')
-  if ('Intx.p' %in% colnames(tbl)) { tbl$Intx.p.adjust <- p.adjust(tbl$Intx.p, method='fdr') }
-  tbl
 }
 
 # Write a network's tables to functional/output (these files are read back for the connectivity figures below)
