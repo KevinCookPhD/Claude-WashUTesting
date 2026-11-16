@@ -64,7 +64,18 @@ coordinatesAreAFNI <- TRUE
 # matched to); FALSE puts the front at the top.
 glassAxialPosteriorAtTop <- TRUE
 
-# How the brain is drawn so that nodes and edges look inside it: the brain is cut into this many depth layers, and each node and
+# How the glass brains are drawn. 'rgl' = a true 3D render (spheres, tubes and a translucent brain surface; needs the rgl and png
+# packages and a computer screen, and the image size is limited by the screen). 'ggplot' = the flat layered drawing below,
+# which needs neither (it is also the automatic fallback when rgl cannot open a window).
+glassRenderer <- 'rgl'
+glassPixels <- 1000                       # rgl: size of each view in pixels (square)
+glassMeshColor <- 'grey88'                # rgl: brain surface color
+glassMeshAlpha <- .28                     # rgl: brain surface opacity (0-1)
+glassEdgeColors <- c(low = '#6C9BE3', high = '#E57373')     # rgl: edge colors (Low > High Risk, High > Low Risk)
+glassNodeRadius <- c(network = 2.6, whole = 1.4)            # rgl: node radius (mm) for the network and whole-brain figures
+glassTubeRadius <- c(network = .85, whole = .45)            # rgl: edge tube radius (mm)
+
+# (ggplot renderer only) How the brain is drawn so that nodes and edges look inside it: the brain is cut into this many depth layers, and each node and
 # piece of an edge is drawn between the layers at its own depth, so deeper ones are veiled by the layers in front of them.
 glassDepthLayers <- 6
 
@@ -520,12 +531,74 @@ loadGlassBrain <- function() {
   if (!exists('roiCoordinates', envir = globalenv())) {
     roiCoordinates <<- standardCoordinates(read.table(roiCoordinateFile))
   }
+  glassRendererActive <<- glassRenderer
+  if (glassRenderer == 'rgl') {
+    ok <- requireNamespace('rgl', quietly = TRUE) && requireNamespace('png', quietly = TRUE)
+    if (ok) {
+      ok <- tryCatch({ rgl::open3d(useNULL = FALSE); usable <- !rgl::rgl.useNULL(); rgl::close3d(); usable }, error = function(e) FALSE)
+    }
+    if (!ok) {
+      message('rgl cannot draw here (the rgl/png packages or a display are missing); using the ggplot glass brain instead')
+      glassRendererActive <<- 'ggplot'
+    }
+  }
+  if (glassRendererActive == 'rgl') {
+    if (!exists('glassMesh3d', envir = globalenv())) {
+      mesh <- readMz3(brainMeshFile)
+      v <- standardCoordinates(mesh$vertices)
+      glassMesh3d <<- rgl::addNormals(rgl::tmesh3d(t(cbind(as.matrix(v), 1)), t(mesh$faces), homogeneous = TRUE))
+    }
+    return(invisible(NULL))
+  }
   if (!exists('glassBrainBackgrounds', envir = globalenv())) {
     glassBrainBackgrounds <<- cached('glass_brain_backgrounds',
                                      inputs = list(unname(tools::md5sum(brainMeshFile)), deparse(glassBackgrounds), deparse(glassViews), coordinatesAreAFNI),
                                      compute = function() glassBackgrounds(readMz3(brainMeshFile)))
   }
   invisible(NULL)
+}
+
+# One 3D glass brain view as a ggplot (so it can be arranged like the other figures). size = 'network' or 'whole' picks node and edge sizes.
+glassBrainRgl <- function(view, nodes, edges = NULL, size = 'network') {
+  rgl::open3d(useNULL = FALSE, windowRect = c(0, 0, glassPixels, glassPixels))
+  on.exit(rgl::close3d())
+  rgl::bg3d('white')
+  rgl::clear3d('lights')
+  rgl::light3d(theta = 0, phi = 0, viewpoint.rel = TRUE, ambient = '#808080', diffuse = '#E0E0E0', specular = '#000000')
+  xyz <- as.matrix(roiCoordinates)
+  if (!is.null(edges) && nrow(edges) > 0) {
+    for (k in seq_len(nrow(edges))) {
+      rgl::shade3d(rgl::cylinder3d(rbind(xyz[edges$a[k], ], xyz[edges$b[k], ]), radius = glassTubeRadius[[size]], sides = 16),
+                   color = glassEdgeColors[[edges$dir[k]]], alpha = .9, specular = 'black')
+    }
+  }
+  rgl::spheres3d(xyz[nodes$id, , drop = FALSE], radius = glassNodeRadius[[size]], color = nodes$fill, specular = 'black', shininess = 1)
+  rgl::shade3d(glassMesh3d, color = glassMeshColor, alpha = glassMeshAlpha, specular = 'black', shininess = 1, override = FALSE)
+  R <- rgl::rotationMatrix
+  userMatrix <- switch(view,
+                       axial = if (glassAxialPosteriorAtTop) R(pi, 1, 0, 0) else R(0, 1, 0, 0),
+                       posterior = R(-pi / 2, 1, 0, 0),
+                       lateral = R(pi / 2, 0, 1, 0) %*% R(-pi / 2, 1, 0, 0))
+  rgl::par3d(userMatrix = userMatrix, zoom = .75)
+  file <- tempfile(fileext = '.png')
+  rgl::snapshot3d(file, webshot = FALSE)
+  img <- png::readPNG(file)
+  unlink(file)
+  used <- which(apply(img[, , 1:3, drop = FALSE] < .98, c(1, 2), any), arr.ind = TRUE)      # trim the white margin
+  pad <- 10
+  rows <- max(1, min(used[, 1]) - pad):min(dim(img)[1], max(used[, 1]) + pad)
+  cols <- max(1, min(used[, 2]) - pad):min(dim(img)[2], max(used[, 2]) + pad)
+  img <- img[rows, cols, 1:3, drop = FALSE]
+  ggplot() +
+    annotation_raster(as.raster(img), xmin = 0, xmax = ncol(img), ymin = 0, ymax = nrow(img), interpolate = TRUE) +
+    xlim(0, ncol(img)) + ylim(0, nrow(img)) + coord_fixed(expand = FALSE) + theme_void()
+}
+
+# One glass brain view with whichever renderer is in use. size = 'network' or 'whole'.
+glassView <- function(view, nodes, edges = NULL, size = 'network') {
+  if (glassRendererActive == 'rgl') { return(glassBrainRgl(view, nodes, edges, size)) }
+  glassBrainView(view, glassBrainBackgrounds, roiCoordinates, nodes, edges,
+                 nodeSize = ifelse(size == 'network', 3.2, 1.6), edgeWidth = ifelse(size == 'network', 1.4, .9))
 }
 
 # Region numbers at the two ends of each connection ID such as 'CAU.L.39_THA.R.139'
@@ -1885,8 +1958,8 @@ message('Whole-brain glass brains: ', sum(wholeBrainEdges$dir == 'low', na.rm = 
 
 wholeBrainGlass <- function(direction) {
   edges <- wholeBrainEdges[which(wholeBrainEdges$dir == direction),]
-  ggpubr::ggarrange(glassBrainView('lateral', glassBrainBackgrounds, roiCoordinates, allRegionNodes, edges, nodeSize = 1.6, edgeWidth = .9),
-                    glassBrainView('posterior', glassBrainBackgrounds, roiCoordinates, allRegionNodes, edges, nodeSize = 1.6, edgeWidth = .9),
+  ggpubr::ggarrange(glassView('lateral', allRegionNodes, edges, 'whole'),
+                    glassView('posterior', allRegionNodes, edges, 'whole'),
                     ncol = 1, nrow = 2)
 }
 
@@ -2296,12 +2369,12 @@ networkLegendPanel <- function() {
     annotate('segment', x = .04, xend = .96, y = .27, yend = .27, linewidth = .5) +
     annotate('text', x = c(.27, .73), y = .20, label = c('Low > High Risk', 'High > Low Risk'), size = 3.6) +
     annotate('segment', x = c(.12, .58), xend = c(.42, .88), y = .12, yend = .12, linewidth = 2.2,
-             colour = c(groupLineColor[['low']], groupLineColor[['high']]), lineend = 'round')
+             colour = if (glassRendererActive == 'rgl') glassEdgeColors[c('low', 'high')] else groupLineColor[c('low', 'high')], lineend = 'round')
 }
 
-network_glass <- ggpubr::ggarrange(glassBrainView('axial', glassBrainBackgrounds, roiCoordinates, networkGlassNodes, networkGlassEdges, nodeSize = 3.2, edgeWidth = 1.4),
-                                   glassBrainView('posterior', glassBrainBackgrounds, roiCoordinates, networkGlassNodes, networkGlassEdges, nodeSize = 3.2, edgeWidth = 1.4),
-                                   glassBrainView('lateral', glassBrainBackgrounds, roiCoordinates, networkGlassNodes, networkGlassEdges, nodeSize = 3.2, edgeWidth = 1.4),
+network_glass <- ggpubr::ggarrange(glassView('axial', networkGlassNodes, networkGlassEdges),
+                                   glassView('posterior', networkGlassNodes, networkGlassEdges),
+                                   glassView('lateral', networkGlassNodes, networkGlassEdges),
                                    networkLegendPanel(), nrow = 2, ncol = 2)
 showFigure(network_glass, 'network_glass', width = 9, height = 9)
 
