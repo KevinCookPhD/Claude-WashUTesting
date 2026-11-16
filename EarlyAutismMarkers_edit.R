@@ -19,6 +19,31 @@ library(emmeans)
 
 
 
+## Helper Functions ----
+
+# Build the participant ID used in the imaging file names from a study_id and its study.
+# Vectorized: pass the study_id and study columns of a data frame.
+formatID <- function(study_id, study) {
+  study_id <- as.character(study_id)
+  study <- as.character(study)
+  out <- character(length(study_id))
+
+  abc <- study == 'ABC'
+  chd <- study == 'CHD R01'
+  pl <- study == 'Placenta'
+  rescue <- !(abc | chd | pl)
+
+  out[abc] <- paste0('fetus_00', study_id[abc])
+  out[chd] <- paste0('fetus_0', study_id[chd])
+  out[pl] <- paste0('pl_1', sprintf("%04d", as.numeric(substr(study_id[pl], 4, nchar(study_id[pl])))))
+
+  rescueNum <- as.numeric(substr(study_id[rescue], 5, nchar(study_id[rescue])))
+  out[rescue] <- paste0('rescue_', ifelse(rescueNum < 100, sprintf("%03d", rescueNum), sprintf("%04d", rescueNum)))
+
+  out
+}
+
+
 # 1. SHARED DATA ----
 
 ## Behavioral Data (MCHAT) ----
@@ -48,61 +73,11 @@ testFetal <- subset(testData, PretermStatus=='Term' & CHDStatus !='CHD' & AnyFet
 testFetalPass <- subset(testFetal, mchat_result=='Pass')
 testFetalFail <- subset(testFetal, mchat_result=='Fail')
 
-fetalPassID <- vector()
-fetalFailID <- vector()
 
 
-for(i in 1:nrow(testFetalPass)){
-  
-  tempID <- testFetalPass$study_id[i]
-  tempProj <- testFetalPass$study[i]
-  
-  if(tempProj=='ABC') {
-    tempIDFormat <- paste0('fetus_00',tempID)
-    fetalPassID[i] <- tempIDFormat
-  } else if(tempProj=='CHD R01') {
-    tempIDFormat <- paste0('fetus_0',tempID)
-    fetalPassID[i] <- tempIDFormat
-  } else if(tempProj=='Placenta') {
-    tempIDFormat <- paste0('pl_1',sprintf("%04d", as.numeric(substr(tempID,4,nchar(tempID)))))
-    fetalPassID[i] <- tempIDFormat
-  } else {
-    tempRescue <- as.numeric(substr(tempID,5,nchar(tempID)))
-    if(tempRescue < 100) {
-      tempIDFormat <- paste0('rescue_',sprintf("%03d", as.numeric(substr(tempID,5,nchar(tempID)))))
-      fetalPassID[i] <- tempIDFormat 
-    } else {
-      tempIDFormat <- paste0('rescue_',sprintf("%04d", as.numeric(substr(tempID,5,nchar(tempID)))))
-      fetalPassID[i] <- tempIDFormat 
-    }
-  }
-}
+fetalPassID <- formatID(testFetalPass$study_id, testFetalPass$study)
 
-for(i in 1:nrow(testFetalFail)){
-  
-  tempID <- testFetalFail$study_id[i]
-  tempProj <- testFetalFail$study[i]
-  
-  if(tempProj=='ABC') {
-    tempIDFormat <- paste0('fetus_00',tempID)
-    fetalFailID[i] <- tempIDFormat
-  } else if(tempProj=='CHD R01') {
-    tempIDFormat <- paste0('fetus_0',tempID)
-    fetalFailID[i] <- tempIDFormat
-  } else if(tempProj=='Placenta') {
-    tempIDFormat <- paste0('pl_1',sprintf("%04d", as.numeric(substr(tempID,4,nchar(tempID)))))
-    fetalFailID[i] <- tempIDFormat
-  } else {
-    tempRescue <- as.numeric(substr(tempID,5,nchar(tempID)))
-    if(tempRescue < 100) {
-      tempIDFormat <- paste0('rescue_',sprintf("%03d", as.numeric(substr(tempID,5,nchar(tempID)))))
-      fetalFailID[i] <- tempIDFormat 
-    } else {
-      tempIDFormat <- paste0('rescue_',sprintf("%04d", as.numeric(substr(tempID,5,nchar(tempID)))))
-      fetalFailID[i] <- tempIDFormat 
-    }
-  }
-}
+fetalFailID <- formatID(testFetalFail$study_id, testFetalFail$study)
 
 
 tissueDir <- file.path(baseDir, "anatomical", "tissueVolumes_Individual")
@@ -156,32 +131,7 @@ fetalMatched <- subset(fetalMatched, !is.na(study_id ))
 
 t.test(subset(fetalMatched, mchat_result=='Fail')$scanAge, subset(fetalMatched, mchat_result=='Pass')$scanAge)
 
-fetalMatched$shortID <- NA
-for(i in 1:nrow(fetalMatched)){
-  
-  tempID <- fetalMatched$study_id[i]
-  tempProj <- fetalMatched$study[i]
-  
-  if(tempProj=='ABC') {
-    tempIDFormat <- paste0('fetus_00',tempID)
-    fetalMatched$shortID[i] <- tempIDFormat
-  } else if(tempProj=='CHD R01') {
-    tempIDFormat <- paste0('fetus_0',tempID)
-    fetalMatched$shortID[i] <- tempIDFormat
-  } else if(tempProj=='Placenta') {
-    tempIDFormat <- paste0('pl_1',sprintf("%04d", as.numeric(substr(tempID,4,nchar(tempID)))))
-    fetalMatched$shortID[i] <- tempIDFormat
-  } else {
-    tempRescue <- as.numeric(substr(tempID,5,nchar(tempID)))
-    if(tempRescue < 100) {
-      tempIDFormat <- paste0('rescue_',sprintf("%03d", as.numeric(substr(tempID,5,nchar(tempID)))))
-      fetalMatched$shortID[i] <- tempIDFormat 
-    } else {
-      tempIDFormat <- paste0('rescue_',sprintf("%04d", as.numeric(substr(tempID,5,nchar(tempID)))))
-      fetalMatched$shortID[i] <- tempIDFormat 
-    }
-  }
-}
+fetalMatched$shortID <- formatID(fetalMatched$study_id, fetalMatched$study)
 
 fetalMatched$scanTimepoint <- as.character(fetalMatched$scanTimepoint)
 fetalMatched$longID <- paste0(fetalMatched$shortID,'_0', substr(fetalMatched$scanTimepoint,nchar(fetalMatched$scanTimepoint),1000))
@@ -258,32 +208,7 @@ if(HANDMATCH) {
   #Pull those to be added and format dataframe for merging
   shortAddFrame <- fetalMchatMelt[fetalMchatMelt$study_id %in% addListShort,]
   
-  shortAddFrame$shortID <- NA
-  for(i in 1:nrow(shortAddFrame)){
-    
-    tempID <- shortAddFrame$study_id[i]
-    tempProj <- shortAddFrame$study[i]
-    
-    if(tempProj=='ABC') {
-      tempIDFormat <- paste0('fetus_00',tempID)
-      shortAddFrame$shortID[i] <- tempIDFormat
-    } else if(tempProj=='CHD R01') {
-      tempIDFormat <- paste0('fetus_0',tempID)
-      shortAddFrame$shortID[i] <- tempIDFormat
-    } else if(tempProj=='Placenta') {
-      tempIDFormat <- paste0('pl_1',sprintf("%04d", as.numeric(substr(tempID,4,nchar(tempID)))))
-      shortAddFrame$shortID[i] <- tempIDFormat
-    } else {
-      tempRescue <- as.numeric(substr(tempID,5,nchar(tempID)))
-      if(tempRescue < 100) {
-        tempIDFormat <- paste0('rescue_',sprintf("%03d", as.numeric(substr(tempID,5,nchar(tempID)))))
-        shortAddFrame$shortID[i] <- tempIDFormat 
-      } else {
-        tempIDFormat <- paste0('rescue_',sprintf("%04d", as.numeric(substr(tempID,5,nchar(tempID)))))
-        shortAddFrame$shortID[i] <- tempIDFormat 
-      }
-    }
-  }
+  shortAddFrame$shortID <- formatID(shortAddFrame$study_id, shortAddFrame$study)
   
   shortAddFrame$scanTimepoint <- as.character(shortAddFrame$scanTimepoint)
   shortAddFrame$longID <- paste0(shortAddFrame$shortID,'_0', substr(shortAddFrame$scanTimepoint,nchar(shortAddFrame$scanTimepoint),1000))
