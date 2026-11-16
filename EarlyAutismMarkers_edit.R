@@ -70,7 +70,7 @@ glassAxialPosteriorAtTop <- TRUE
 glassRenderer <- 'rgl'
 glassPixels <- 1000                       # rgl: size of each view in pixels (square)
 glassMeshColor <- 'grey88'                # rgl: brain surface color
-glassMeshAlpha <- .28                     # rgl: brain surface opacity (0-1)
+glassMeshAlpha <- .18                     # rgl: brain surface opacity (0-1)
 glassEdgesOnTop <- TRUE                    # rgl: TRUE draws the edges solid over the brain surface (not veiled by it); FALSE lets the glass veil them
 glassEdgeColors <- c(low = '#6C9BE3', high = '#E57373')     # rgl: edge colors (Low > High Risk, High > Low Risk)
 glassNodeRadius <- c(network = 2.6, whole = 1.4)            # rgl: node radius (mm) for the network and whole-brain figures
