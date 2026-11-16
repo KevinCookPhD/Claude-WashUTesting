@@ -507,36 +507,33 @@ reportSignificant(glmRegionalNormedVolTable.Itx)
 
 #### Regional Figure ----
 
+# Two sets of figures for the same ROIs:
+#   (1) group main effect: estimated marginal means (bars) for Low vs High Risk, from the group x scanAge model
+#   (2) interaction:       normalized volume across gestational age, with a line per risk group
+
 
 # ----
 
-## HPC LEFT
+# One row per ROI: column name in regionalData, axis label, and y-axis limits/breaks for each figure type
+# (yMax = upper y limit; breakMax and breakStep define the tick marks, seq(0, breakMax, breakStep))
+regionalFigureROIs <- data.frame(
+  roi            = c('HPC_L', 'HPC_R', 'Amyg_L', 'FusiformAnt_GM_R', 'Caudate_R', 'Subthalamic_L', 'Lentiform_L'),
+  label          = c('Hippocampus (Left) Volume', 'Hippocampus (Right) Volume', 'Amygdala (Left) Volume',
+                     'Fusiform (Right) Volume', 'Caudate (Right) Volume', 'Subthalamic (Left) Volume', 'Pallidum (Left) Volume'),
+  groupYMax      = c(.003,  .003,  .002,  .002,  .01,  .0007,  .0105),
+  groupBreakMax  = c(.003,  .003,  .003,  .003,  .03,  .03,    .03),
+  groupBreakStep = c(.0005, .0005, .0005, .0005, .002, .0002,  .002),
+  intxYMax       = c(.0047, .0047, .0037, .003,  .02,  .00125, .02),
+  intxBreakMax   = c(.005,  .005,  .005,  .005,  .05,  .005,   .03),
+  intxBreakStep  = c(.001,  .001,  .001,  .0005, .0025, .00025, .005),
+  stringsAsFactors = FALSE)
 
-regionalVolumeROI <- regionalData[,'HPC_L', drop=FALSE]
-colnames(regionalVolumeROI) <- 'Volume'
-regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
-  
-tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
-tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
+# Participants dropped from the figures (the regional stats above drop only the first and third)
+regionalFigureExclude <- c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')
 
-tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
-tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
-tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-colnames(tempAnalyses)[5] <- 'Autism Risk'
-
-HPC.L.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-  scale_y_continuous(limits=c(0,.0047), breaks=seq(0,.005,.001), expand=c(0,0)) +
-  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-  scale_shape_manual(values=c(21,23)) +
-  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
-  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
-  scale_color_manual(values=c('#72a3e8','#e37575')) +
-  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-  ylab('Hippocampus (Left) Volume') + xlab('Gestional Age (Weeks)') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
+# Shared figure theme. The group (bar) figures have no x-axis title.
+themeRegionalFigure <- function(showXTitle = TRUE) {
+  theme(axis.title.x = if (showXTitle) element_text(color = 'black', size = 16) else element_blank(),
         axis.text.x = element_text(color = 'black', size = 12),
         axis.ticks.x = element_blank(),
         axis.title.y = element_text(color = 'black', size = 16),
@@ -551,284 +548,72 @@ HPC.L.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
         legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
-  
+}
+
+# Data for one regional ROI's figure
+prepRegionalFigureData <- function(roi) {
+  prepVolumeAnalysis(regionalData[,roi, drop=FALSE], fetalMatched, regionalDataRaw,
+                     excludeIDs = regionalFigureExclude, dropInf = TRUE)
+}
+
+# Group main effect figure: model-estimated means (+/- SE) for Low vs High Risk
+plotRoiGroup <- function(roiRow) {
+  tempAnalyses <- prepRegionalFigureData(roiRow$roi)
+
+  model <- lme(data=tempAnalyses, VolNormed ~ mchat_result * scanAge, random= ~1|factor(shortID), control=lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim'))
+  meansTable <- emmeans::emmeans(model, ~ mchat_result, data=tempAnalyses)
+
+  meansTablePlot <- summary(meansTable)
+  colnames(meansTablePlot)[1] <- 'Autism Risk'
+  meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+  ggplot(data=meansTablePlot, aes(x=`Autism Risk`, y=emmean)) +
+    scale_y_continuous(limits=c(0, roiRow$groupYMax), breaks=seq(0, roiRow$groupBreakMax, roiRow$groupBreakStep), expand=c(0,0)) +
+    scale_fill_manual(values=c('#a3c0e9','#e09999')) +
+    geom_bar(stat='identity',aes(fill=`Autism Risk`), color='#000000', linewidth=2) +
+    geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.125, linewidth=2) +
+    ylab(roiRow$label) +
+    themeRegionalFigure(showXTitle = FALSE)
+}
+
+# Interaction figure: normalized volume by gestational age, with a fitted line per risk group
+plotRoiInteraction <- function(roiRow) {
+  tempAnalyses <- prepRegionalFigureData(roiRow$roi)
+  colnames(tempAnalyses)[5] <- 'Autism Risk'
+
+  ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+    scale_y_continuous(limits=c(0, roiRow$intxYMax), breaks=seq(0, roiRow$intxBreakMax, roiRow$intxBreakStep), expand=c(0,0)) +
+    scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+    scale_shape_manual(values=c(21,23)) +
+    scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
+    geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
+    scale_color_manual(values=c('#72a3e8','#e37575')) +
+    geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+    ylab(roiRow$label) + xlab('Gestional Age (Weeks)') +
+    themeRegionalFigure(showXTitle = TRUE)
+}
+
+# Build every plot (named by ROI) for each figure type
+regionalGroupPlots <- lapply(seq_len(nrow(regionalFigureROIs)), function(i) plotRoiGroup(regionalFigureROIs[i,]))
+names(regionalGroupPlots) <- regionalFigureROIs$roi
+
+regionalIntxPlots <- lapply(seq_len(nrow(regionalFigureROIs)), function(i) plotRoiInteraction(regionalFigureROIs[i,]))
+names(regionalIntxPlots) <- regionalFigureROIs$roi
 
 
-## HPC RIGHT
+## Group main effect figure
 
-regionalVolumeROI <- regionalData[,'HPC_R', drop=FALSE]
-colnames(regionalVolumeROI) <- 'Volume'
-regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
-  
-tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
-tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-
-tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
-tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
-tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-colnames(tempAnalyses)[5] <- 'Autism Risk'
+#tiff(paste0(figDir,'/regionalVolumePlot_Group.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
+ggpubr::ggarrange(plotlist = regionalGroupPlots, nrow=2, ncol=4, legend = 'none')
+#dev.off()
 
 
-HPC.R.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-  scale_y_continuous(limits=c(0,.0047), breaks=seq(0,.005,.001), expand=c(0,0)) +
-  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-  scale_shape_manual(values=c(21,23)) +
-  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
-  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
-  scale_color_manual(values=c('#72a3e8','#e37575')) +
-  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-  ylab('Hippocampus (Right) Volume') + xlab('Gestional Age (Weeks)') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.x =  element_blank(),
-        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-  
-
-
-## AMYG Left
-
-regionalVolumeROI <- regionalData[,'Amyg_L', drop=FALSE]
-colnames(regionalVolumeROI) <- 'Volume'
-regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
-  
-tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
-tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-
-tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
-tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
-tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-colnames(tempAnalyses)[5] <- 'Autism Risk'
-
-
-Amy.L.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-  scale_y_continuous(limits=c(0,.0037), breaks=seq(0,.005,.001), expand=c(0,0)) +
-  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-  scale_shape_manual(values=c(21,23)) +
-  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
-  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
-  scale_color_manual(values=c('#72a3e8','#e37575')) +
-  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-  ylab('Amygdala (Left) Volume') + xlab('Gestional Age (Weeks)') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.x =  element_blank(),
-        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-  
-
-
-## Fus Right
-
-regionalVolumeROI <- regionalData[,'FusiformAnt_GM_R', drop=FALSE]
-colnames(regionalVolumeROI) <- 'Volume'
-regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
-  
-tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
-tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-
-tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
-tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
-tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-colnames(tempAnalyses)[5] <- 'Autism Risk'
-
-
-FUS.R.Plot <-  ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-  scale_y_continuous(limits=c(0,.003), breaks=seq(0,.005,.0005), expand=c(0,0)) +
-  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-  scale_shape_manual(values=c(21,23)) +
-  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
-  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
-  scale_color_manual(values=c('#72a3e8','#e37575')) +
-  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-  ylab('Fusiform (Right) Volume') + xlab('Gestional Age (Weeks)') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.x =  element_blank(),
-        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-  
-
-
-## Caudate Right
-
-regionalVolumeROI <- regionalData[,'Caudate_R', drop=FALSE]
-colnames(regionalVolumeROI) <- 'Volume'
-regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
-  
-tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
-tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-
-tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
-tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
-tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-colnames(tempAnalyses)[5] <- 'Autism Risk'
-
-
-CAU.R.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-  scale_y_continuous(limits=c(0,.02), breaks=seq(0,.05,.0025), expand=c(0,0)) +
-  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-  scale_shape_manual(values=c(21,23)) +
-  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
-  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
-  scale_color_manual(values=c('#72a3e8','#e37575')) +
-  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-  ylab('Caudate (Right) Volume') + xlab('Gestional Age (Weeks)') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.x =  element_blank(),
-        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-  
-
-
-## Subthalamic Left
-
-regionalVolumeROI <- regionalData[,'Subthalamic_L', drop=FALSE]
-colnames(regionalVolumeROI) <- 'Volume'
-regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
-  
-tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
-tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-
-tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
-tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
-tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-colnames(tempAnalyses)[5] <- 'Autism Risk'
-
-
-SUBT.L.Plot <- ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-  scale_y_continuous(limits=c(0,.00125), breaks=seq(0,.005,.00025), expand=c(0,0)) +
-  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-  scale_shape_manual(values=c(21,23)) +
-  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
-  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
-  scale_color_manual(values=c('#72a3e8','#e37575')) +
-  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-  ylab('Subthalamic (Left) Volume') + xlab('Gestional Age (Weeks)') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.x =  element_blank(),
-        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-  
-
-
-## Pallidum Left
-
-regionalVolumeROI <- regionalData[,'Lentiform_L', drop=FALSE]
-colnames(regionalVolumeROI) <- 'Volume'
-regionalVolumeROI$Volume <- as.numeric(regionalVolumeROI$Volume)
-  
-tempAnalyses <- merge(fetalMatched[,c('shortID','longID','scanAge', 'mchat_result')], regionalVolumeROI, by="row.names")
-tempAnalyses <- tempAnalyses[complete.cases(tempAnalyses),]
-tempAnalyses$mchat_result <- factor(tempAnalyses$mchat_result)
-tempAnalyses$scanAge <- as.numeric(tempAnalyses$scanAge)
-
-tempAnalyses <- tempAnalyses[!(tempAnalyses$longID %in% c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),]
-tempAnalyses <- merge(tempAnalyses,regionalDataRaw, by='longID', all.x=T, all.y=F)
-tempAnalyses$VolNormed <- tempAnalyses$Volume/tempAnalyses$TBV
-tempAnalyses<-tempAnalyses[!tempAnalyses$VolNormed==Inf,]
-colnames(tempAnalyses)[5] <- 'Autism Risk'
-
-
-PAL.L.Plot <-  ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-  scale_y_continuous(limits=c(0,.02), breaks=seq(0,.03,.005), expand=c(0,0)) +
-  scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-  scale_shape_manual(values=c(21,23)) +
-  scale_fill_manual(values=c('#a3c0e955','#e0999955')) +
-  geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
-  scale_color_manual(values=c('#72a3e8','#e37575')) +
-  geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-  ylab('Pallidum (Left) Volume') + xlab('Gestional Age (Weeks)') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.x =  element_blank(),
-        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-  
-
+## Interaction figure
 
 #tiff(paste0(figDir,'/regionalVolumePlot_Interactions.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
-ggpubr::ggarrange(HPC.L.Plot, HPC.R.Plot, Amy.L.Plot, FUS.R.Plot, 
-                  CAU.R.Plot, SUBT.L.Plot, PAL.L.Plot,
-          nrow=2, ncol=4, legend = 'none')
+ggpubr::ggarrange(plotlist = regionalIntxPlots, nrow=2, ncol=4, legend = 'none')
 #dev.off()
+
 
 
 ## 2d. Cortical Thickness ----
