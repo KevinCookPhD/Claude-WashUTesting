@@ -1933,8 +1933,8 @@ plotNetworkBars <- function(fcGLM, spec) {
           axis.line.x = element_line(color='black', linewidth = 1),
           axis.line.y = element_line(color='black', linewidth = 1),
           plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-          panel.grid.major.y = element_line(color = 'dark gray'),
-          panel.grid.major.x = element_line(color = 'dark gray'),
+          panel.grid.major.y = element_line(color = '#cccccc', linewidth = 1),
+          panel.grid.major.x = element_blank(),   # no vertical lines: with hundreds of bars they fill the panel with gray
           panel.background = element_rect(fill='white'),
           legend.position = 'none',
           legend.text = element_text(color = 'black', size = 12),
