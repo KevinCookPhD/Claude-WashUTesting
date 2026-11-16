@@ -18,12 +18,12 @@
 # added by rewrite_paths.R: 2026-10-26
 library(here)
 
-# WORK LAPTOP
-baseDir <- here("data")
-
-figDir <- here("paper", "figures")
-
 # HOME LAPTOP
+baseDir <- 'C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/04_Projects/01_Active/FASD_FetalASDRisk/data'
+
+figDir <- "C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/04_Projects/01_Active/FASD_FetalASDRisk/paper/figures"
+
+#  WORK LAPTOP
 # baseDir <- here("data")
 
 # figDir <- here("paper", "figures")
