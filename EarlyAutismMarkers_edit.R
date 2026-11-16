@@ -1667,11 +1667,16 @@ writeNetworkTables <- function(name, fcGLM, fcIntxGLM) {
   out(fcIntxGLM, 'Intx_Wholebrain')
 }
 
-# Run one network: select its connections, fit the models, FDR-correct, print what survives, and write the tables
+# Run one network: select its connections, fit the models (cached), FDR-correct, print what survives, and write the tables
 runNetworkAnalysis <- function(name, spec) {
   bothROIMatch <- spec$match(connROIs$ROI1) & spec$match(connROIs$ROI2)
 
-  models <- fitNetworkModels(tdFC[,bothROIMatch], asdFC[,bothROIMatch], tdDemoFinal, asdDemoFinal)
+  # The fit is cached per network: it is recomputed only if this network's connections, the demographics or the model code change
+  tdNetwork <- tdFC[,bothROIMatch]
+  asdNetwork <- asdFC[,bothROIMatch]
+  models <- cached(paste0('network_', name),
+                   inputs = list(tdNetwork, asdNetwork, tdDemoFinal, asdDemoFinal, deparse(fitNetworkModels)),
+                   compute = function() fitNetworkModels(tdNetwork, asdNetwork, tdDemoFinal, asdDemoFinal))
   fcGLM <- addFDRfc(models$fcGLM)
   fcIntxGLM <- addFDRfc(models$fcIntxGLM)
 
