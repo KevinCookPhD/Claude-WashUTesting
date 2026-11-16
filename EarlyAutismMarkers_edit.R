@@ -1489,7 +1489,7 @@ roiFullNames <- c(ACG = 'Anterior Cingulate', IFGoperc = 'Inferior Operculum', I
                   ORBinf = 'Inferior Orbital', ORBmed = 'Medial Orbital', ORBmid = 'Middle Orbital', ORBsupb = 'Superior Orbital',
                   PreCG = 'Precentral', REC = 'Rectus', SFGdor = 'Superior Frontal (Dorsal)', SFGmed = 'Superior Frontal (Medial)',
                   SMA = 'Supplemental Motor',
-                  INS = 'Insula', IPL = 'Intraparietal Lobule', MCG = 'Middle Cingulate', PCG = 'Paracentral Lobule',
+                  INS = 'Insula', IPL = 'Inferior Parietal Lobule', MCG = 'Middle Cingulate', PCG = 'Posterior Cingulate',
                   PCL = 'Paracentral Lobule', PCUN = 'Precuneus', PoCG = 'Postcentral', SMG = 'Supramarginal',
                   SPG = 'Superior Parietal', HES = "Heschl's",
                   FFG = 'Fusiform', ITG = 'Inferior Temporal', MTG = 'Middle Temporal', STG = 'Superior Temporal',
