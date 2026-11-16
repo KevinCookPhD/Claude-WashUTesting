@@ -71,6 +71,7 @@ glassRenderer <- 'rgl'
 glassPixels <- 1000                       # rgl: size of each view in pixels (square)
 glassMeshColor <- 'grey88'                # rgl: brain surface color
 glassMeshAlpha <- .28                     # rgl: brain surface opacity (0-1)
+glassEdgesOnTop <- TRUE                    # rgl: TRUE draws the edges solid over the brain surface (not veiled by it); FALSE lets the glass veil them
 glassEdgeColors <- c(low = '#6C9BE3', high = '#E57373')     # rgl: edge colors (Low > High Risk, High > Low Risk)
 glassNodeRadius <- c(network = 2.6, whole = 1.4)            # rgl: node radius (mm) for the network and whole-brain figures
 glassTubeRadius <- c(network = .85, whole = .45)            # rgl: edge tube radius (mm)
@@ -566,29 +567,48 @@ glassBrainRgl <- function(view, nodes, edges = NULL, size = 'network') {
   rgl::clear3d('lights')
   rgl::light3d(theta = 0, phi = 0, viewpoint.rel = TRUE, ambient = '#808080', diffuse = '#E0E0E0', specular = '#000000')
   xyz <- as.matrix(roiCoordinates)
-  if (!is.null(edges) && nrow(edges) > 0) {
-    for (k in seq_len(nrow(edges))) {
-      rgl::shade3d(rgl::cylinder3d(rbind(xyz[edges$a[k], ], xyz[edges$b[k], ]), radius = glassTubeRadius[[size]], sides = 16),
-                   color = glassEdgeColors[[edges$dir[k]]], alpha = 1, specular = 'black')
-    }
-  }
-  rgl::spheres3d(xyz[nodes$id, , drop = FALSE], radius = glassNodeRadius[[size]], color = nodes$fill, specular = 'black', shininess = 1)
-  rgl::shade3d(glassMesh3d, color = glassMeshColor, alpha = glassMeshAlpha, specular = 'black', shininess = 1, override = FALSE)
   R <- rgl::rotationMatrix
   userMatrix <- switch(view,
                        axial = if (glassAxialPosteriorAtTop) R(pi, 1, 0, 0) else R(0, 1, 0, 0),
                        posterior = R(-pi / 2, 1, 0, 0),
                        lateral = R(pi / 2, 0, 1, 0) %*% R(-pi / 2, 1, 0, 0))
-  rgl::par3d(userMatrix = userMatrix, zoom = .75)
-  file <- tempfile(fileext = '.png')
-  rgl::snapshot3d(file, webshot = FALSE)
-  img <- png::readPNG(file)
-  unlink(file)
-  used <- which(apply(img[, , 1:3, drop = FALSE] < .98, c(1, 2), any), arr.ind = TRUE)      # trim the white margin
+  hasEdges <- !is.null(edges) && nrow(edges) > 0
+  # Draw the scene and return it as an image array; each piece can be left out
+  snap <- function(withMesh, withNodes, withEdges) {
+    rgl::clear3d('shapes')
+    if (withEdges && hasEdges) {
+      for (k in seq_len(nrow(edges))) {
+        rgl::shade3d(rgl::cylinder3d(rbind(xyz[edges$a[k], ], xyz[edges$b[k], ]), radius = glassTubeRadius[[size]], sides = 16),
+                     color = glassEdgeColors[[edges$dir[k]]], alpha = 1, specular = 'black')
+      }
+    }
+    if (withNodes) {
+      rgl::spheres3d(xyz[nodes$id, , drop = FALSE], radius = glassNodeRadius[[size]], color = nodes$fill, specular = 'black', shininess = 1)
+    }
+    # The surface is always in the scene (invisible when left out) so every picture has the same framing
+    rgl::shade3d(glassMesh3d, color = glassMeshColor, alpha = ifelse(withMesh, glassMeshAlpha, 0), specular = 'black', shininess = 1, override = FALSE)
+    rgl::par3d(userMatrix = userMatrix, zoom = .75)
+    file <- tempfile(fileext = '.png')
+    rgl::snapshot3d(file, webshot = FALSE)
+    on.exit(unlink(file))
+    png::readPNG(file)[, , 1:3, drop = FALSE]
+  }
+  img <- snap(TRUE, TRUE, TRUE)
+  if (glassEdgesOnTop && hasEdges) {
+    # Edges are drawn over the brain surface so the surface does not veil them. Pixels where only an edge is visible (no node
+    # in front of it) are taken from a picture of the edges alone; everything else stays as drawn with the glass.
+    edgesOnly <- snap(FALSE, FALSE, TRUE)
+    edgesAndNodes <- snap(FALSE, TRUE, TRUE)
+    isEdge <- apply(edgesOnly < .98, c(1, 2), any)
+    noNodeInFront <- apply(abs(edgesAndNodes - edgesOnly) < .01, c(1, 2), all)
+    take <- isEdge & noNodeInFront
+    for (channel in 1:3) { layer <- img[, , channel]; layer[take] <- edgesOnly[, , channel][take]; img[, , channel] <- layer }
+  }
+  used <- which(apply(img < .98, c(1, 2), any), arr.ind = TRUE)      # trim the white margin
   pad <- 10
   rows <- max(1, min(used[, 1]) - pad):min(dim(img)[1], max(used[, 1]) + pad)
   cols <- max(1, min(used[, 2]) - pad):min(dim(img)[2], max(used[, 2]) + pad)
-  img <- img[rows, cols, 1:3, drop = FALSE]
+  img <- img[rows, cols, , drop = FALSE]
   ggplot() +
     annotation_raster(as.raster(img), xmin = 0, xmax = ncol(img), ymin = 0, ymax = nrow(img), interpolate = TRUE) +
     xlim(0, ncol(img)) + ylim(0, nrow(img)) + coord_fixed(expand = FALSE) + theme_void()
