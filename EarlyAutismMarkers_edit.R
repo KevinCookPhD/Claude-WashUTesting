@@ -502,10 +502,16 @@ tissueData <- subset(tissueData, select = -c(longID))
 
 
 # Analyze trajectories across tissue ROI
-tissueModels <- runRoiModels(colnames(tissueData),
-                             function(i) prepVolumeAnalysis(tissueData[,i, drop=FALSE], fetalMatched, tissueDataRaw,
-                                                            excludeIDs=c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')),
-                             rawVar='Volume', normVar='VolNormed')
+tissueExclude <- c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')
+
+# The fits are cached: recomputed only if the data, the exclusions or the model code change (or rerun is TRUE)
+tissueModels <- cached('structural_tissue_models',
+                       inputs = list(tissueData, tissueDataRaw, fetalMatched, tissueExclude,
+                                     deparse(prepVolumeAnalysis), deparse(fitRoiModels), deparse(runRoiModels)),
+                       compute = function() runRoiModels(colnames(tissueData),
+                                                         function(i) prepVolumeAnalysis(tissueData[,i, drop=FALSE], fetalMatched, tissueDataRaw,
+                                                                                        excludeIDs=tissueExclude),
+                                                         rawVar='Volume', normVar='VolNormed'))
 
 glmTissueVolTable <- tissueModels$Raw
 glmTissueVolTable.Itx <- tissueModels$RawItx
@@ -582,10 +588,15 @@ if(IncludeCerebellarParcellation){
 
 # Analyze trajectories across regional ROI
 # NOTE: this analysis excludes two participants; the tissue analysis excludes three (fetus_02178_01 is kept here)
-regionalModels <- runRoiModels(colnames(regionalData),
-                               function(i) prepVolumeAnalysis(regionalData[,i, drop=FALSE], fetalMatched, regionalDataRaw,
-                                                              excludeIDs=c('rescue_0175_01', 'rescue_0184_01'), dropInf=TRUE),
-                               rawVar='Volume', normVar='VolNormed')
+regionalExclude <- c('rescue_0175_01', 'rescue_0184_01')
+
+regionalModels <- cached('structural_regional_models',
+                         inputs = list(regionalData, regionalDataRaw, fetalMatched, regionalExclude,
+                                       deparse(prepVolumeAnalysis), deparse(fitRoiModels), deparse(runRoiModels)),
+                         compute = function() runRoiModels(colnames(regionalData),
+                                                           function(i) prepVolumeAnalysis(regionalData[,i, drop=FALSE], fetalMatched, regionalDataRaw,
+                                                                                          excludeIDs=regionalExclude, dropInf=TRUE),
+                                                           rawVar='Volume', normVar='VolNormed'))
 
 glmRegionalVolTable <- regionalModels$Raw
 glmRegionalVolTable.Itx <- regionalModels$RawItx
@@ -796,7 +807,9 @@ prepCTAnalysis <- function(i) {
   tempAnalyses
 }
 
-ctModels <- runRoiModels(colnames(ctData)[1:(ncol(ctData)-1)], prepCTAnalysis, rawVar='CT', normVar='CTNormed')
+ctModels <- cached('structural_ct_models',
+                   inputs = list(ctData, fetalMatched, deparse(prepCTAnalysis), deparse(fitRoiModels), deparse(runRoiModels)),
+                   compute = function() runRoiModels(colnames(ctData)[1:(ncol(ctData)-1)], prepCTAnalysis, rawVar='CT', normVar='CTNormed'))
 
 glmCTTable <- ctModels$Raw
 glmCTTable.Itx <- ctModels$RawItx
