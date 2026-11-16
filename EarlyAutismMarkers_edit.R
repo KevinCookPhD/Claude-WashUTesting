@@ -14,7 +14,6 @@ figDir <- "C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing
 
 # figDir <- file.path(getwd(), "paper", "figures")
 
-knitr::opts_knit$set(root.dir = normalizePath(baseDir))
 library(ggplot2)
 library(ggpubr)
 # library(lmerTest)
