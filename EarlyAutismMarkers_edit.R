@@ -1417,38 +1417,51 @@ gapSizes <- c(rep(2:2, 9), #L Frontal
               13) 
 
 
-drawASDChord <- function() {
+# circlize lays out all 40,000 region pairs, which takes minutes, but only the significant links are visible; the rest
+# are transparent and only take up space. Within a pair of regions, a run of consecutive transparent links takes up
+# exactly the same space as one transparent link of their combined value, so each run is merged into one link.
+# This gives the identical picture from about 6,000 links instead of 40,000.
+compressChordLinks <- function(links, colorCol, valueCol, invisibleColor = '#00000000') {
+  n <- nrow(links)
+  pair <- paste(links$ToAbbrev, links$FromAbbrev)
+  ord <- order(factor(pair), seq_len(n))              # group rows by region pair, keeping original order within a pair
+  samePair <- pair[ord]
+  hidden <- links[[colorCol]][ord] == invisibleColor
+  newRun <- c(TRUE, samePair[-1] != samePair[-n] | !hidden[-1] | !hidden[-n])   # visible links stay on their own
+  runId <- cumsum(newRun)
+  firstRow <- ord[newRun]                              # first original row of every run
+  out <- links[firstRow, , drop = FALSE]
+  out[[valueCol]] <- as.vector(rowsum(links[[valueCol]][ord], runId))
+  out[order(firstRow), , drop = FALSE]                 # back to the original row order
+}
+
+chordASDLinks <- compressChordLinks(chordDiagram.Base, 'ASDCol', 'ASDConn')
+chordTDLinks <- compressChordLinks(chordDiagram.Base, 'TDCol', 'TDConn')
+
+# Draw a chord diagram from compressed links. connCol = column with the link values, colorCol = column with the link colors.
+# Transparent links are not drawn (link.visible), which leaves the layout unchanged but is much faster.
+drawChord <- function(links, connCol, colorCol) {
+  chordArgs <- list(links[,c('ToAbbrev','FromAbbrev',connCol)],
+                    order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
+                    col=links[[colorCol]], symmetric = TRUE, scale=TRUE,
+                    link.border=links[[colorCol]], link.lwd=3,
+                    annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
+  if ('link.visible' %in% names(formals(circlize::chordDiagram))) {
+    chordArgs$link.visible <- links[[colorCol]] != '#00000000'
+  }
+
   circos.clear()
   circos.par(start.degree=81, gap.after=gapSizes)
-  chordDiagram(chordDiagram.Base[,c('ToAbbrev','FromAbbrev','ASDConn')],
-               order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
-               col=chordDiagram.Base$ASDCol, symmetric = TRUE, scale=TRUE, 
-               link.border=chordDiagram.Base$ASDCol, link.lwd=3,
-               annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
+  do.call(chordDiagram, chordArgs)
   circos.track(track.index = 1, panel.fun = function(x, y) {
-    circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
+    circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
                 facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
   }, bg.border = NA) # here set bg.border to NA is important
 }
 
-showBaseFigure('wholebrain_chord_ASD', width = 8, height = 8, drawFun = drawASDChord)
+showBaseFigure('wholebrain_chord_ASD', width = 8, height = 8, drawFun = function() drawChord(chordASDLinks, 'ASDConn', 'ASDCol'))
 
-
-drawTDChord <- function() {
-  circos.clear()
-  circos.par(start.degree=81, gap.after=gapSizes)
-  chordDiagram(chordDiagram.Base[,c('ToAbbrev','FromAbbrev','TDConn')],
-               order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
-               col=chordDiagram.Base$TDCol, symmetric = TRUE, scale=TRUE, 
-               link.border=chordDiagram.Base$TDCol, link.lwd=3,
-               annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
-  circos.track(track.index = 1, panel.fun = function(x, y) {
-    circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
-                facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
-  }, bg.border = NA) # here set bg.border to NA is important
-}
-
-showBaseFigure('wholebrain_chord_TD', width = 8, height = 8, drawFun = drawTDChord)
+showBaseFigure('wholebrain_chord_TD', width = 8, height = 8, drawFun = function() drawChord(chordTDLinks, 'TDConn', 'TDCol'))
 
 
 asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$TFromAbbrev)
