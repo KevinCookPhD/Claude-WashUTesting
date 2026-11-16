@@ -19,7 +19,58 @@ library(emmeans)
 
 
 
+## Figure Output Settings ----
+
+# Set saveFigures to TRUE to write every figure to figDir (existing files with the same name are overwritten).
+saveFigures <- FALSE
+
+# File types to save, in this order. Choose any of: 'tiff', 'pdf', 'svg', 'eps'
+figureFileTypes <- c('tiff', 'pdf', 'svg', 'eps')
+
+# Every ggplot figure is also kept here by name (e.g. figures[['regional_group_p05']]) so it can be re-shown or re-saved
+figures <- list()
+
+
 ## Helper Functions ----
+
+# Save a figure to figDir in each of figureFileTypes (only if saveFigures is TRUE).
+# drawFun is a function with no arguments that draws the figure on the current device.
+# eps files are written with cairo_ps so semi-transparent colors are kept.
+saveFigure <- function(name, width, height, drawFun) {
+  if (!saveFigures) { return(invisible(NULL)) }
+
+  badTypes <- setdiff(figureFileTypes, c('tiff', 'pdf', 'svg', 'eps'))
+  if (length(badTypes) > 0) { stop('Unknown figure file type(s): ', paste(badTypes, collapse=', '), ". Use 'tiff', 'pdf', 'svg', 'eps'.") }
+
+  dir.create(figDir, showWarnings = FALSE, recursive = TRUE)
+  for (type in figureFileTypes) {
+    file <- file.path(figDir, paste0(name, '.', type))
+    switch(type,
+           tiff = tiff(file, width = width, height = height, units = 'in', res = 600, compression = 'lzw'),
+           pdf  = pdf(file, width = width, height = height),
+           svg  = svg(file, width = width, height = height),
+           eps  = cairo_ps(file, width = width, height = height, onefile = FALSE, fallback_resolution = 600))
+    tryCatch(drawFun(), finally = dev.off())
+  }
+  invisible(NULL)
+}
+
+# Show a ggplot/ggarrange figure, keep it in figures[[name]], and save it. Does nothing for a NULL figure.
+showFigure <- function(plotObj, name, width, height) {
+  if (is.null(plotObj)) { return(invisible(NULL)) }
+  figures[[name]] <<- plotObj
+  print(plotObj)
+  saveFigure(name, width, height, function() print(plotObj))
+  invisible(plotObj)
+}
+
+# Same for a base-graphics figure (e.g. circlize chord diagram): drawFun draws it.
+showBaseFigure <- function(name, width, height, drawFun) {
+  drawFun()
+  saveFigure(name, width, height, drawFun)
+  invisible(NULL)
+}
+
 
 # Build the participant ID used in the imaging file names from a study_id and its study.
 # Vectorized: pass the study_id and study columns of a data frame.
@@ -644,24 +695,20 @@ names(groupROIs) <- names(intxROIs) <- paste0('p', figureThresholds)
 
 ## Group main effect figures
 
-#tiff(paste0(figDir,'/regionalVolumePlot_Group_p05.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
-regionalFigure(groupROIs[[1]], plotRoiGroup, paste('Group effect, p.adj <', figureThresholds[1]))
-#dev.off()
-
-#tiff(paste0(figDir,'/regionalVolumePlot_Group_p10.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
-regionalFigure(groupROIs[[2]], plotRoiGroup, paste('Group effect, p.adj <', figureThresholds[2]))
-#dev.off()
+for (k in seq_along(figureThresholds)) {
+  thrTag <- paste0('p', sprintf('%02d', round(figureThresholds[k]*100)))
+  showFigure(regionalFigure(groupROIs[[k]], plotRoiGroup, paste('Group effect, p.adj <', figureThresholds[k])),
+             paste0('regional_group_', thrTag), width = 14, height = 7)
+}
 
 
 ## Interaction figures
 
-#tiff(paste0(figDir,'/regionalVolumePlot_Interactions_p05.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
-regionalFigure(intxROIs[[1]], plotRoiInteraction, paste('Interaction, p.adj <', figureThresholds[1]))
-#dev.off()
-
-#tiff(paste0(figDir,'/regionalVolumePlot_Interactions_p10.tiff'), height=7, width=14, units='in', res=600, compression='lzw')
-regionalFigure(intxROIs[[2]], plotRoiInteraction, paste('Interaction, p.adj <', figureThresholds[2]))
-#dev.off()
+for (k in seq_along(figureThresholds)) {
+  thrTag <- paste0('p', sprintf('%02d', round(figureThresholds[k]*100)))
+  showFigure(regionalFigure(intxROIs[[k]], plotRoiInteraction, paste('Interaction, p.adj <', figureThresholds[k])),
+             paste0('regional_intx_', thrTag), width = 14, height = 7)
+}
 
 
 
@@ -1261,38 +1308,38 @@ gapSizes <- c(rep(2:2, 9), #L Frontal
               13) 
 
 
-# tiff(paste0(figDir,'/chordPlot_ASD_newColors.tiff'), units = 'in', height = 8, width = 8, res=600, compression = 'lzw')
+drawASDChord <- function() {
+  circos.clear()
+  circos.par(start.degree=81, gap.after=gapSizes)
+  chordDiagram(chordDiagram.Base[,c('ToAbbrev','FromAbbrev','ASDConn')],
+               order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
+               col=chordDiagram.Base$ASDCol, symmetric = TRUE, scale=TRUE, 
+               link.border=chordDiagram.Base$ASDCol, link.lwd=3,
+               annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
+  circos.track(track.index = 1, panel.fun = function(x, y) {
+    circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
+                facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
+  }, bg.border = NA) # here set bg.border to NA is important
+}
 
-circos.clear()
-circos.par(start.degree=81, gap.after=gapSizes)
-chordDiagram(chordDiagram.Base[,c('ToAbbrev','FromAbbrev','ASDConn')],
-             order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
-             col=chordDiagram.Base$ASDCol, symmetric = TRUE, scale=TRUE, 
-             link.border=chordDiagram.Base$ASDCol, link.lwd=3,
-             annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
-circos.track(track.index = 1, panel.fun = function(x, y) {
-  circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
-              facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
-}, bg.border = NA) # here set bg.border to NA is important
-
-# dev.off()
+showBaseFigure('wholebrain_chord_ASD', width = 8, height = 8, drawFun = drawASDChord)
 
 
-# tiff(paste0(figDir,'/chordPlot_TD_newColors.tiff'), units = 'in', height = 8, width = 8, res=600, compression = 'lzw')
+drawTDChord <- function() {
+  circos.clear()
+  circos.par(start.degree=81, gap.after=gapSizes)
+  chordDiagram(chordDiagram.Base[,c('ToAbbrev','FromAbbrev','TDConn')],
+               order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
+               col=chordDiagram.Base$TDCol, symmetric = TRUE, scale=TRUE, 
+               link.border=chordDiagram.Base$TDCol, link.lwd=3,
+               annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
+  circos.track(track.index = 1, panel.fun = function(x, y) {
+    circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
+                facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
+  }, bg.border = NA) # here set bg.border to NA is important
+}
 
-circos.clear()
-circos.par(start.degree=81, gap.after=gapSizes)
-chordDiagram(chordDiagram.Base[,c('ToAbbrev','FromAbbrev','TDConn')],
-             order = ROIOrder, grid.col=ROIColor, grid.border = '#000000',
-             col=chordDiagram.Base$TDCol, symmetric = TRUE, scale=TRUE, 
-             link.border=chordDiagram.Base$TDCol, link.lwd=3,
-             annotationTrack = c("grid"), annotationTrackHeight = c(0.03, 0.03))
-circos.track(track.index = 1, panel.fun = function(x, y) {
-  circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
-              facing = "clockwise", niceFacing = TRUE, adj = c(-.25, .5))
-}, bg.border = NA) # here set bg.border to NA is important
-
-# dev.off()
+showBaseFigure('wholebrain_chord_TD', width = 8, height = 8, drawFun = drawTDChord)
 
 
 asdConnections <- c(chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$ToAbbrev, chordDiagram.Base[chordDiagram.Base$ASDCol == '#a60000aa',]$TFromAbbrev)
@@ -1373,8 +1420,7 @@ colnames(tdConnPlot) <- c('Row','Col','Num')
 tdConnPlot$Row <- factor(tdConnPlot$Row, levels=lobeNames)
 tdConnPlot$Col <- factor(tdConnPlot$Col, levels=rev(lobeNames))
 
-# tiff(paste0(figDir,'/tdWholeBrainTableFig.tiff'), width=8.95, height=8, units='in', res=600, compression='lzw')
-ggplot(tdConnPlot, aes(x=Row, y=Col)) +
+wholebrain_lobeHeatmap_TD <- ggplot(tdConnPlot, aes(x=Row, y=Col)) +
   scale_fill_gradient(low='#ffffff', high='#0050bf') +
   geom_tile(aes(fill=Num), color='#000000') +
   geom_text(aes(label=Num), color='#000000')  +
@@ -1391,7 +1437,7 @@ ggplot(tdConnPlot, aes(x=Row, y=Col)) +
         legend.position = 'Right',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
-# dev.off()
+showFigure(wholebrain_lobeHeatmap_TD, 'wholebrain_lobeHeatmap_TD', width = 8.95, height = 8)
 
 
 meltASDConn <- allConnDescSig.ASD
@@ -1402,8 +1448,7 @@ colnames(asdConnPlot) <- c('Row','Col','Num')
 asdConnPlot$Row <- factor(asdConnPlot$Row, levels=lobeNames)
 asdConnPlot$Col <- factor(asdConnPlot$Col, levels=rev(lobeNames))
 
-# tiff(paste0(figDir,'/asdWholeBrainTableFig.tiff'), width=8.95, height=8, units='in', res=600, compression='lzw')
-ggplot(asdConnPlot, aes(x=Row, y=Col)) +
+wholebrain_lobeHeatmap_ASD <- ggplot(asdConnPlot, aes(x=Row, y=Col)) +
   scale_fill_gradient(limits=c(0,25), low='#ffffff', high='#a60000') +
   geom_tile(aes(fill=Num), color='#000000') +
   geom_text(aes(label=Num), color='#000000')  +
@@ -1420,7 +1465,7 @@ ggplot(asdConnPlot, aes(x=Row, y=Col)) +
         legend.position = 'Right',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
-# dev.off()
+showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 8.95, height = 8)
 
 
 ## 3c. Smaller Network Approach ----
@@ -1576,7 +1621,7 @@ limit001 <- nrow(subset(fcGLM, Grp.p <.001))
 limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
 
 
-ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+network_CRB_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
   scale_y_continuous(limits=c(0,1.2), breaks=seq(0,2,.2), expand=c(0,0)) +
   scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
   scale_color_manual(values=c('#bb0000','#0000bb')) +
@@ -1598,6 +1643,8 @@ ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)
         legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
+
+showFigure(network_CRB_bars, 'network_CRB_bars', width = 10, height = 6)
 
 
 ### Limbic ----
@@ -1722,7 +1769,7 @@ limit01 <- nrow(subset(fcGLM, Grp.p <.01))
 limit001 <- nrow(subset(fcGLM, Grp.p <.001))
 limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
 
-ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+network_Limbic_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
   scale_y_continuous(limits=c(-.4,1.4), breaks=seq(-2,2,.2), expand=c(0,0)) +
   scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
   scale_color_manual(values=c('#bb0000','#0000bb')) +
@@ -1743,6 +1790,8 @@ ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)
         legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
+
+showFigure(network_Limbic_bars, 'network_Limbic_bars', width = 10, height = 6)
 
 
 ### Default Mode ----
@@ -1867,7 +1916,7 @@ limit01 <- nrow(subset(fcGLM, Grp.p <.01))
 limit001 <- nrow(subset(fcGLM, Grp.p <.001))
 limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
 
-ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+network_DMN_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
   scale_y_continuous(limits=c(-.6,1), breaks=seq(-2,2,.2), expand=c(0,0)) +
   scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
   scale_color_manual(values=c('#bb0000','#0000bb')) +
@@ -1888,6 +1937,8 @@ ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)
         legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
+
+showFigure(network_DMN_bars, 'network_DMN_bars', width = 10, height = 6)
 
 
 ### Somatomotor ----
@@ -1998,7 +2049,7 @@ limit01 <- nrow(subset(fcGLM, Grp.p <.01))
 limit001 <- nrow(subset(fcGLM, Grp.p <.001))
 limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
 
-ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+network_SomMot_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
   scale_y_continuous(limits=c(-.3,1.1), breaks=seq(-2,2,.2), expand=c(0,0)) +
   scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
   scale_color_manual(values=c('#bb0000','#0000bb')) +
@@ -2019,6 +2070,8 @@ ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)
         legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
+
+showFigure(network_SomMot_bars, 'network_SomMot_bars', width = 10, height = 6)
 
 
 ### Subcortical ----
@@ -2138,7 +2191,7 @@ limit01 <- nrow(subset(fcGLM, Grp.p <.01))
 limit001 <- nrow(subset(fcGLM, Grp.p <.001))
 limitfdr <- nrow(subset(fcGLM, Grp.p.adjust <.05))
 
-ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+network_SubCort_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
   scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
   scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
   scale_color_manual(values=c('#bb0000','#0000bb')) +
@@ -2159,6 +2212,8 @@ ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)
         legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
+
+showFigure(network_SubCort_bars, 'network_SubCort_bars', width = 10, height = 6)
 
 
 ### Auditory ----
@@ -2270,7 +2325,7 @@ write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(bas
 write.table(fcIntxGLM, paste0(baseDir,'/functional/output/Auditory_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
 
 
-ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+network_Auditory_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
   #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
   scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
   scale_color_manual(values=c('#bb0000','#0000bb')) +
@@ -2291,6 +2346,8 @@ ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)
         legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
+
+showFigure(network_Auditory_bars, 'network_Auditory_bars', width = 10, height = 6)
 
 
 ### Visual ----
@@ -2402,7 +2459,7 @@ write.table(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), paste0(bas
 write.table(fcIntxGLM, paste0(baseDir,'/functional/output/Visual_Intx_Wholebrain.csv'), col.names=T, row.names=F, sep=',')
 
 
-ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+network_Visual_bars <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
   #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
   scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
   scale_color_manual(values=c('#bb0000','#0000bb')) +
@@ -2423,6 +2480,8 @@ ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)
         legend.position = 'none',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
+
+showFigure(network_Visual_bars, 'network_Visual_bars', width = 10, height = 6)
 
 
 #### Network Connectivity Figures ----
@@ -2502,7 +2561,7 @@ plotFrame$SE <- as.numeric(plotFrame$SE)
 ##plot ggeffects maybe ggprdict?
 ##need marginal means? -- emmeans? Give the SE from the model itself
 
-ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
+network_combined_bars_p10 <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
   #scale_y_continuous(limits=c(-.2,1.2), breaks=seq(-2,2,.2), expand=c(0,0)) +
   scale_fill_manual(values=c('#d88080cc','#8cb0e3cc')) +
   scale_color_manual(values=c('#bb0000','#0000bb')) +
@@ -2525,6 +2584,8 @@ ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
         legend.position = 'right',
         legend.text = element_text(color = 'black', size = 12),
         legend.title=element_blank())
+
+showFigure(network_combined_bars_p10, 'network_combined_bars_p10', width = 10, height = 6)
 
 
 
