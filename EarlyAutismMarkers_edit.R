@@ -52,8 +52,9 @@ chordLinkBorderWidth <- 3
 ## Glass Brain Settings ----
 
 # Files for the glass brain figures (the region coordinates and the brain surface are in the same fetal atlas space)
-roiCoordinateFile <- file.path(baseDir, 'functional', 'nodeTable.node')            # one row per region; the first three columns are x y z
-brainMeshFile <- file.path(baseDir, 'anatomical', 'Segmentation_inner_cortex.mz3')  # brain surface mesh
+glassBrainDir <- file.path(baseDir, 'functional', 'output', 'brainNet')
+roiCoordinateFile <- file.path(glassBrainDir, 'nodeTable.node')                    # one row per region; the first three columns are x y z
+brainMeshFile <- file.path(glassBrainDir, 'Segmentation_inner_cortex.mz3')         # brain surface mesh
 
 # The coordinates and mesh are in AFNI orientation (x: positive = left, y: positive = posterior). TRUE converts them to the
 # standard orientation (x: right, y: anterior, z: superior) before drawing.
