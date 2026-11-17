@@ -94,14 +94,14 @@ networkPalettes <- list(
   tableau = c(CRB = '#F28E2B', Limbic = '#59A14F', SubCort = '#B07AA1', DMN = '#9C755F'),
   earth   = c(CRB = '#C9A227', Limbic = '#4C8C4A', SubCort = '#8C5A9E', DMN = '#8B5A2B'),
   current = c(CRB = '#F2B134', Limbic = '#14C28D', SubCort = '#1A8BB5', DMN = '#E8305E'))
-networkPaletteName <- 'dark2'
+networkPaletteName <- 'okabe'
 networkNodeColors <- networkPalettes[[networkPaletteName]]
 
 # The Tier 2 figure shows the connections with an FDR-adjusted p below this (.05 = significant only)
 tier2FigureThreshold <- .05
 
 # Also save the Tier 2 figure in each of these palettes (names from networkPalettes), to compare colors; character(0) for none
-tier2PaletteOptions <- c('dark2', 'okabe', 'tableau')
+tier2PaletteOptions <- character(0)
 
 networkNodeLabels <- c(CRB = 'Cerebellar', Limbic = 'Limbic', SubCort = 'Subcortical', DMN = 'Default Mode')
 
