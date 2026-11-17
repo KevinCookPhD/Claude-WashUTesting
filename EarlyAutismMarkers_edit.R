@@ -1698,9 +1698,9 @@ barsFor <- function(fits, xAngle = 0, legendTop = NULL) {      # legendTop = y v
 # facet_grid splits the plot into two panels that share the y axis (free_x lets each panel have its own bars, space = 'free_x' makes the panel
 # widths proportional to the number of bars).
 tier1Columns <- c('label', 'LowRisk.Mean', 'LowRisk.SE', 'HighRisk.Mean', 'HighRisk.SE', 'Grp.p.adjust')
-tier1Combined <- rbind(data.frame(family = 'Within networks', tier1Within$fits[, tier1Columns], stringsAsFactors = FALSE),
-                       data.frame(family = 'Between networks', tier1Between$fits[, tier1Columns], stringsAsFactors = FALSE))
-tier1Combined$family <- factor(tier1Combined$family, levels = c('Within networks', 'Between networks'))
+tier1Combined <- rbind(data.frame(family = 'Within Networks', tier1Within$fits[, tier1Columns], stringsAsFactors = FALSE),
+                       data.frame(family = 'Between Networks', tier1Between$fits[, tier1Columns], stringsAsFactors = FALSE))
+tier1Combined$family <- factor(tier1Combined$family, levels = c('Within Networks', 'Between Networks'))
 tier1_bars <- barsFor(tier1Combined, xAngle = 40, legendTop = .65) +      # legend box top lines up with y = 0.65
   ggplot2::facet_grid(~family, scales = 'free_x', space = 'free_x') +
   ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(color = 'black', size = 18))
