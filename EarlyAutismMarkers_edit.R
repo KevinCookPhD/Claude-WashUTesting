@@ -1865,8 +1865,7 @@ tier2Figure <- function(palette = networkNodeColors) {
     annotate('rect', xmin = .08, xmax = .19, ymin = .31 - .042, ymax = .31 + .042, fill = groupBarFill[['low']], colour = '#000000', linewidth = .8) +
     annotate('text', x = .24, y = .31, label = 'Low Risk', hjust = 0, size = 4.2) +
     annotate('rect', xmin = .08, xmax = .19, ymin = .20 - .042, ymax = .20 + .042, fill = groupBarFill[['high']], colour = '#000000', linewidth = .8) +
-    annotate('text', x = .24, y = .20, label = 'High Risk', hjust = 0, size = 4.2) +
-    annotate('text', x = .08, y = .09, label = paste0('All connections FDR p < ', sub('^0', '', format(tier2FigureThreshold))), hjust = 0, size = 3.1, colour = '#444444')
+    annotate('text', x = .24, y = .20, label = 'High Risk', hjust = 0, size = 4.2)
   top <- ggpubr::ggarrange(brains[[1]], brains[[2]], brains[[3]], legendPanel, nrow = 1, ncol = 4, widths = c(1, 1, 1, .85))
 
   # Bars: all connections in one row, grouped by network
@@ -1900,7 +1899,7 @@ tier2Figure <- function(palette = networkNodeColors) {
     scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
     labs(x = NULL, y = 'Connectivity Strength') +
     themeRegionalFigure(showXTitle = FALSE) +
-    theme(axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = .5), strip.text = element_blank(), strip.background = element_blank(),
+    theme(axis.text.x = element_text(size = 10, angle = 30, hjust = 1, vjust = 1), strip.text = element_blank(), strip.background = element_blank(),
           panel.spacing = unit(.35, 'lines'))
 
   ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.15), labels = c('A', 'B'))
