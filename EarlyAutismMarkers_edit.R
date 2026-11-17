@@ -1290,13 +1290,12 @@ shortRegionName <- function(roi) {
   name <- sub('\\(Left\\)', '(L)', name); sub('\\(Right\\)', '(R)', name)
 }
 
-plotRoiCombined <- function(roi) {
-  tempAnalyses <- prepRegionalFigureData(roi)
+plotRoiCombined <- function(roi, tempAnalyses, yLimits) {
   tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
-  axisInfo <- roiAxis(roi, 'intx', max(tempAnalyses$VolNormed, na.rm=TRUE))
+  yBreaks <- pretty(yLimits, n = 5); yBreaks <- yBreaks[yBreaks >= yLimits[1] & yBreaks <= yLimits[2]]
 
   ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-    scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
+    scale_y_continuous(limits=yLimits, breaks=yBreaks, labels=fixedDecimalLabels, expand=c(0,0)) +
     scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
     scale_shape_manual(values=c(23,21)) +
     scale_fill_manual(values=c(groupPointFill[['low']], groupPointFill[['high']])) +
@@ -1330,7 +1329,17 @@ combinedTable <- combinedTable[order(match(combinedTable$ROI, combinedOrder), co
 message('Combined regional figure: ', nrow(combinedTable), ' region(s) with a group or interaction effect at FDR p < ', combinedFigureThreshold)
 if (nrow(combinedTable) > 0) {
   saveTable(combinedTable[, c('ROI', 'Grp.p.Adj', 'Itx.p.Adj')], 'regional_combined_regions')
-  combinedPlots <- lapply(combinedTable$ROI, plotRoiCombined)
+  # y axes fit the data (they do not start at 0), and the left and right side of the same region share one axis
+  combinedData <- setNames(lapply(combinedTable$ROI, prepRegionalFigureData), combinedTable$ROI)
+  combinedRegionKey <- sub('_[LR]$', '', combinedTable$ROI)
+  combinedLimits <- lapply(combinedTable$ROI, function(roi) {
+    sameRegion <- combinedTable$ROI[combinedRegionKey == sub('_[LR]$', '', roi)]
+    values <- unlist(lapply(combinedData[sameRegion], function(d) d$VolNormed))
+    values <- values[is.finite(values)]
+    padding <- .05 * diff(range(values))
+    range(values) + c(-padding, padding)
+  })
+  combinedPlots <- lapply(seq_along(combinedTable$ROI), function(i) plotRoiCombined(combinedTable$ROI[i], combinedData[[i]], combinedLimits[[i]]))
   nRows <- 2; nCols <- ceiling((length(combinedPlots) + 1) / nRows)      # two rows, with the legend in the last cell
   combinedSlots <- c(combinedPlots, rep(list(ggplot() + theme_void()), nCols * nRows - length(combinedPlots) - 1), list(combinedLegendPanel()))
   regional_combined <- ggpubr::ggarrange(plotlist = combinedSlots, nrow = nRows, ncol = nCols, legend = 'none')
