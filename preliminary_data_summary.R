@@ -70,7 +70,10 @@ cat("\n--- Redundancy check ---\n")
 cat("Duplicate scan keys within omnibus:", nrow(filter(count(omni2, across(all_of(keys))), n > 1)), "\n")
 cat("Duplicate scan keys within QA:     ", nrow(filter(count(qa2,   across(all_of(keys))), n > 1)), "\n")
 dup_qa <- qa2 %>% count(across(all_of(keys))) %>% filter(n > 1)
-if (nrow(dup_qa) > 0) { cat("QA scans listed more than once:\n"); print(dup_qa) }   # CHECK: true duplicates?
+if (nrow(dup_qa) > 0) {   # CHECK: true duplicates, or a re-scan that got the same scan number?
+  cat("QA scans listed more than once:\n"); print(dup_qa)
+  print(semi_join(qa2, dup_qa, by = keys) %>% arrange(across(all_of(keys))), width = Inf)
+}
 cat("Scans in both sheets:", nrow(inner_join(omni2, qa2, by = keys)), "\n")
 cat("Omnibus only:        ", nrow(anti_join(omni2, qa2, by = keys)), "\n")
 cat("QA only:             ", nrow(anti_join(qa2, omni2, by = keys)), "\n")
@@ -114,6 +117,9 @@ disagree <- inner_join(
   select(omni2, all_of(keys), scanPMA_omni = scanPMA), by = keys) %>%
   filter(abs(scanPMA_qa - scanPMA_omni) > 0.1)
 cat("Scans whose PMA differs between sheets:", nrow(disagree), "\n")
+if (nrow(disagree) > 0) {   # the QA value is the one used; this shows how big the corrections are
+  print(summary(abs(disagree$scanPMA_qa - disagree$scanPMA_omni)))
+}
 
 # ---- 5. Assign study cohorts -------------------------------------------------------
 # Looks for the study name in project, shortID, or FullID, ignoring case.
