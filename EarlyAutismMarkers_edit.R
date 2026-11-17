@@ -1274,10 +1274,15 @@ for (k in seq_along(figureThresholds)) {
 # name as the y-axis title. The adjusted p-values are saved in the regional_combined_regions table. Text sizes: 14 pt titles, 12 pt everything else.
 combinedFigureThreshold <- .10
 
+# Names used on the y axis for regions that are not in regionalFigureROIs (the column name with the underscores removed is looked up here)
+regionNameOverrides <- c('Thalamus HighIntensity' = 'Thalamus', 'Lentiform' = 'Pallidum')
+
 # Short region name for a y-axis title, e.g. 'Hippocampus (L)': drops 'Volume' and abbreviates the side
 shortRegionName <- function(roi) {
   spec <- regionalFigureROIs[regionalFigureROIs$roi == roi,]
-  name <- if (nrow(spec) == 1) sub(' Volume$', '', spec$label) else sub('^(.*) ([LR])$', '\\1 (\\2)', gsub('_', ' ', roi))
+  baseName <- gsub('_', ' ', sub('_[LR]$', '', roi)); side <- sub('^.*_([LR])$', '\\1', roi)
+  if (baseName %in% names(regionNameOverrides)) { baseName <- regionNameOverrides[[baseName]] }
+  name <- if (nrow(spec) == 1) sub(' Volume$', '', spec$label) else if (grepl('_[LR]$', roi)) paste0(baseName, ' (', side, ')') else baseName
   name <- sub('\\(Left\\)', '(L)', name); sub('\\(Right\\)', '(R)', name)
 }
 
