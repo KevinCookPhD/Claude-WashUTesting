@@ -74,6 +74,10 @@ if (nrow(dup_qa) > 0) {   # CHECK: true duplicates, or a re-scan that got the sa
   cat("QA scans listed more than once:\n"); print(dup_qa)
   print(semi_join(qa2, dup_qa, by = keys) %>% arrange(across(all_of(keys))), width = Inf)
 }
+# Drop the duplicate QA rows, keeping the first listed row for each scan
+n_qa <- nrow(qa2)
+qa2  <- distinct(qa2, across(all_of(keys)), .keep_all = TRUE)
+cat("Duplicate QA rows dropped:", n_qa - nrow(qa2), "\n")
 cat("Scans in both sheets:", nrow(inner_join(omni2, qa2, by = keys)), "\n")
 cat("Omnibus only:        ", nrow(anti_join(omni2, qa2, by = keys)), "\n")
 cat("QA only:             ", nrow(anti_join(qa2, omni2, by = keys)), "\n")
