@@ -344,6 +344,25 @@ fixedDecimalLabels <- function(breaks) {
   formatC(breaks, format = 'f', digits = digits)
 }
 
+# Shared figure theme. The group (bar) figures have no x-axis title.
+themeRegionalFigure <- function(showXTitle = TRUE) {
+  theme(axis.title.x = if (showXTitle) element_text(color = 'black', size = 16) else element_blank(),
+        axis.text.x = element_text(color = 'black', size = 12),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(color = 'black', size = 16),
+        axis.text.y = element_text(color = 'black', size = 12),
+        axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color='black', linewidth = 1),
+        axis.line.y = element_line(color='black', linewidth = 1),
+        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+        panel.grid.major.x =  element_blank(),
+        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
+        panel.background = element_rect(fill='white'),
+        legend.position = 'none',
+        legend.text = element_text(color = 'black', size = 12),
+        legend.title=element_blank())
+}
+
 # A boxed legend (Low Risk / High Risk) drawn as its own panel, like the key in the older hand-formatted figure.
 # type = 'group' (filled bars), 'network' (bars with colored outlines) or 'intx' (diamond / circle with a line);
 # textSize = size of the 'Low Risk' / 'High Risk' text
@@ -1123,25 +1142,6 @@ roiAxis <- function(roi, type, maxValue) {
   }
 }
 
-# Shared figure theme. The group (bar) figures have no x-axis title.
-themeRegionalFigure <- function(showXTitle = TRUE) {
-  theme(axis.title.x = if (showXTitle) element_text(color = 'black', size = 16) else element_blank(),
-        axis.text.x = element_text(color = 'black', size = 12),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.x =  element_blank(),
-        panel.grid.major.y = element_line(color='#cccccc', linewidth = 1),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-}
-
 # Data for one regional ROI's figure
 prepRegionalFigureData <- function(roi) {
   prepVolumeAnalysis(regionalData[,roi, drop=FALSE], fetalMatched, regionalDataRaw,
@@ -1641,7 +1641,7 @@ pairs <- combn(networksOfInterest, 2, simplify = FALSE)
 pairNames <- vapply(pairs, paste, character(1), collapse = ' x ')
 betweenMasks <- setNames(lapply(pairs, function(p) betweenMask(p[1], p[2])), pairNames)
 betweenIds <- setNames(lapply(pairs, function(p) data.frame(network = paste(p, collapse = ' x '),
-                                                             label = paste(networkLabel(p[1]), 'x', networkLabel(p[2])), stringsAsFactors = FALSE)), pairNames)
+                                                             label = paste(networkLabel(p[1]), '-', networkLabel(p[2])), stringsAsFactors = FALSE)), pairNames)
 tier1Between <- runScores(betweenMasks, betweenIds)
 
 showColumns <- c('label', 'nConnections', 'nScans', 'LowRisk.Mean', 'HighRisk.Mean', 'Diff.LowMinusHigh', 'Diff.inSD', 'Grp.p', 'Grp.p.adjust', 'GA.p')
@@ -1656,6 +1656,8 @@ saveResultTable(tier1Within$fits, 'tier1_within')
 saveResultTable(tier1Between$fits, 'tier1_between')
 
 ### Tier 1 Figures ----
+# Group bars in the same style as the regional volume figures: light group fill with a black outline, thick black error bars, gray horizontal gridlines and
+# no axis ticks. The boxed Low Risk / High Risk legend sits inside the plot, in the top right corner.
 barsFor <- function(fits, xAngle = 0) {
   labels <- fits$label
   barData <- rbind(data.frame(label = labels, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
@@ -1664,19 +1666,32 @@ barsFor <- function(fits, xAngle = 0) {
   starData <- data.frame(label = factor(labels, levels = labels), star = starFor(fits$Grp.p.adjust),
                          y = pmax(fits$LowRisk.Mean + fits$LowRisk.SE, fits$HighRisk.Mean + fits$HighRisk.SE))
   if ('family' %in% colnames(fits)) { barData$family <- rep(fits$family, 2); starData$family <- fits$family }      # for faceting
-  starData$y <- starData$y + .04 * diff(range(c(0, barData$Mean + barData$SE)))
-  ggplot2::ggplot(barData, ggplot2::aes(x = label, y = Mean, fill = Group, color = Group)) +
-    ggplot2::geom_col(position = ggplot2::position_dodge(.8), width = .72, linewidth = .8) +
-    ggplot2::geom_errorbar(ggplot2::aes(ymin = Mean - SE, ymax = Mean + SE), position = ggplot2::position_dodge(.8), width = .25, color = 'black', linewidth = .6) +
-    ggplot2::geom_text(data = starData, ggplot2::aes(x = label, y = y, label = star), inherit.aes = FALSE, size = 7) +
-    ggplot2::scale_fill_manual(values = c('Low Risk' = networkBarFill[['low']], 'High Risk' = networkBarFill[['high']]), name = NULL) +
-    ggplot2::scale_color_manual(values = c('Low Risk' = groupColors[['low']], 'High Risk' = groupColors[['high']]), name = NULL) +
-    ggplot2::labs(x = NULL, y = paste0('Average connectivity', ifelse(networkScore == 'absmean', ' (absolute values)', '')),
-                  caption = '* p.adj < .05, + p.adj < .10 (FDR within this figure); age-adjusted means +/- SE') +
-    ggplot2::theme_classic(base_size = 14) +
-    ggplot2::theme(legend.position = 'top', axis.text.y = ggplot2::element_text(color = 'black'),
-                   axis.text.x = ggplot2::element_text(color = 'black', angle = xAngle, hjust = ifelse(xAngle == 0, .5, 1), vjust = 1))
+
+  # y axis from the lowest bar (or 0) to just above the highest, on round tick marks (the stars sit above their bars)
+  starData$y <- starData$y + .05 * diff(range(c(0, barData$Mean + barData$SE)))
+  yBreaks <- pretty(c(0, barData$Mean - barData$SE, barData$Mean + barData$SE, starData$y * 1.08), n = 6)
+
+  legendInside <- if (utils::packageVersion('ggplot2') >= '3.5.0') {
+    ggplot2::theme(legend.position = 'inside', legend.position.inside = c(.985, .985), legend.justification = c(1, 1))
+  } else {
+    ggplot2::theme(legend.position = c(.985, .985), legend.justification = c(1, 1))
+  }
+  ggplot2::ggplot(barData, ggplot2::aes(x = label, y = Mean, fill = Group)) +
+    ggplot2::geom_col(position = ggplot2::position_dodge(.85), width = .8, color = '#000000', linewidth = 1) +
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = Mean - SE, ymax = Mean + SE), position = ggplot2::position_dodge(.85), width = .22, linewidth = 1.6, color = '#000000') +
+    ggplot2::geom_hline(yintercept = 0, linewidth = 1) +
+    ggplot2::geom_text(data = starData, ggplot2::aes(x = label, y = y, label = star), inherit.aes = FALSE, size = 9) +
+    ggplot2::scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
+    ggplot2::scale_y_continuous(limits = range(yBreaks), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
+    ggplot2::labs(x = NULL, y = paste0('Average connectivity', ifelse(networkScore == 'absmean', ' (absolute values)', ''))) +
+    themeRegionalFigure(showXTitle = FALSE) +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(color = 'black', size = 12, angle = xAngle, hjust = ifelse(xAngle == 0, .5, 1), vjust = 1),
+                   legend.text = ggplot2::element_text(color = 'black', size = 16), legend.key.size = grid::unit(1.2, 'cm'),
+                   legend.background = ggplot2::element_rect(fill = 'white', color = '#000000', linewidth = 1),
+                   legend.margin = ggplot2::margin(8, 14, 8, 8), legend.key = ggplot2::element_rect(fill = 'white', color = NA)) +
+    legendInside
 }
+
 # The within-network and between-network bars in ONE plot: the two sets of results are stacked into one table with a 'family' column, and
 # facet_grid splits the plot into two panels that share the y axis (free_x lets each panel have its own bars, space = 'free_x' makes the panel
 # widths proportional to the number of bars).
@@ -1684,9 +1699,9 @@ tier1Columns <- c('label', 'LowRisk.Mean', 'LowRisk.SE', 'HighRisk.Mean', 'HighR
 tier1Combined <- rbind(data.frame(family = 'Within networks', tier1Within$fits[, tier1Columns], stringsAsFactors = FALSE),
                        data.frame(family = 'Between networks', tier1Between$fits[, tier1Columns], stringsAsFactors = FALSE))
 tier1Combined$family <- factor(tier1Combined$family, levels = c('Within networks', 'Between networks'))
-tier1_bars <- barsFor(tier1Combined, xAngle = 40) + ggplot2::labs(caption = NULL) +
+tier1_bars <- barsFor(tier1Combined, xAngle = 40) +
   ggplot2::facet_grid(~family, scales = 'free_x', space = 'free_x') +
-  ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(face = 'bold', size = 15))
+  ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(color = 'black', size = 18))
 showFigure(tier1_bars, 'tier1_bars', width = 11, height = 6)
 
 # Low minus High Risk difference for every network (the diagonal, within the network) and every pair of networks (below the diagonal, between the two).
