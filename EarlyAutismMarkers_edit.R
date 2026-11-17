@@ -86,8 +86,23 @@ glassDepthLayers <- 6
 # How opaque the glass is where the most surface overlaps (0 = invisible, 1 = solid). Lower it for a lighter brain.
 glassBrainOpacity <- .8
 
-# The four networks shown on the network glass brain: node color and legend name
-networkNodeColors <- c(CRB = '#F2B134', Limbic = '#14C28D', SubCort = '#1A8BB5', DMN = '#E8305E')
+# Network colors (nodes, edges, name bands and the tinted backing behind the bars in the Tier 2 figure). One entry per palette, in the order Cerebellar, Limbic,
+# Subcortical, Default Mode; networkPaletteName picks the one used everywhere. The palettes avoid blue and red/pink, which are the Low and High Risk colors.
+networkPalettes <- list(
+  dark2   = c(CRB = '#D95F02', Limbic = '#1B9E77', SubCort = '#7570B3', DMN = '#A6761D'),
+  okabe   = c(CRB = '#E69F00', Limbic = '#009E73', SubCort = '#7B68C8', DMN = '#A0522D'),
+  tableau = c(CRB = '#F28E2B', Limbic = '#59A14F', SubCort = '#B07AA1', DMN = '#9C755F'),
+  earth   = c(CRB = '#C9A227', Limbic = '#4C8C4A', SubCort = '#8C5A9E', DMN = '#8B5A2B'),
+  current = c(CRB = '#F2B134', Limbic = '#14C28D', SubCort = '#1A8BB5', DMN = '#E8305E'))
+networkPaletteName <- 'dark2'
+networkNodeColors <- networkPalettes[[networkPaletteName]]
+
+# The Tier 2 figure shows the connections with an FDR-adjusted p below this (.05 = significant only)
+tier2FigureThreshold <- .05
+
+# Also save the Tier 2 figure in each of these palettes (names from networkPalettes), to compare colors; character(0) for none
+tier2PaletteOptions <- c('dark2', 'okabe', 'tableau')
+
 networkNodeLabels <- c(CRB = 'Cerebellar', Limbic = 'Limbic', SubCort = 'Subcortical', DMN = 'Default Mode')
 
 ## Network Settings ----
@@ -333,6 +348,12 @@ tintColor <- function(color, amount, alpha = '') {
   rgbValues <- col2rgb(color)[, 1]
   mixed <- rgbValues * (1 - amount) + 255 * amount
   paste0(rgb(mixed[1], mixed[2], mixed[3], maxColorValue = 255), alpha)
+}
+
+# Text color (white or black) that reads well on a given background color
+textColorFor <- function(hex) {
+  v <- col2rgb(hex) / 255
+  ifelse(.299 * v[1, ] + .587 * v[2, ] + .114 * v[3, ] < .5, 'white', 'black')
 }
 
 # Tints of the group colors: filled bars, translucent points, fitted lines, and network bars
@@ -1800,92 +1821,93 @@ if (length(tier2Units) == 0) {
   }
 }
 
-### Tier 2 Combined Figure ----
+### Tier 2 Figure ----
 
-# Every significant or trending (FDR p < .10) connection of the gated networks, one bar pair per connection: Low Risk vs High Risk group means.
-# Connections are ordered by network and then by group p-value.
-tier2Sig <- if (is.null(tier2)) NULL else tier2[tier2$gated & tier2$status != 'ns', ]
-if (!is.null(tier2Sig) && nrow(tier2Sig) > 0) {
-  tier2Sig <- tier2Sig[order(match(tier2Sig$unit, networksOfInterest), tier2Sig$Grp.p), ]
-  plotOrder <- unique(tier2Sig$ROI)
-  plotFrame <- rbind(data.frame(Connection = tier2Sig$ROI, Mean = tier2Sig$TD.Mean, Grp = 'Low Risk', stringsAsFactors = FALSE),
-                     data.frame(Connection = tier2Sig$ROI, Mean = tier2Sig$ASD.Mean, Grp = 'High Risk', stringsAsFactors = FALSE))
-  plotFrame$Connection <- factor(plotFrame$Connection, levels = plotOrder)
-  plotFrame$Grp <- factor(plotFrame$Grp, levels = c('Low Risk', 'High Risk'))
-
-  tier2_combined_bars <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
-    scale_y_continuous(labels=fixedDecimalLabels) +
-    scale_x_discrete(labels=setNames(connectionLabel(plotOrder), plotOrder)) +
-    scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
-    scale_color_manual(values=c(groupColors[['low']], groupColors[['high']])) +
-    geom_hline(yintercept = 0, lwd=1) +
-    geom_bar(stat='identity', position=position_dodge2(0.2), aes(color=Grp,fill=Grp)) +
-    ylab('Connectivity Strength') + xlab('Network Connections') +
-    theme(axis.title.x = element_text(color = 'black', size = 16),
-          axis.text.x = element_text(color = 'black', size = 6, angle=90, hjust=1, vjust=.5),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_text(color = 'black', size = 16),
-          axis.text.y = element_text(color = 'black', size = 12),
-          axis.ticks.y = element_blank(),
-          axis.line.x = element_line(color='black', linewidth = 1),
-          axis.line.y = element_line(color='black', linewidth = 1),
-          plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-          panel.grid.major.y = element_line(color = '#aaaaaa'),
-          panel.grid.major.x = element_line(color = '#aaaaaa'),
-          panel.background = element_rect(fill='white'),
-          legend.position = 'none',
-          legend.text = element_text(color = 'black', size = 12),
-          legend.title=element_blank())
-
-  showFigure(addRiskLegend(tier2_combined_bars, 'network'), 'tier2_combined_bars', width = 12, height = 6)
-} else {
-  message('No gated Tier 2 connection is significant or trending, so no combined figure was made.')
-}
-
-
-### Tier 2 Glass Brain ----
-
-# Nodes of the four networks colored by network; edges are the significant or trending (FDR p < .10) Tier 2 connections of the gated networks,
-# blue where Low Risk is higher and red where High Risk is higher.
+# One figure. Top: the significant Tier 2 connections of the gated networks drawn on the brain (axial, posterior and lateral views; only the regions
+# that have a connection, each edge in its network's color) and a legend panel. Bottom: one bar pair per connection (Low vs High Risk group means),
+# grouped by network on a tinted backing with a colored name band. Which connections are shown is set by tier2FigureThreshold.
 
 loadGlassBrain()
 
 regionLabels <- read.csv(paste0(baseDir,'/functional/100PerHemiLabels_Decimal.1D'), header=F)
 roiNames <- paste0(regionLabels$V1, '.', seq_len(nrow(regionLabels)))
 
-networkGlassNodes <- do.call(rbind, lapply(names(networkNodeColors), function(net) {
-  ids <- which(networkSpecs[[net]]$match(roiNames))
-  data.frame(id = ids, fill = networkNodeColors[[net]], network = net, stringsAsFactors = FALSE)
-}))
+tier2Figure <- function(palette = networkNodeColors) {
+  shown <- if (is.null(tier2)) NULL else tier2[tier2$gated & !is.na(tier2$Grp.p.adjust) & tier2$Grp.p.adjust < tier2FigureThreshold, ]
+  if (is.null(shown) || nrow(shown) == 0) {
+    message('No gated Tier 2 connection has an adjusted p below ', tier2FigureThreshold, ', so no Tier 2 figure was made.')
+    return(NULL)
+  }
+  usedNets <- networksOfInterest[networksOfInterest %in% shown$unit]
+  shown$unit <- factor(shown$unit, levels = usedNets)
+  shown <- shown[order(shown$unit, shown$Grp.p), ]
+  shown$ROI <- factor(shown$ROI, levels = shown$ROI)
 
-networkGlassEdges <- NULL
-if (!is.null(tier2Sig) && nrow(tier2Sig) > 0) {
-  networkGlassEdges <- connectionRegions(tier2Sig$ROI)
-  networkGlassEdges$dir <- ifelse(tier2Sig$Grp.B > 0, 'low', 'high')
-  message('Tier 2 glass brain: ', sum(networkGlassEdges$dir == 'low', na.rm = TRUE), ' Low > High Risk edges and ',
-          sum(networkGlassEdges$dir == 'high', na.rm = TRUE), ' High > Low Risk edges')
+  # Brain views: edges colored by network, and only the regions that have an edge
+  edges <- connectionRegions(as.character(shown$ROI))
+  edges$color <- unname(palette[as.character(shown$unit)])
+  nodes <- unique(rbind(data.frame(id = edges$a, fill = edges$color, stringsAsFactors = FALSE),
+                        data.frame(id = edges$b, fill = edges$color, stringsAsFactors = FALSE)))
+  brains <- lapply(c('axial', 'posterior', 'lateral'), function(view) glassView(view, nodes, edges))
+
+  # Legend panel: the networks shown, the Low / High Risk bar colors and what is plotted
+  yNet <- seq(.86, by = -.115, length.out = length(usedNets))
+  legendPanel <- ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed(ratio = 1.1) + theme_void() +
+    annotate('rect', xmin = .02, xmax = .98, ymin = .03, ymax = .97, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('rect', xmin = .08, xmax = .19, ymin = yNet - .042, ymax = yNet + .042, fill = unname(palette[usedNets]), colour = '#444444', linewidth = .4) +
+    annotate('text', x = .24, y = yNet, label = paste(networkNodeLabels[usedNets], 'Network'), hjust = 0, size = 4.2) +
+    annotate('segment', x = .05, xend = .95, y = .45, yend = .45, linewidth = .5) +
+    annotate('rect', xmin = .08, xmax = .19, ymin = .31 - .042, ymax = .31 + .042, fill = groupBarFill[['low']], colour = '#000000', linewidth = .8) +
+    annotate('text', x = .24, y = .31, label = 'Low Risk', hjust = 0, size = 4.2) +
+    annotate('rect', xmin = .08, xmax = .19, ymin = .20 - .042, ymax = .20 + .042, fill = groupBarFill[['high']], colour = '#000000', linewidth = .8) +
+    annotate('text', x = .24, y = .20, label = 'High Risk', hjust = 0, size = 4.2) +
+    annotate('text', x = .08, y = .09, label = paste0('All connections FDR p < ', sub('^0', '', format(tier2FigureThreshold))), hjust = 0, size = 3.1, colour = '#444444')
+  top <- ggpubr::ggarrange(brains[[1]], brains[[2]], brains[[3]], legendPanel, nrow = 1, ncol = 4, widths = c(1, 1, 1, .85))
+
+  # Bars: all connections in one row, grouped by network
+  long <- rbind(data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'Low Risk', Mean = shown$TD.Mean, SE = shown$TD.SE),
+                data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'High Risk', Mean = shown$ASD.Mean, SE = shown$ASD.SE))
+  long$Group <- factor(long$Group, levels = c('Low Risk', 'High Risk'))
+  yBreaks <- pretty(c(0, long$Mean + long$SE), n = 5)
+  topY <- max(yBreaks); band <- .13 * topY
+  background <- data.frame(unit = factor(usedNets, levels = usedNets),
+                           x = vapply(usedNets, function(u) (sum(shown$unit == u) + 1) / 2, numeric(1)),
+                           tint = vapply(palette[usedNets], tintColor, character(1), amount = .72), solid = unname(palette[usedNets]),
+                           name = paste(networkNodeLabels[usedNets], 'Network'), stringsAsFactors = FALSE)
+  background$text <- textColorFor(background$solid)
+  dividers <- do.call(rbind, lapply(usedNets, function(u) {
+    n <- sum(shown$unit == u)
+    if (n > 1) data.frame(unit = factor(u, levels = usedNets), x = seq_len(n - 1) + .5) else NULL
+  }))
+  xLabels <- setNames(connectionLabel(as.character(shown$ROI)), as.character(shown$ROI))
+
+  bars <- ggplot(long, aes(x = ROI, y = Mean, fill = Group)) +
+    geom_rect(data = background, aes(xmin = -Inf, xmax = Inf, ymin = 0, ymax = topY + band), fill = background$tint, inherit.aes = FALSE) +
+    geom_vline(data = dividers, aes(xintercept = x), color = 'white', linewidth = 1.4) +
+    geom_rect(data = background, aes(xmin = -Inf, xmax = Inf, ymin = topY, ymax = topY + band), fill = background$solid, inherit.aes = FALSE) +
+    geom_text(data = background, aes(x = x, y = topY + band / 2, label = name), color = background$text, inherit.aes = FALSE, size = 5, hjust = .5) +
+    geom_col(position = position_dodge(.85), width = .8, color = '#000000', linewidth = .8) +
+    geom_errorbar(aes(ymin = Mean - SE, ymax = Mean + SE), position = position_dodge(.85), width = .25, linewidth = 1.1) +
+    scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
+    scale_x_discrete(labels = xLabels) +
+    facet_grid(~unit, scales = 'free_x', space = 'free_x') +
+    scale_y_continuous(limits = c(0, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
+    labs(x = NULL, y = 'Connectivity Strength') +
+    themeRegionalFigure(showXTitle = FALSE) +
+    theme(axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = .5), strip.text = element_blank(), strip.background = element_blank(),
+          panel.spacing = unit(.35, 'lines'))
+
+  ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.15), labels = c('A', 'B'))
 }
 
-# Legend: one chip per network (node color with a lighter tint), then what the blue and red edges mean
-networkLegendPanel <- function() {
-  nNet <- length(networkNodeColors); yChip <- seq(.80, by = -.14, length.out = nNet)
-  tints <- vapply(networkNodeColors, tintColor, character(1), amount = .65)
-  ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed() + theme_void() +
-    annotate('rect', xmin = .02, xmax = .98, ymin = .04, ymax = .96, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('rect', xmin = .08, xmax = .14, ymin = yChip - .05, ymax = yChip + .05, fill = unname(networkNodeColors), colour = '#444444', linewidth = .4) +
-    annotate('rect', xmin = .14, xmax = .92, ymin = yChip - .05, ymax = yChip + .05, fill = unname(tints), colour = '#444444', linewidth = .4) +
-    annotate('text', x = .17, y = yChip, label = paste(networkNodeLabels[names(networkNodeColors)], 'Network'), hjust = 0, size = 4.2) +
-    annotate('segment', x = .04, xend = .96, y = .27, yend = .27, linewidth = .5) +
-    annotate('text', x = c(.27, .73), y = .20, label = c('Low > High Risk', 'High > Low Risk'), size = 3.6) +
-    annotate('segment', x = c(.12, .58), xend = c(.42, .88), y = .12, yend = .12, linewidth = 2.2,
-             colour = if (glassRendererActive == 'rgl') glassEdgeColors[c('low', 'high')] else groupLineColor[c('low', 'high')], lineend = 'round')
-}
+tier2_figure <- tier2Figure()
+if (!is.null(tier2_figure)) { showFigure(tier2_figure, 'tier2_figure', width = 13, height = 8.4) }
 
-tier2_glass <- ggpubr::ggarrange(glassView('axial', networkGlassNodes, networkGlassEdges),
-                                glassView('posterior', networkGlassNodes, networkGlassEdges),
-                                glassView('lateral', networkGlassNodes, networkGlassEdges),
-                                networkLegendPanel(), nrow = 2, ncol = 2)
-showFigure(tier2_glass, 'tier2_glass', width = 9, height = 9)
+# The same figure in each palette listed in tier2PaletteOptions, to compare colors (saved in the components folder)
+for (paletteName in tier2PaletteOptions) {
+  paletteFigure <- tier2Figure(networkPalettes[[paletteName]])
+  if (!is.null(paletteFigure)) { showFigure(paletteFigure, paste0('tier2_figure_', paletteName), width = 13, height = 8.4, subfolder = componentFolder) }
+}
 
 
 ## 3e. Tier 3: Exploratory Whole Brain ----
