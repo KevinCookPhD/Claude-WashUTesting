@@ -1663,6 +1663,7 @@ barsFor <- function(fits, xAngle = 0) {
   barData$label <- factor(barData$label, levels = labels); barData$Group <- factor(barData$Group, levels = c('Low Risk', 'High Risk'))
   starData <- data.frame(label = factor(labels, levels = labels), star = starFor(fits$Grp.p.adjust),
                          y = pmax(fits$LowRisk.Mean + fits$LowRisk.SE, fits$HighRisk.Mean + fits$HighRisk.SE))
+  if ('family' %in% colnames(fits)) { barData$family <- rep(fits$family, 2); starData$family <- fits$family }      # for faceting
   starData$y <- starData$y + .04 * diff(range(c(0, barData$Mean + barData$SE)))
   ggplot2::ggplot(barData, ggplot2::aes(x = label, y = Mean, fill = Group, color = Group)) +
     ggplot2::geom_col(position = ggplot2::position_dodge(.8), width = .72, linewidth = .8) +
@@ -1673,11 +1674,20 @@ barsFor <- function(fits, xAngle = 0) {
     ggplot2::labs(x = NULL, y = paste0('Average connectivity', ifelse(networkScore == 'absmean', ' (absolute values)', '')),
                   caption = '* p.adj < .05, + p.adj < .10 (FDR within this figure); age-adjusted means +/- SE') +
     ggplot2::theme_classic(base_size = 14) +
-    ggplot2::theme(legend.position = 'bottom', axis.text.y = ggplot2::element_text(color = 'black'),
-                   axis.text.x = ggplot2::element_text(color = 'black', angle = xAngle, hjust = ifelse(xAngle == 0, .5, 1), vjust = ifelse(xAngle == 0, 1, .5)))
+    ggplot2::theme(legend.position = 'top', axis.text.y = ggplot2::element_text(color = 'black'),
+                   axis.text.x = ggplot2::element_text(color = 'black', angle = xAngle, hjust = ifelse(xAngle == 0, .5, 1), vjust = 1))
 }
-showFigure(barsFor(tier1Within$fits), 'tier1_within_bars', width = 9, height = 6)
-showFigure(barsFor(tier1Between$fits, xAngle = 45), 'tier1_between_bars', width = 11, height = 7)
+# The within-network and between-network bars in ONE plot: the two sets of results are stacked into one table with a 'family' column, and
+# facet_grid splits the plot into two panels that share the y axis (free_x lets each panel have its own bars, space = 'free_x' makes the panel
+# widths proportional to the number of bars).
+tier1Columns <- c('label', 'LowRisk.Mean', 'LowRisk.SE', 'HighRisk.Mean', 'HighRisk.SE', 'Grp.p.adjust')
+tier1Combined <- rbind(data.frame(family = 'Within networks', tier1Within$fits[, tier1Columns], stringsAsFactors = FALSE),
+                       data.frame(family = 'Between networks', tier1Between$fits[, tier1Columns], stringsAsFactors = FALSE))
+tier1Combined$family <- factor(tier1Combined$family, levels = c('Within networks', 'Between networks'))
+tier1_bars <- barsFor(tier1Combined, xAngle = 40) + ggplot2::labs(caption = NULL) +
+  ggplot2::facet_grid(~family, scales = 'free_x', space = 'free_x') +
+  ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(face = 'bold', size = 15))
+showFigure(tier1_bars, 'tier1_bars', width = 11, height = 6)
 
 # Low minus High Risk difference for every network (the diagonal, within the network) and every pair of networks (below the diagonal, between the two).
 # Only the lower triangle is drawn: the matrix is symmetric, so the upper triangle would repeat it.
