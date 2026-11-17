@@ -60,9 +60,8 @@ brainMeshFile <- file.path(glassBrainDir, 'Segmentation_inner_cortex.mz3')      
 # standard orientation (x: right, y: anterior, z: superior) before drawing.
 coordinatesAreAFNI <- TRUE
 
-# The top (axial) view: TRUE puts the back of the head at the top of the picture (as in the BrainNet Viewer figures this was
-# matched to); FALSE puts the front at the top.
-glassAxialPosteriorAtTop <- TRUE
+# All glass brains follow the radiological convention: the patient's right is on the LEFT of the picture. Axial = seen from below (front at the top);
+# anterior = seen from the front; lateral = seen from the left side (front on the left).
 
 # How the glass brains are drawn. 'rgl' = a true 3D render (spheres, tubes and a translucent brain surface; needs the rgl and png
 # packages and a computer screen, and the image size is limited by the screen). 'ggplot' = the flat layered drawing below,
@@ -485,13 +484,13 @@ standardCoordinates <- function(xyz, fromAFNI = coordinatesAreAFNI) {
 }
 
 # How each glass brain view maps the coordinates onto the page. Lateral = left side of the head (front on the left),
-# posterior = seen from behind, axial = seen from above or below (see glassAxialPosteriorAtTop).
+# anterior = seen from the front, axial = seen from below. Radiological convention: the right side of the head is on the left of the picture.
 glassViews <- list(lateral   = list(h = list(axis = 'Y', sign = -1), v = list(axis = 'Z', sign = 1),
                                     d = list(axis = 'X', sign = 1)),                      # viewer on the left, so the right is farther
-                   posterior = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Z', sign = 1),
-                                    d = list(axis = 'Y', sign = 1)),                      # viewer behind, so the front is farther
-                   axial     = list(h = list(axis = 'X', sign = 1),  v = list(axis = 'Y', sign = ifelse(glassAxialPosteriorAtTop, -1, 1)),
-                                    d = list(axis = 'Z', sign = ifelse(glassAxialPosteriorAtTop, 1, -1))))   # from below: the top is farther
+                   anterior  = list(h = list(axis = 'X', sign = -1), v = list(axis = 'Z', sign = 1),
+                                    d = list(axis = 'Y', sign = -1)),                     # viewer in front, so the back is farther
+                   axial     = list(h = list(axis = 'X', sign = -1), v = list(axis = 'Y', sign = 1),
+                                    d = list(axis = 'Z', sign = 1)))                      # from below: the top is farther
 
 # The translucent brain behind the nodes, cut into glassDepthLayers depth layers (far to near) for every view.
 # Each layer holds the mesh surface area (smoothed) at that depth; folds show where the surface overlaps itself.
@@ -543,7 +542,7 @@ glassBackgrounds <- function(mesh, pixels = 300, blur = 1.4, pad = 4, layers = g
 }
 
 # One glass brain view: the translucent brain in depth layers, with edges and nodes drawn between the layers at their own depth.
-#   view = 'lateral', 'posterior' or 'axial';  backgrounds = the result of glassBackgrounds();  coords = standardCoordinates() of the regions
+#   view = 'lateral', 'anterior' or 'axial';  backgrounds = the result of glassBackgrounds();  coords = standardCoordinates() of the regions
 #   nodes = data frame with the region number (id) and the node color (fill);  edges = data frame with region numbers a and b and dir ('low' or 'high')
 glassBrainView <- function(view, backgrounds, coords, nodes, edges = NULL, nodeSize = 2, edgeWidth = 1, edgePieces = 8) {
   vw <- glassViews[[view]]
@@ -635,8 +634,8 @@ glassBrainRgl <- function(view, nodes, edges = NULL, size = 'network') {
   lighten <- function(col) if (glassColorLighten > 0) unname(vapply(col, tintColor, character(1), amount = glassColorLighten)) else col
   R <- rgl::rotationMatrix
   userMatrix <- switch(view,
-                       axial = if (glassAxialPosteriorAtTop) R(pi, 1, 0, 0) else R(0, 1, 0, 0),
-                       posterior = R(-pi / 2, 1, 0, 0),
+                       axial = R(pi, 0, 1, 0),                                   # from below, front at the top, right on the left
+                       anterior = R(-pi / 2, 1, 0, 0) %*% R(pi, 0, 0, 1),        # from the front, right on the left
                        lateral = R(pi / 2, 0, 1, 0) %*% R(-pi / 2, 1, 0, 0))
   hasEdges <- !is.null(edges) && nrow(edges) > 0
   # Draw the scene and return it as an image array; each piece can be left out
@@ -1832,7 +1831,7 @@ if (length(tier2Units) == 0) {
 
 ### Tier 2 Figure ----
 
-# One figure. Top: the significant Tier 2 connections of the gated networks drawn on the brain (axial, posterior and lateral views; only the regions
+# One figure. Top: the significant Tier 2 connections of the gated networks drawn on the brain (axial, anterior and lateral views; only the regions
 # that have a connection, each edge in its network's color) and a legend panel. Bottom: one bar pair per connection (Low vs High Risk group means),
 # grouped by network on a tinted backing with a colored name band. Which connections are shown is set by tier2FigureThreshold.
 
@@ -1857,7 +1856,7 @@ tier2Figure <- function(palette = networkNodeColors) {
   edges$color <- unname(palette[as.character(shown$unit)])
   nodes <- unique(rbind(data.frame(id = edges$a, fill = edges$color, stringsAsFactors = FALSE),
                         data.frame(id = edges$b, fill = edges$color, stringsAsFactors = FALSE)))
-  brains <- lapply(c('axial', 'posterior', 'lateral'), function(view) glassView(view, nodes, edges))
+  brains <- lapply(c('axial', 'anterior', 'lateral'), function(view) glassView(view, nodes, edges))
 
   # Text sizes in this figure: 14 pt (panel letters, y title, network names), 12 pt (everything else)
   # (the Low / High Risk key is drawn inside the bar panel)
@@ -2393,7 +2392,7 @@ showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, 
 
 ### Tier 3 Glass Brains ----
 
-# Significant whole-brain connections (FDR) drawn on a translucent brain: lateral view above, posterior view below.
+# Significant whole-brain connections (FDR) drawn on a translucent brain: lateral view above, anterior view below.
 # Low Risk (blue) = connections where Low Risk is higher; High Risk (red) = connections where High Risk is higher.
 
 loadGlassBrain()
@@ -2407,7 +2406,7 @@ message('Whole-brain glass brains: ', sum(wholeBrainEdges$dir == 'low', na.rm = 
 wholeBrainGlass <- function(direction) {
   edges <- wholeBrainEdges[which(wholeBrainEdges$dir == direction),]
   ggpubr::ggarrange(glassView('lateral', allRegionNodes, edges, 'whole'),
-                    glassView('posterior', allRegionNodes, edges, 'whole'),
+                    glassView('anterior', allRegionNodes, edges, 'whole'),
                     ncol = 1, nrow = 2)
 }
 
@@ -2442,7 +2441,7 @@ drawWholeBrainComposite <- function() {
                       conn = 'ASDConn', color = 'ASDCol', letters = c('D.', 'E.', 'F.'), glass = wholebrain_glass_ASD))
 
   for (half in halves) {
-    # A / D: glass brains (lateral view above, posterior view below)
+    # A / D: glass brains (lateral view above, anterior view below)
     print(half$glass, newpage = FALSE,
           vp = grid::viewport(x = grid::unit(half$x0 + .005, 'npc'), y = grid::unit(.49, 'npc'), width = grid::unit(.178, 'npc'),
                               height = grid::unit(.45, 'npc'), just = c('left', 'bottom')))
