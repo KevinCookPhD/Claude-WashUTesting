@@ -84,13 +84,14 @@ glassDepthLayers <- 6
 glassBrainOpacity <- .8
 
 # The four networks shown on the network glass brain: node color and legend name
-networkNodeColors <- c(CRB = '#F2B134', DMN = '#E8305E', Limbic = '#14C28D', SubCort = '#1A8BB5')
-networkNodeLabels <- c(CRB = 'Cerebellar', DMN = 'Default Mode', Limbic = 'Limbic', SubCort = 'Subcortical')
+networkNodeColors <- c(CRB = '#F2B134', Limbic = '#14C28D', SubCort = '#1A8BB5', DMN = '#E8305E')
+networkNodeLabels <- c(CRB = 'Cerebellar', Limbic = 'Limbic', SubCort = 'Subcortical', DMN = 'Default Mode')
 
 ## Network Settings ----
 
 # The a priori networks of interest. Only these are analyzed in the connectivity sections (and in the PMACheck and NetworkMeans scripts).
-networksOfInterest <- c('CRB', 'Limbic', 'DMN', 'SubCort')
+# The order here is the order of the bars, the matrix rows and columns and the legends.
+networksOfInterest <- c('CRB', 'Limbic', 'SubCort', 'DMN')
 
 # Network membership: TRUE uses the revised lists (the parcel-by-parcel decisions, see membership_decisions.csv); FALSE uses the original lists.
 useRevisedNetworks <- TRUE
