@@ -1702,13 +1702,14 @@ tier1_matrix <- ggplot2::ggplot(cells, ggplot2::aes(x = across, y = down, fill =
   ggplot2::geom_tile(color = 'white', linewidth = 1) + ggplot2::geom_text(ggplot2::aes(label = text), size = 4.5, lineheight = .9) +
   ggplot2::scale_x_discrete(drop = FALSE) + ggplot2::scale_y_discrete(drop = FALSE) +
   ggplot2::scale_fill_gradient2(low = groupColors[['high']], mid = 'white', high = groupColors[['low']], midpoint = 0, limits = c(-limit, limit),
-                                breaks = matrixBreaks, labels = matrixLabels, name = 'Low minus High Risk\nconnectivity difference') +
-  ggplot2::guides(fill = ggplot2::guide_colorbar(ticks.colour = 'black', ticks.linewidth = .6, frame.colour = 'black', frame.linewidth = .5)) +
+                                breaks = matrixBreaks, labels = matrixLabels, name = 'Connectivity Difference\n(Low - High Risk)') +
+  ggplot2::guides(fill = ggplot2::guide_colorbar(ticks.colour = 'black', ticks.linewidth = .6, frame.colour = 'black', frame.linewidth = .5, title.hjust = .5)) +
+  ggplot2::coord_fixed() +      # square cells
   ggplot2::labs(x = NULL, y = NULL) +
   ggplot2::theme_minimal(base_size = 14) +
-  ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text = ggplot2::element_text(color = 'black'),
+  ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text = ggplot2::element_text(color = 'black'), legend.title = ggplot2::element_text(hjust = .5),
                  legend.key.height = grid::unit(1.3, 'cm'), legend.key.width = grid::unit(.7, 'cm'))      # the color bar is 5 key heights tall
-showFigure(tier1_matrix, 'tier1_matrix', width = 8, height = 7)
+showFigure(tier1_matrix, 'tier1_matrix', width = 8, height = 6)
 
 ## 3d. Tier 2: ROI-to-ROI Connections Within Networks ----
 
