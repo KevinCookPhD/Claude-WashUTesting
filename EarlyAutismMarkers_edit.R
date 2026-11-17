@@ -625,7 +625,7 @@ glassBrainRgl <- function(view, nodes, edges = NULL, size = 'network') {
     if (withEdges && hasEdges) {
       for (k in seq_len(nrow(edges))) {
         rgl::shade3d(rgl::cylinder3d(rbind(xyz[edges$a[k], ], xyz[edges$b[k], ]), radius = glassTubeRadius[[size]], sides = 16),
-                     color = glassEdgeColors[[edges$dir[k]]], alpha = 1, specular = 'black')
+                     color = if ('color' %in% colnames(edges)) edges$color[k] else glassEdgeColors[[edges$dir[k]]], alpha = 1, specular = 'black')      # edges$color (optional) sets each edge's color
       }
     }
     if (withNodes) {
