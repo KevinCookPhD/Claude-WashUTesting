@@ -2,7 +2,7 @@
 #
 # Refits the tissue and regional volume models (raw and normalized volume; with and without the group x age interaction) with scan age
 # (PMA) centered at every week from 20 to 40, plus at the sample mean, and shows how the group-effect results change as the centering
-# moves. In the interaction models the group term is the Low vs High Risk difference at the centering age, so this traces the
+# moves. In the interaction models the group term is the Low-risk vs High-risk difference at the centering age, so this traces the
 # difference across ages. (The main-effects model and the interaction term do not depend on the centering; they are shown for reference.)
 #
 # HOW TO RUN: first run EarlyAutismMarkers_edit.R so the volume data and functions exist in the R session, then run this whole file.
@@ -78,7 +78,7 @@ mainRows <- do.call(rbind, lapply(names(families), function(fam) {
 
 statusOf <- function(p) ifelse(!is.na(p) & p < .05, 'sig', ifelse(!is.na(p) & p < .10, 'trend', 'ns'))
 sweepRows$status <- statusOf(sweepRows$Grp.p.adj)
-sweepRows$direction <- ifelse(sweepRows$Grp.B > 0, 'Low', 'High')        # Grp.B > 0 means Low Risk (Pass) higher at that age
+sweepRows$direction <- ifelse(sweepRows$Grp.B > 0, 'Low', 'High')        # Grp.B > 0 means Low-risk (Pass) higher at that age
 
 # Counts table ----
 
@@ -154,8 +154,8 @@ saveSweepFigure(sweep_counts, 'PMACheck_volume_week_sweep_counts', width = 12, h
 # 2. Heatmap: every ROI that is significant or trending at some week
 heat <- sweepRows[!is.na(sweepRows$week), ]
 heat$cell <- ifelse(heat$status == 'ns', 'Not significant',
-                    paste0(ifelse(heat$direction == 'Low', 'Low Risk higher', 'High Risk higher'), ifelse(heat$status == 'sig', ', p.adj < .05', ', p.adj < .10')))
-cellLevels <- c('Low Risk higher, p.adj < .05', 'Low Risk higher, p.adj < .10', 'Not significant', 'High Risk higher, p.adj < .10', 'High Risk higher, p.adj < .05')
+                    paste0(ifelse(heat$direction == 'Low', 'Low-risk higher', 'High-risk higher'), ifelse(heat$status == 'sig', ', p.adj < .05', ', p.adj < .10')))
+cellLevels <- c('Low-risk higher, p.adj < .05', 'Low-risk higher, p.adj < .10', 'Not significant', 'High-risk higher, p.adj < .10', 'High-risk higher, p.adj < .05')
 heat$cell <- factor(heat$cell, levels = cellLevels)
 hits <- unique(heat[heat$status != 'ns', c('family', 'ROI')])
 if (nrow(hits) == 0) {
@@ -172,8 +172,8 @@ if (nrow(hits) == 0) {
     ggplot2::geom_vline(xintercept = meanAge, linetype = 'dotted', color = '#222222') +
     ggplot2::facet_grid(family ~ ., scales = 'free_y', space = 'free_y') +
     ggplot2::scale_x_continuous(breaks = seq(min(sweepWeeks), max(sweepWeeks), by = 2), expand = c(0, 0)) +
-    ggplot2::scale_fill_manual(values = c('Low Risk higher, p.adj < .05' = groupColors[['low']], 'Low Risk higher, p.adj < .10' = '#9DBFE0', 'Not significant' = '#f0f0f0',
-                                          'High Risk higher, p.adj < .10' = '#E5A3A8', 'High Risk higher, p.adj < .05' = groupColors[['high']]),
+    ggplot2::scale_fill_manual(values = c('Low-risk higher, p.adj < .05' = groupColors[['low']], 'Low-risk higher, p.adj < .10' = '#9DBFE0', 'Not significant' = '#f0f0f0',
+                                          'High-risk higher, p.adj < .10' = '#E5A3A8', 'High-risk higher, p.adj < .05' = groupColors[['high']]),
                                drop = FALSE, name = NULL) +
     ggplot2::labs(x = 'Age at which scan age is centered (weeks)', y = NULL, title = 'Volume ROIs with a group difference at some centering age',
                   caption = paste0('Dotted line = mean scan age (', round(meanAge, 1), ' weeks); observed scan ages ', round(ageRange[1], 1), ' to ', round(ageRange[2], 1), '.')) +

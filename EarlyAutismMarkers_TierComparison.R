@@ -93,8 +93,8 @@ comparison <- do.call(rbind, lapply(comparisonNetworks, function(net) {
 }))
 comparison$status.original <- statusOf(comparison$Grp.p.adj.original)
 comparison$status.revised <- statusOf(comparison$Grp.p.adj.revised)
-comparison$direction <- ifelse(is.na(comparison$Grp.B.revised), ifelse(comparison$Grp.B.original > 0, 'Low Risk higher', 'High Risk higher'),
-                               ifelse(comparison$Grp.B.revised > 0, 'Low Risk higher', 'High Risk higher'))
+comparison$direction <- ifelse(is.na(comparison$Grp.B.revised), ifelse(comparison$Grp.B.original > 0, 'Low-risk higher', 'High-risk higher'),
+                               ifelse(comparison$Grp.B.revised > 0, 'Low-risk higher', 'High-risk higher'))
 comparison$label <- gsub('\n', ' ', connectionLabel(comparison$ROI))
 comparison$reason <- ifelse(comparison$status.original == 'not in network', 'membership: added in the revised network',
                      ifelse(comparison$status.revised == 'not in network', 'membership: removed in the revised network', 'FDR: same connection, different correction set'))

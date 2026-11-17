@@ -18,7 +18,7 @@
 # OUTPUT (figures in figDir/networkAverages, tables in tableDir/networkAverages; tables only if saveTables is TRUE):
 #   networkAverages_within_bars / _within_by_age     adjusted group means and score-by-age plots for the networks
 #   networkAverages_between_bars / _between_by_age   the same for the network pairs
-#   networkAverages_matrix                           Low minus High Risk difference for every network and pair in one matrix
+#   networkAverages_matrix                           Low-risk minus High-risk difference for every network and pair in one matrix
 #   tables: networkAverages_within, networkAverages_between
 
 # Settings ----
@@ -75,7 +75,7 @@ scoreData <- function(mask) {
   d <- rbind(one(tdFC, tdDemoFinal, 'TD'), one(asdFC, asdDemoFinal, 'ASD'))
   d <- d[is.finite(d$FC), ]
   d$shortID <- substr(d$ID, 1, nchar(d$ID) - 3)
-  d$Grp <- factor(d$Grp, levels = c('ASD', 'TD'))        # ASD (High Risk) is the reference, so the group estimate is Low minus High Risk
+  d$Grp <- factor(d$Grp, levels = c('ASD', 'TD'))        # ASD (High-risk) is the reference, so the group estimate is Low-risk minus High-risk
   attr(d, 'nConnections') <- sum(mask)
   d
 }
@@ -129,7 +129,7 @@ between <- runFamily(betweenMasks, betweenId)
 showColumns <- c('label', 'nConnections', 'nScans', 'LowRisk.Mean', 'HighRisk.Mean', 'Diff.LowMinusHigh', 'Diff.inSD', 'Grp.p', 'Grp.p.adj', 'GA.p', 'Intx.p', 'Intx.p.adj')
 nmWidth <- options(width = 220)
 cat('\n=== Network-level connectivity (average of connections; score = ', networkScore, ') ===\n', sep = '')
-cat('Diff.LowMinusHigh: Low minus High Risk, adjusted for age (positive = Low Risk higher). Diff.inSD: that difference in SD of the scores.\n',
+cat('Diff.LowMinusHigh: Low-risk minus High-risk, adjusted for age (positive = Low-risk higher). Diff.inSD: that difference in SD of the scores.\n',
     'p.adj: FDR within the table (', nrow(within$fits), ' networks; ', nrow(between$fits), ' network pairs). Intx.p is from the model with age centered at the mean.\n', sep = '')
 cat('\nWITHIN networks\n')
 print(format(within$fits[, showColumns], digits = 3), row.names = FALSE)
@@ -157,10 +157,10 @@ scoreAxisLabel <- paste0('Average connectivity', ifelse(networkScore == 'absmean
 # Bars: adjusted group means for every score in a family
 familyBars <- function(fits, xAngle = 0) {
   labels <- fits$label
-  barData <- rbind(data.frame(label = labels, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
-                   data.frame(label = labels, Group = 'High Risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
+  barData <- rbind(data.frame(label = labels, Group = 'Low-risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
+                   data.frame(label = labels, Group = 'High-risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
   barData$label <- factor(barData$label, levels = labels)
-  barData$Group <- factor(barData$Group, levels = c('Low Risk', 'High Risk'))
+  barData$Group <- factor(barData$Group, levels = c('Low-risk', 'High-risk'))
   starData <- data.frame(label = factor(labels, levels = labels),
                          y = pmax(fits$LowRisk.Mean + fits$LowRisk.SE, fits$HighRisk.Mean + fits$HighRisk.SE), star = starFor(fits$Grp.p.adj))
   starData$y <- starData$y + .04 * diff(range(c(0, barData$Mean + barData$SE)))
@@ -168,8 +168,8 @@ familyBars <- function(fits, xAngle = 0) {
     ggplot2::geom_col(position = ggplot2::position_dodge(.8), width = .72, linewidth = .8) +
     ggplot2::geom_errorbar(ggplot2::aes(ymin = Mean - SE, ymax = Mean + SE), position = ggplot2::position_dodge(.8), width = .25, color = 'black', linewidth = .6) +
     ggplot2::geom_text(data = starData, ggplot2::aes(x = label, y = y, label = star), inherit.aes = FALSE, size = 7) +
-    ggplot2::scale_fill_manual(values = c('Low Risk' = networkBarFill[['low']], 'High Risk' = networkBarFill[['high']]), name = NULL) +
-    ggplot2::scale_color_manual(values = c('Low Risk' = groupColors[['low']], 'High Risk' = groupColors[['high']]), name = NULL) +
+    ggplot2::scale_fill_manual(values = c('Low-risk' = networkBarFill[['low']], 'High-risk' = networkBarFill[['high']]), name = NULL) +
+    ggplot2::scale_color_manual(values = c('Low-risk' = groupColors[['low']], 'High-risk' = groupColors[['high']]), name = NULL) +
     ggplot2::labs(x = NULL, y = scoreAxisLabel, caption = '* p.adj < .05, + p.adj < .10 (FDR within this figure); age-adjusted means +/- SE') +
     ggplot2::theme_classic(base_size = 14) +
     ggplot2::theme(legend.position = 'bottom', axis.text.y = ggplot2::element_text(color = 'black'),
@@ -202,7 +202,7 @@ familyByAge <- function(family) {
     ggplot2::geom_point(data = agePoints, alpha = .5, size = 1.1) +
     ggplot2::geom_line(data = ageLines, linewidth = 1.1) +
     ggplot2::facet_wrap(~panel, ncol = 4, scales = 'free_y') +
-    ggplot2::scale_color_manual(values = c(TD = groupColors[['low']], ASD = groupColors[['high']]), labels = c(TD = 'Low Risk', ASD = 'High Risk'), name = NULL) +
+    ggplot2::scale_color_manual(values = c(TD = groupColors[['low']], ASD = groupColors[['high']]), labels = c(TD = 'Low-risk', ASD = 'High-risk'), name = NULL) +
     ggplot2::labs(x = 'Postmenstrual age at scan (weeks)', y = scoreAxisLabel) +
     ggplot2::theme_classic(base_size = 11) +
     ggplot2::theme(strip.text = ggplot2::element_text(size = 8, hjust = 0), strip.background = ggplot2::element_blank(), legend.position = 'bottom',
@@ -214,7 +214,7 @@ showFigure(familyByAge(within), 'networkAverages_within_by_age', width = 14, hei
 showFigure(familyBars(between$fits, xAngle = 45), 'networkAverages_between_bars', width = 14, height = 8, subfolder = networkAveragesFolder)
 showFigure(familyByAge(between), 'networkAverages_between_by_age', width = 14, height = 2.2 + 2.6 * ceiling(nrow(between$fits) / 4), subfolder = networkAveragesFolder)
 
-# One matrix: Low minus High Risk difference for every network (diagonal = within) and network pair (off the diagonal)
+# One matrix: Low-risk minus High-risk difference for every network (diagonal = within) and network pair (off the diagonal)
 cells <- rbind(
   data.frame(row = within$fits$network, col = within$fits$network, diff = within$fits$Diff.LowMinusHigh, star = starFor(within$fits$Grp.p.adj), stringsAsFactors = FALSE),
   do.call(rbind, lapply(seq_along(pairs), function(i) {
@@ -230,8 +230,8 @@ networkAverages_matrix <- ggplot2::ggplot(cells, ggplot2::aes(x = row, y = col, 
   ggplot2::geom_tile(color = 'white', linewidth = 1) +
   ggplot2::geom_text(ggplot2::aes(label = text), size = 3.6, lineheight = .9) +
   ggplot2::scale_fill_gradient2(low = groupColors[['high']], mid = 'white', high = groupColors[['low']], midpoint = 0, limits = c(-limit, limit),
-                                name = 'Low minus High\nRisk difference') +
-  ggplot2::labs(x = NULL, y = NULL, caption = 'Diagonal = within the network; off-diagonal = between two networks. Blue = Low Risk higher, red = High Risk higher.\n* p.adj < .05, + p.adj < .10 (FDR within the within-network and between-network families separately); age-adjusted') +
+                                name = 'Low-risk minus High-risk\ndifference') +
+  ggplot2::labs(x = NULL, y = NULL, caption = 'Diagonal = within the network; off-diagonal = between two networks. Blue = Low-risk higher, red = High-risk higher.\n* p.adj < .05, + p.adj < .10 (FDR within the within-network and between-network families separately); age-adjusted') +
   ggplot2::theme_minimal(base_size = 13) +
   ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text.x = ggplot2::element_text(color = 'black', angle = 45, hjust = 1), axis.text.y = ggplot2::element_text(color = 'black'))
 showFigure(networkAverages_matrix, 'networkAverages_matrix', width = 9, height = 7.5, subfolder = networkAveragesFolder)

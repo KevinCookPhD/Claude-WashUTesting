@@ -389,7 +389,7 @@ cat('\nROIs/connections whose group-effect status (sig = p.adj < .05, trend = < 
     ifelse(is.null(statusChanges), 0, nrow(statusChanges)), '\n')
 if (!is.null(statusChanges)) {
   print(table(statusChanges$analysis))
-  cat('(the full list is in the object statusChanges; betaSign + means Low Risk higher at that centering)\n')
+  cat('(the full list is in the object statusChanges; betaSign + means Low-risk higher at that centering)\n')
 }
 
 if (exists('saveTables') && isTRUE(saveTables)) {
@@ -453,7 +453,7 @@ pmaNetworkPanel <- function(net, tbl) {
     ggplot2::geom_line(data = lines, linewidth = 1.1) +
     ggplot2::facet_wrap(~panel, ncol = 4, scales = 'free_y') +
     ggplot2::scale_color_manual(values = c(TD = groupColors[['low']], ASD = groupColors[['high']]),
-                                labels = c(TD = 'Low Risk', ASD = 'High Risk'), name = NULL) +
+                                labels = c(TD = 'Low-risk', ASD = 'High-risk'), name = NULL) +
     ggplot2::labs(title = paste0(title, ' (', sum(pmin(keep$Grp.p.adj, keep$Itx.p.adj) < .05), ' significant, ',
                                  sum(pmin(keep$Grp.p.adj, keep$Itx.p.adj) >= .05), ' trending)'),
                   x = 'Postmenstrual age at scan (weeks)', y = 'Connectivity strength') +
@@ -490,17 +490,17 @@ if (length(panels) == 0) {
 
 # Region of significance: at which ages do the groups differ? ----
 #
-# The model is  outcome ~ Low-Risk indicator * age  with a random intercept per participant, so the Low minus High Risk difference at a
+# The model is  outcome ~ Low-Risk indicator * age  with a random intercept per participant, so the Low-risk minus High-risk difference at a
 # given age is  (group beta) + (interaction beta) * age.  Instead of testing it at one chosen age (what centering does), this tests it
 # at every half week of age from the youngest to the oldest age present in BOTH groups, and reports the ages where it is significant.
 # Nothing outside the observed ages is tested, so there is no extrapolation.
 #
 # Per connection/ROI this gives: the crossover age (where the difference is zero, if it falls inside the tested range) and the ages
-# where Low Risk is higher and where High Risk is higher, both with the p-values uncorrected and FDR-corrected across the
+# where Low-risk is higher and where High-risk is higher, both with the p-values uncorrected and FDR-corrected across the
 # connections/ROIs of that network at each age. regionOfSignificanceMethod picks which one the figure uses.
 
-# Low minus High Risk difference at each age for one connection/ROI.
-#   d: data frame with columns y (outcome), age, low (1 = Low Risk, 0 = High Risk) and id (participant)
+# Low-risk minus High-risk difference at each age for one connection/ROI.
+#   d: data frame with columns y (outcome), age, low (1 = Low-risk, 0 = High-risk) and id (participant)
 differenceAcrossAge <- function(d) {
   d <- d[complete.cases(d[, c('y', 'age', 'low', 'id')]), ]
   lo <- max(tapply(d$age, d$low, min)); hi <- min(tapply(d$age, d$low, max))
@@ -618,7 +618,7 @@ if (exists('saveTables') && isTRUE(saveTables)) {
   write.csv(regionSummary, file.path(pmaTableDir, 'PMACheck_region_of_significance_summary.csv'), row.names = FALSE)
 }
 
-# Figure: the Low minus High Risk difference across age, for the connections/ROIs that differ at some age
+# Figure: the Low-risk minus High-risk difference across age, for the connections/ROIs that differ at some age
 pmaRegionPanel <- function(family, results) {
   sigColumn <- ifelse(regionOfSignificanceMethod == 'fdr', 'pAdjusted', 'p')
   nSig <- vapply(results, function(r) sum(r$curve[[sigColumn]] < regionOfSignificanceAlpha), numeric(1))
@@ -631,19 +631,19 @@ pmaRegionPanel <- function(family, results) {
     cv$panel <- paste0(labels[i], '\n', ifelse(is.na(results[[keep[i]]]$crossover), 'no crossover in range',
                                               paste0('crossover at wk ', round(results[[keep[i]]]$crossover, 1))))
     cv$lower <- cv$estimate - qt(.975, cv$df) * cv$se; cv$upper <- cv$estimate + qt(.975, cv$df) * cv$se
-    cv$sig <- ifelse(cv[[sigColumn]] < regionOfSignificanceAlpha, ifelse(cv$estimate > 0, 'Low Risk higher', 'High Risk higher'), NA)
+    cv$sig <- ifelse(cv[[sigColumn]] < regionOfSignificanceAlpha, ifelse(cv$estimate > 0, 'Low-risk higher', 'High-risk higher'), NA)
     cv
   }))
   curves$panel <- factor(curves$panel, levels = unique(curves$panel))
-  yLabel <- if (grepl('^Network', family)) 'Low minus High Risk connectivity' else 'Low minus High Risk normalized volume'
+  yLabel <- if (grepl('^Network', family)) 'Low-risk minus High-risk connectivity' else 'Low-risk minus High-risk normalized volume'
   plotObj <- ggplot2::ggplot(curves, ggplot2::aes(x = age, y = estimate)) +
     ggplot2::geom_hline(yintercept = 0, color = '#444444', linewidth = .5) +
     ggplot2::geom_ribbon(ggplot2::aes(ymin = lower, ymax = upper), fill = '#bbbbbb', alpha = .5) +
     ggplot2::geom_line(linewidth = .8, color = '#333333') +
     ggplot2::geom_point(data = curves[!is.na(curves$sig), ], ggplot2::aes(color = sig), size = 1.8) +
     ggplot2::facet_wrap(~panel, ncol = 4, scales = 'free_y') +
-    ggplot2::scale_color_manual(values = c('Low Risk higher' = groupColors[['low']], 'High Risk higher' = groupColors[['high']]),
-                                limits = c('Low Risk higher', 'High Risk higher'), drop = FALSE, name = NULL) +
+    ggplot2::scale_color_manual(values = c('Low-risk higher' = groupColors[['low']], 'High-risk higher' = groupColors[['high']]),
+                                limits = c('Low-risk higher', 'High-risk higher'), drop = FALSE, name = NULL) +
     ggplot2::labs(title = paste0(family, ' (', length(keep), ifelse(sum(nSig > 0) > length(keep), paste0(' of ', sum(nSig > 0)), ''),
                                  ' connections/ROIs with a significant age range)'),
                   x = 'Postmenstrual age at scan (weeks)', y = yLabel) +
