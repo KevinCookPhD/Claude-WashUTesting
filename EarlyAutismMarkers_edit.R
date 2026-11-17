@@ -1868,8 +1868,8 @@ tier2Figure <- function(palette = networkNodeColors) {
   long <- rbind(data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'Low Risk', Mean = shown$TD.Mean, SE = shown$TD.SE),
                 data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'High Risk', Mean = shown$ASD.Mean, SE = shown$ASD.SE))
   long$Group <- factor(long$Group, levels = c('Low Risk', 'High Risk'))
-  yBreaks <- pretty(c(0, long$Mean + long$SE), n = 5)
-  topY <- max(yBreaks); band <- .13 * topY
+  yBreaks <- pretty(c(0, long$Mean - long$SE, long$Mean + long$SE), n = 5)      # includes the lower end of any error bar that dips below zero
+  bottomY <- min(yBreaks); topY <- max(yBreaks); band <- .13 * (topY - bottomY)
   background <- data.frame(unit = factor(usedNets, levels = usedNets),
                            x = vapply(usedNets, function(u) (sum(shown$unit == u) + 1) / 2, numeric(1)),
                            tint = vapply(palette[usedNets], tintColor, character(1), amount = .72), solid = unname(palette[usedNets]),
@@ -1882,16 +1882,17 @@ tier2Figure <- function(palette = networkNodeColors) {
   xLabels <- setNames(connectionLabel(as.character(shown$ROI)), as.character(shown$ROI))
 
   bars <- ggplot(long, aes(x = ROI, y = Mean, fill = Group)) +
-    geom_rect(data = background, aes(xmin = -Inf, xmax = Inf, ymin = 0, ymax = topY + band), fill = background$tint, inherit.aes = FALSE) +
+    geom_rect(data = background, aes(xmin = -Inf, xmax = Inf, ymin = bottomY, ymax = topY + band), fill = background$tint, inherit.aes = FALSE) +
     geom_vline(data = dividers, aes(xintercept = x), color = 'white', linewidth = 1.4) +
     geom_rect(data = background, aes(xmin = -Inf, xmax = Inf, ymin = topY, ymax = topY + band), fill = background$solid, inherit.aes = FALSE) +
     geom_text(data = background, aes(x = x, y = topY + band / 2, label = name), color = background$text, inherit.aes = FALSE, size = 5, hjust = .5) +
+    geom_hline(yintercept = 0, linewidth = 1) +
     geom_col(position = position_dodge(.85), width = .8, color = '#000000', linewidth = .8) +
     geom_errorbar(aes(ymin = Mean - SE, ymax = Mean + SE), position = position_dodge(.85), width = .25, linewidth = 1.1) +
     scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
     scale_x_discrete(labels = xLabels) +
     facet_grid(~unit, scales = 'free_x', space = 'free_x') +
-    scale_y_continuous(limits = c(0, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
+    scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
     labs(x = NULL, y = 'Connectivity Strength') +
     themeRegionalFigure(showXTitle = FALSE) +
     theme(axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = .5), strip.text = element_blank(), strip.background = element_blank(),
