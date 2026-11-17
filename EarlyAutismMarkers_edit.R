@@ -1274,6 +1274,9 @@ for (k in seq_along(figureThresholds)) {
 # name as the y-axis title. The adjusted p-values are saved in the regional_combined_regions table. Text sizes: 14 pt titles, 12 pt everything else.
 combinedFigureThreshold <- .10
 
+# TRUE outlines the points in the group colors (blue / red); FALSE outlines them in black
+colorPointOutlines <- TRUE
+
 # Names used on the y axis for regions that are not in regionalFigureROIs (the column name with the underscores removed is looked up here)
 regionNameOverrides <- c('Thalamus HighIntensity' = 'Thalamus', 'Lentiform' = 'Pallidum')
 fullNameOverrides <- c(FusiformAnt_GM_R = 'Anterior Fusiform (R)')      # whole y-axis names, by column name
@@ -1297,7 +1300,8 @@ plotRoiCombined <- function(roi) {
     scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
     scale_shape_manual(values=c(23,21)) +
     scale_fill_manual(values=c(groupPointFill[['low']], groupPointFill[['high']])) +
-    geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4, stroke=.75) +
+    (if (colorPointOutlines) geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`, color=`Autism Risk`), size=4, stroke=1)
+     else geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4, stroke=.75)) +
     scale_color_manual(values=c(groupLineColor[['low']], groupLineColor[['high']])) +
     geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
     ylab(wrapAxisLabel(shortRegionName(roi), width = 24)) + xlab('Gestational Age (Weeks)') +
@@ -1310,10 +1314,10 @@ combinedLegendPanel <- function() {
   ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
     annotate('rect', xmin = .12, xmax = .88, ymin = .36, ymax = .64, fill = 'white', colour = 'black', linewidth = 1) +
     annotate('segment', x = .17, xend = .35, y = .55, yend = .55, colour = groupLineColor[['low']], linewidth = 2) +
-    annotate('point', x = .26, y = .55, shape = 23, size = 5, fill = groupPointFill[['low']], colour = 'black', stroke = .75) +
+    annotate('point', x = .26, y = .55, shape = 23, size = 5, fill = groupPointFill[['low']], colour = if (colorPointOutlines) groupLineColor[['low']] else 'black', stroke = if (colorPointOutlines) 1 else .75) +
     annotate('text', x = .40, y = .55, label = 'Low Risk', hjust = 0, size = 12 / .pt) +
     annotate('segment', x = .17, xend = .35, y = .45, yend = .45, colour = groupLineColor[['high']], linewidth = 2) +
-    annotate('point', x = .26, y = .45, shape = 21, size = 5, fill = groupPointFill[['high']], colour = 'black', stroke = .75) +
+    annotate('point', x = .26, y = .45, shape = 21, size = 5, fill = groupPointFill[['high']], colour = if (colorPointOutlines) groupLineColor[['high']] else 'black', stroke = if (colorPointOutlines) 1 else .75) +
     annotate('text', x = .40, y = .45, label = 'High Risk', hjust = 0, size = 12 / .pt)
 }
 
