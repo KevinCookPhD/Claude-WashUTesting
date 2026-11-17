@@ -19,10 +19,12 @@
 
 # Settings ----
 
-# The three input files
-fetalAtlasFile  <- 'tcorr_cluster_100ROIs_per_hemi.nii'                         # fetal parcellation (labels 1-200)
-fetalLabelFile  <- 'r200_Net.csv'                                               # one row per parcel: ROINum, Name_Abrv, Lobe, X, Y, Z, ...
-schaeferFile    <- 'Schaefer2018_400Parcels_7Networks_order_FSLMNI152_1mm.nii'  # Yeo 7-network cortical atlas in MNI space
+# The three input files, in the atlas folder (baseDir/functional/atlasParcellattion when baseDir is defined, otherwise the current folder;
+# note the folder name is spelled as it is on disk)
+atlasDir <- if (exists('baseDir')) file.path(baseDir, 'functional', 'atlasParcellattion') else '.'
+fetalAtlasFile  <- file.path(atlasDir, 'tcorr_cluster_100ROIs_per_hemi.nii')                         # fetal parcellation (labels 1-200)
+fetalLabelFile  <- file.path(atlasDir, 'r200_Net.csv')                                               # one row per parcel: ROINum, Name_Abrv, Lobe, X, Y, Z, ...
+schaeferFile    <- file.path(atlasDir, 'Schaefer2018_400Parcels_7Networks_order_FSLMNI152_1mm.nii')  # Yeo 7-network cortical atlas in MNI space
 
 # Amygdala, hippocampus and parahippocampal parcels are subcortical structures but are in your Limbic network. Which network
 # should they get? 'Limbic' (as in your current lists) or 'Subcortical'.
