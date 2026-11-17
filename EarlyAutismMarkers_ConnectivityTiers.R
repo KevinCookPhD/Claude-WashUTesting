@@ -33,6 +33,13 @@ runTier3 <- TRUE
 # How the connections of a network are combined in Tier 1: 'mean' = plain average; 'absmean' = average of absolute values
 networkScore <- 'mean'
 
+# Use the revised network membership (the parcel-by-parcel decisions in networkSpecs_revised.R) instead of the original lists in networkSpecs.
+# FALSE runs the original lists (needed if you want to compare the two). The file is looked for in baseDir/functional/atlasParcellattion,
+# then in the working folder.
+useRevisedNetworks <- TRUE
+revisedNetworksFile <- if (exists('baseDir') && file.exists(file.path(baseDir, 'functional', 'atlasParcellattion', 'networkSpecs_revised.R')))
+  file.path(baseDir, 'functional', 'atlasParcellattion', 'networkSpecs_revised.R') else 'networkSpecs_revised.R'
+
 # Subfolder (inside the figure and table folders) for everything this script writes
 tiersFolder <- 'connectivityTiers'
 
@@ -47,7 +54,13 @@ tierMissing <- tierNeeded[!vapply(tierNeeded, exists, logical(1))]
 if (length(tierMissing) > 0) { stop('Run EarlyAutismMarkers_edit.R first (current version). These objects are missing: ', paste(tierMissing, collapse = ', ')) }
 if (!networkScore %in% c('mean', 'absmean')) { stop("networkScore must be 'mean' or 'absmean'") }
 if (!tier2FDR %in% c('withinNetwork', 'allTier2')) { stop("tier2FDR must be 'withinNetwork' or 'allTier2'") }
-message('Tier networks: ', paste(networksOfInterest, collapse = ', '))
+if (useRevisedNetworks) {
+  if (!file.exists(revisedNetworksFile)) { stop('Revised network file not found: ', revisedNetworksFile, '. Put networkSpecs_revised.R there or set revisedNetworksFile.') }
+  source(revisedNetworksFile)            # replaces networkSpecs for the four networks and keeps the old ones in networkSpecsOriginal
+} else if (exists('networkSpecsOriginal')) {
+  networkSpecs <- networkSpecsOriginal   # go back to the original lists if the revised ones were loaded earlier in this session
+}
+message('Tier networks: ', paste(networksOfInterest, collapse = ', '), if (useRevisedNetworks) ' (revised membership)' else ' (original membership)')
 if (!exists('resultTables')) { resultTables <- list() }
 
 # Helpers ----
