@@ -1,0 +1,201 @@
+ROINum,Name_Abrv,ROIName,Hemisphere,Lobe,yeoA,yeoB,purityA,proposed,basis
+1,MTG.L,Middle Temporal Gyrus,Left,Temporal,Dorsal Attention,Dorsal Attention,0.64,Dorsal Attention,"Yeo, high confidence"
+2,STG.L,Superior Temporal Gyrus,Left,Temporal,Somatomotor,Somatomotor,0.63,Somatomotor,"Yeo, high confidence"
+3,PreCG.L,Precentral Gyrus,Left,Frontal,Somatomotor,Somatomotor,0.74,Somatomotor,"Yeo, high confidence"
+4,ACG.L,Anterior Cingulate Gyrus,Left,Frontal,Salience / Ventral Attention,Salience / Ventral Attention,0.73,Salience / Ventral Attention,"Yeo, high confidence"
+5,ORBsupb.L,Orbital (Superior),Left,Frontal,Limbic,Limbic,0.97,Limbic,"Yeo, high confidence"
+6,CRB.L,Cerebellum,Left,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+7,SPG.L,Superior Parietal Gyrus,Left,Parietal,Dorsal Attention,Dorsal Attention,0.6,Dorsal Attention,"Yeo, high confidence"
+8,PreCG.L,Precentral Gyrus,Left,Frontal,Somatomotor,Somatomotor,1,Somatomotor,"Yeo, high confidence"
+9,TPOmid.L,Temporal Pole (Middle),Left,Temporal,Limbic,Limbic,1,Limbic,"Yeo, high confidence"
+10,FFG.L,Fusiform Gyrus,Left,Temporal,Visual,Visual,1,Visual,"Yeo, high confidence"
+11,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,Frontal,Default Mode,Default Mode,0.93,Default Mode,"Yeo, high confidence"
+12,INS.L,Insula,Left,Parietal,Somatomotor,Somatomotor,1,Somatomotor,"Yeo, high confidence"
+13,CRB.L,Cerebellum,Left,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+14,PoCG.L,Postcentral Gyrus,Left,Parietal,Somatomotor,Somatomotor,1,Somatomotor,"Yeo, high confidence"
+15,CAL.L,Calcerine Cortex,Left,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+16,ORBmid.L,Orbital (Middle),Left,Frontal,Control,Control,0.66,Control,"Yeo, high confidence"
+17,CRB.L,Cerebellum,Left,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+18,SFGmed.L,Superior Frontal Gyrus (Medial),Left,Frontal,Default Mode,Default Mode,1,Default Mode,"Yeo, high confidence"
+19,IOG.L,Inferior Occipital Gyrus,Left,Occipital,Visual,Visual,0.98,Visual,"Yeo, high confidence"
+20,REC.L,Rectus,Left,Frontal,Limbic,Limbic,0.72,Limbic,"Yeo, high confidence"
+21,IPL.L,Inferior Parietal Lobule,Left,Parietal,Default Mode,Default Mode,0.97,Default Mode,"Yeo, high confidence"
+22,MTG.L,Middle Temporal Gyrus,Left,Temporal,Default Mode,Default Mode,0.96,Default Mode,"Yeo, high confidence"
+23,PCUN.L,Precuneus,Left,Parietal,Default Mode,Default Mode,1,Default Mode,"Yeo, high confidence"
+24,MFG.L,Middle Frontal Gyrus,Left,Frontal,Default Mode,Default Mode,0.75,Default Mode,"Yeo, high confidence"
+25,CUN.L,Cuneus,Left,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+26,PCUN.L,Precuneus,Left,Parietal,Somatomotor,Somatomotor,0.42,Somatomotor,"Yeo, low confidence"
+27,BS,Brainstem,Left,Brainstem,NA,NA,NA,Brainstem,anatomy
+28,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,Frontal,Default Mode,Default Mode,0.86,Default Mode,"Yeo, high confidence"
+29,AMY.L,Amygdala,Left,Subcortical,NA,NA,NA,Limbic,anatomy
+30,CUN.L,Cuneus,Left,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+31,CAU.L,Caudate,Left,Subcortical,NA,NA,NA,Subcortical,anatomy
+32,CAU.L,Caudate,Left,Subcortical,NA,NA,NA,Subcortical,anatomy
+33,IPL.L,Inferior Parietal Lobule,Left,Parietal,Somatomotor,Somatomotor,0.41,Somatomotor,"Yeo, low confidence"
+34,ACG.L,Anterior Cingulate Gyrus,Left,Frontal,Default Mode,Default Mode,1,Default Mode,"Yeo, high confidence"
+35,IOG.L,Inferior Occipital Gyrus,Left,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+36,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,Frontal,Default Mode,Default Mode,0.59,Default Mode,"Yeo, low confidence"
+37,MCG.L,Middle Cingulate Gyrus,Left,Parietal,Somatomotor,Somatomotor,0.67,Somatomotor,"Yeo, high confidence"
+38,INS.L,Insula,Left,Parietal,Salience / Ventral Attention,Control,0.44,Salience / Ventral Attention,"Yeo, low confidence"
+39,CAU.L,Caudate,Left,Subcortical,NA,NA,NA,Subcortical,anatomy
+40,STG.L,Superior Temporal Gyrus,Left,Temporal,Default Mode,Default Mode,0.56,Default Mode,"Yeo, low confidence"
+41,PreCG.L,Precentral Gyrus,Left,Frontal,Somatomotor,Somatomotor,0.86,Somatomotor,"Yeo, high confidence"
+42,CUN.L,Cuneus,Left,Occipital,Visual,Default Mode,0.57,Visual,"Yeo, low confidence"
+43,PHG.L,Parahippocampal Gyrus,Left,Subcortical,NA,NA,NA,Limbic,anatomy
+44,SPG.L,Superior Parietal Gyrus,Left,Parietal,Dorsal Attention,Dorsal Attention,0.67,Dorsal Attention,"Yeo, high confidence"
+45,ITG.L,Inferior Temporal Gyrus,Left,Temporal,Dorsal Attention,Dorsal Attention,0.68,Dorsal Attention,"Yeo, high confidence"
+46,MFG.L,Middle Frontal Gyrus,Left,Frontal,Default Mode,Default Mode,0.57,Default Mode,"Yeo, low confidence"
+47,BS,Brainstem,Left,Brainstem,NA,NA,NA,Brainstem,anatomy
+48,STG.L,Superior Temporal Gyrus,Left,Temporal,Somatomotor,Somatomotor,0.56,Somatomotor,"Yeo, low confidence"
+49,PreCG.L,Precentral Gyrus,Left,Frontal,Somatomotor,Somatomotor,0.83,Somatomotor,"Yeo, high confidence"
+50,ORBmid.L,Orbital (Middle),Left,Frontal,Limbic,Limbic,0.54,Limbic,"Yeo, low confidence"
+51,THA.L,Thalamus,Left,Subcortical,NA,NA,NA,Subcortical,anatomy
+52,MOG.L,Middle Occipital Gyrus,Left,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+53,ACG.L,Anterior Cingulate Gyrus,Left,Frontal,Default Mode,Default Mode,0.76,Default Mode,"Yeo, high confidence"
+54,CRB.L,Cerebellum,Left,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+55,MFG.L,Middle Frontal Gyrus,Left,Frontal,Default Mode,Default Mode,0.56,Default Mode,"Yeo, low confidence"
+56,ITG.L,Inferior Temporal Gyrus,Left,Temporal,Limbic,Limbic,0.81,Limbic,"Yeo, high confidence"
+57,MOG.L,Middle Occipital Gyrus,Left,Occipital,Visual,Visual,0.67,Visual,"Yeo, high confidence"
+58,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,Frontal,Control,Control,0.92,Control,"Yeo, high confidence"
+59,BS,Brainstem,Left,Brainstem,NA,NA,NA,Brainstem,anatomy
+60,CAL.L,Calcerine Cortex,Left,Occipital,Visual,Visual,0.96,Visual,"Yeo, high confidence"
+61,MTG.L,Middle Temporal Gyrus,Left,Temporal,Default Mode,Default Mode,0.88,Default Mode,"Yeo, high confidence"
+62,PoCG.L,Postcentral Gyrus,Left,Parietal,Somatomotor,Somatomotor,0.59,Somatomotor,"Yeo, low confidence"
+63,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,Frontal,Default Mode,Default Mode,0.8,Default Mode,"Yeo, high confidence"
+64,SPG.L,Superior Parietal Gyrus,Left,Parietal,Somatomotor,Somatomotor,0.83,Somatomotor,"Yeo, high confidence"
+65,INS.L,Insula,Left,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.62,Salience / Ventral Attention,"Yeo, high confidence"
+66,PCUN.L,Precuneus,Left,Parietal,Default Mode,Default Mode,0.4,Default Mode,"Yeo, low confidence"
+67,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,Frontal,Default Mode,Default Mode,0.74,Default Mode,"Yeo, high confidence"
+68,ITG.L,Inferior Temporal Gyrus,Left,Temporal,Limbic,Limbic,0.73,Limbic,"Yeo, high confidence"
+69,MTG.L,Middle Temporal Gyrus,Left,Temporal,Default Mode,Default Mode,0.47,Default Mode,"Yeo, low confidence"
+70,MCG.L,Middle Cingulate Gyrus,Left,Parietal,Default Mode,Default Mode,0.53,Default Mode,"Yeo, low confidence"
+71,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,Frontal,Dorsal Attention,Dorsal Attention,0.57,Dorsal Attention,"Yeo, low confidence"
+72,LING.L,Lingual,Left,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+73,PoCG.L,Postcentral Gyrus,Left,Parietal,Somatomotor,Somatomotor,0.83,Somatomotor,"Yeo, high confidence"
+74,ORBinf.L,Orbital (Inferior),Left,Frontal,Default Mode,Default Mode,0.62,Default Mode,"Yeo, high confidence"
+75,LING.L,Lingual,Left,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+76,MCG.L,Middle Cingulate Gyrus,Left,Parietal,Control,Control,0.58,Control,"Yeo, low confidence"
+77,ORBinf.L,Orbital (Inferior),Left,Frontal,Control,Control,0.62,Control,"Yeo, high confidence"
+78,SMG.L,Supramarginal Gyrus,Left,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.47,Salience / Ventral Attention,"Yeo, low confidence"
+79,BS,Brainstem,Left,Brainstem,NA,NA,NA,Brainstem,anatomy
+80,THA.L,Thalamus,Left,Subcortical,NA,NA,NA,Subcortical,anatomy
+81,ORBsupb.L,Orbital (Superior),Left,Frontal,Limbic,Limbic,0.77,Limbic,"Yeo, high confidence"
+82,MCG.L,Middle Cingulate Gyrus,Left,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.82,Salience / Ventral Attention,"Yeo, high confidence"
+83,SMG.L,Supramarginal Gyrus,Left,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.72,Salience / Ventral Attention,"Yeo, high confidence"
+84,MFG.L,Middle Frontal Gyrus,Left,Frontal,Default Mode,Default Mode,0.62,Default Mode,"Yeo, high confidence"
+85,SFGmed.L,Superior Frontal Gyrus (Medial),Left,Frontal,Default Mode,Default Mode,1,Default Mode,"Yeo, high confidence"
+86,PHG.L,Parahippocampal Gyrus,Left,Subcortical,NA,NA,NA,Limbic,anatomy
+87,MOG.L,Middle Occipital Gyrus,Left,Occipital,Visual,Visual,0.87,Visual,"Yeo, high confidence"
+88,STG.L,Superior Temporal Gyrus,Left,Temporal,Default Mode,Default Mode,0.57,Default Mode,"Yeo, low confidence"
+89,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,Frontal,Control,Control,0.86,Control,"Yeo, high confidence"
+90,IPL.L,Inferior Parietal Lobule,Left,Parietal,Control,Control,0.59,Control,"Yeo, low confidence"
+91,SPG.L,Superior Parietal Gyrus,Left,Parietal,Visual,Visual,0.45,Visual,"Yeo, low confidence"
+92,PUT.L,Putamen,Left,Subcortical,NA,NA,NA,Subcortical,anatomy
+93,PreCG.L,Precentral Gyrus,Left,Frontal,Salience / Ventral Attention,Dorsal Attention,0.3,Salience / Ventral Attention,"Yeo, low confidence"
+94,INS.L,Insula,Left,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.72,Salience / Ventral Attention,"Yeo, high confidence"
+95,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,Frontal,Control,Control,0.78,Control,"Yeo, high confidence"
+96,MTG.L,Middle Temporal Gyrus,Left,Temporal,Default Mode,Default Mode,0.77,Default Mode,"Yeo, high confidence"
+97,PAL.L,Pallidum,Left,Subcortical,NA,NA,NA,Subcortical,anatomy
+98,SOG.L,Superior Occipital Gyrus,Left,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+99,CRB.L,Cerebellum,Left,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+100,PCG.L,Paracentral Lobule,Left,Parietal,Default Mode,Default Mode,0.72,Default Mode,"Yeo, high confidence"
+101,CRB.R,Cerebellum,Right,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+102,STG.R,Superior Temporal Gyrus,Right,Temporal,Salience / Ventral Attention,Default Mode,0.38,Salience / Ventral Attention,"Yeo, low confidence"
+103,PreCG.R,Precentral Gyrus,Right,Frontal,Control,Control,0.68,Control,"Yeo, high confidence"
+104,ORBmed.R,Orbital (Medial),Right,Frontal,Default Mode,Default Mode,0.98,Default Mode,"Yeo, high confidence"
+105,SPG.R,Superior Parietal Gyrus,Right,Parietal,Visual,Visual,0.56,Visual,"Yeo, low confidence"
+106,PCUN.R,Precuneus,Right,Parietal,Default Mode,Default Mode,0.66,Default Mode,"Yeo, high confidence"
+107,PAL.R,Pallidum,Right,Subcortical,NA,NA,NA,Subcortical,anatomy
+108,TPOmid.R,Temporal Pole (Middle),Right,Temporal,Limbic,Default Mode,0.5,Limbic,"Yeo, low confidence"
+109,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,Frontal,Control,Control,0.73,Control,"Yeo, high confidence"
+110,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,Frontal,Default Mode,Default Mode,0.89,Default Mode,"Yeo, high confidence"
+111,PUT.R,Putamen,Right,Subcortical,NA,NA,NA,Subcortical,anatomy
+112,INS.R,Insula,Right,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.68,Salience / Ventral Attention,"Yeo, high confidence"
+113,CRB.R,Cerebellum,Right,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+114,SOG.R,Superior Occipital Gyrus,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+115,PCL.R,Paracentral Lobule,Right,Parietal,Somatomotor,Somatomotor,0.88,Somatomotor,"Yeo, high confidence"
+116,MOG.R,Middle Occipital Gyrus,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+117,IFGtriang.R,Inferior Frontal Gryus (Triangularis),Right,Frontal,Control,Control,0.62,Control,"Yeo, high confidence"
+118,BS,Brainstem,Right,Brainstem,NA,NA,NA,Brainstem,anatomy
+119,MCG.R,Middle Cingulate Gyrus,Right,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.48,Salience / Ventral Attention,"Yeo, low confidence"
+120,ITG.R,Inferior Temporal Gyrus,Right,Temporal,Limbic,Limbic,1,Limbic,"Yeo, high confidence"
+121,ORBmid.R,Orbital (Middle),Right,Frontal,Control,Control,0.8,Control,"Yeo, high confidence"
+122,PoCG.R,Postcentral Gyrus,Right,Parietal,Somatomotor,Somatomotor,0.95,Somatomotor,"Yeo, high confidence"
+123,ACG.R,Anterior Cingulate Gyrus,Right,Frontal,Default Mode,Default Mode,1,Default Mode,"Yeo, high confidence"
+124,MCG.R,Middle Cingulate Gyrus,Right,Parietal,Control,Control,0.5,Control,"Yeo, low confidence"
+125,PHG.R,Parahippocampal Gyrus,Right,Subcortical,NA,NA,NA,Limbic,anatomy
+126,PoCG.R,Postcentral Gyrus,Right,Parietal,Somatomotor,Somatomotor,0.86,Somatomotor,"Yeo, high confidence"
+127,IFGoperc.R,Inferior Frontal Gryus (Opercularis),Right,Frontal,Control,Control,0.98,Control,"Yeo, high confidence"
+128,SFGmed.R,Superior Frontal Gyrus (Medial),Right,Frontal,Default Mode,Default Mode,0.8,Default Mode,"Yeo, high confidence"
+129,CRB.R,Cerebellum,Right,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+130,SMG.R,Supramarginal Gyrus,Right,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.84,Salience / Ventral Attention,"Yeo, high confidence"
+131,IOG.R,Inferior Occipital Gyrus,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+132,PreCG.R,Precentral Gyrus,Right,Frontal,Dorsal Attention,Dorsal Attention,0.48,Dorsal Attention,"Yeo, low confidence"
+133,AMY.R,Amygdala,Right,Subcortical,NA,NA,NA,Limbic,anatomy
+134,THA.R,Thalamus,Right,Subcortical,NA,NA,NA,Subcortical,anatomy
+135,MOG.R,Middle Occipital Gyrus,Right,Occipital,Visual,Visual,0.98,Visual,"Yeo, high confidence"
+136,IPL.R,Inferior Parietal Lobule,Right,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.67,Salience / Ventral Attention,"Yeo, high confidence"
+137,SFGmed.R,Superior Frontal Gyrus (Medial),Right,Frontal,Default Mode,Default Mode,0.87,Default Mode,"Yeo, high confidence"
+138,SPG.R,Superior Parietal Gyrus,Right,Parietal,Dorsal Attention,Dorsal Attention,0.95,Dorsal Attention,"Yeo, high confidence"
+139,THA.R,Thalamus,Right,Subcortical,NA,NA,NA,Subcortical,anatomy
+140,IFGtriang.R,Inferior Frontal Gryus (Triangularis),Right,Frontal,Control,Control,0.81,Control,"Yeo, high confidence"
+141,TPOsup.R,Temporal Pole (Superior),Right,Temporal,Default Mode,Salience / Ventral Attention,0.44,Default Mode,"Yeo, low confidence"
+142,CRB.R,Cerebellum,Right,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+143,ORBsupb.R,Orbital (Superior),Right,Frontal,Limbic,Limbic,0.93,Limbic,"Yeo, high confidence"
+144,PoCG.R,Postcentral Gyrus,Right,Parietal,Somatomotor,Somatomotor,1,Somatomotor,"Yeo, high confidence"
+145,PUT.R,Putamen,Right,Subcortical,NA,NA,NA,Subcortical,anatomy
+146,MFG.R,Middle Frontal Gyrus,Right,Frontal,Control,Control,0.54,Control,"Yeo, low confidence"
+147,INS.R,Insula,Right,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.63,Salience / Ventral Attention,"Yeo, high confidence"
+148,ORBinf.R,Orbital (Inferior),Right,Frontal,Limbic,Limbic,0.63,Limbic,"Yeo, high confidence"
+149,MOG.R,Middle Occipital Gyrus,Right,Occipital,Visual,Visual,0.94,Visual,"Yeo, high confidence"
+150,MTG.R,Middle Temporal Gyrus,Right,Temporal,Control,Control,0.84,Control,"Yeo, high confidence"
+151,THA.R,Thalamus,Right,Subcortical,NA,NA,NA,Subcortical,anatomy
+152,STG.R,Superior Temporal Gyrus,Right,Temporal,Somatomotor,Somatomotor,0.64,Somatomotor,"Yeo, high confidence"
+153,SOG.R,Superior Occipital Gyrus,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+154,PCL.R,Paracentral Lobule,Right,Parietal,Salience / Ventral Attention,Salience / Ventral Attention,0.6,Salience / Ventral Attention,"Yeo, high confidence"
+155,ORBsupb.R,Orbital (Superior),Right,Frontal,Default Mode,Default Mode,0.56,Default Mode,"Yeo, low confidence"
+156,ACG.R,Anterior Cingulate Gyrus,Right,Frontal,Control,Control,0.42,Control,"Yeo, low confidence"
+157,BS,Brainstem,Right,Brainstem,NA,NA,NA,Brainstem,anatomy
+158,SPG.R,Superior Parietal Gyrus,Right,Parietal,Dorsal Attention,Dorsal Attention,0.76,Dorsal Attention,"Yeo, high confidence"
+159,ORBinf.R,Orbital (Inferior),Right,Frontal,Default Mode,Default Mode,0.75,Default Mode,"Yeo, high confidence"
+160,HIP.R,Hippocampus,Right,Subcortical,NA,NA,NA,Limbic,anatomy
+161,HES.R,Fusiform Gyrus,Right,Parietal,Somatomotor,Somatomotor,0.88,Somatomotor,"Yeo, high confidence"
+162,LING.R,Lingual,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+163,MTG.R,Middle Temporal Gyrus,Right,Temporal,Default Mode,Default Mode,0.67,Default Mode,"Yeo, high confidence"
+164,PoCG.R,Postcentral Gyrus,Right,Parietal,Somatomotor,Somatomotor,1,Somatomotor,"Yeo, high confidence"
+165,BS,Brainstem,Right,Brainstem,NA,NA,NA,Brainstem,anatomy
+166,MCG.R,Middle Cingulate Gyrus,Right,Parietal,Somatomotor,Somatomotor,0.61,Somatomotor,"Yeo, high confidence"
+167,SPG.R,Superior Parietal Gyrus,Right,Parietal,Dorsal Attention,Dorsal Attention,0.4,Dorsal Attention,"Yeo, low confidence"
+168,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,Frontal,Default Mode,Default Mode,1,Default Mode,"Yeo, high confidence"
+169,PreCG.R,Precentral Gyrus,Right,Frontal,Salience / Ventral Attention,Somatomotor,0.33,Salience / Ventral Attention,"Yeo, low confidence"
+170,SMA.R,Supplemental Motor Area,Right,Frontal,Salience / Ventral Attention,Salience / Ventral Attention,0.7,Salience / Ventral Attention,"Yeo, high confidence"
+171,STG.R,Superior Temporal Gyrus,Right,Temporal,Somatomotor,Somatomotor,0.62,Somatomotor,"Yeo, high confidence"
+172,CAL.R,Calcerine Cortex,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+173,PUT.R,Putamen,Right,Subcortical,NA,NA,NA,Subcortical,anatomy
+174,CUN.R,Cuneus,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+175,BS,Brainstem,Right,Brainstem,NA,NA,NA,Brainstem,anatomy
+176,MTG.R,Middle Temporal Gyrus,Right,Temporal,Dorsal Attention,Dorsal Attention,0.45,Dorsal Attention,"Yeo, low confidence"
+177,SMA.R,Supplemental Motor Area,Right,Frontal,Salience / Ventral Attention,Control,0.52,Salience / Ventral Attention,"Yeo, low confidence"
+178,PCUN.R,Precuneus,Right,Parietal,Default Mode,Default Mode,0.94,Default Mode,"Yeo, high confidence"
+179,ITG.R,Inferior Temporal Gyrus,Right,Temporal,Dorsal Attention,Dorsal Attention,0.73,Dorsal Attention,"Yeo, high confidence"
+180,MFG.R,Middle Frontal Gyrus,Right,Frontal,Control,Control,1,Control,"Yeo, high confidence"
+181,CUN.R,Cuneus,Right,Occipital,Visual,Visual,0.9,Visual,"Yeo, high confidence"
+182,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,Frontal,Somatomotor,Somatomotor,0.7,Somatomotor,"Yeo, high confidence"
+183,MFG.R,Middle Frontal Gyrus,Right,Frontal,Default Mode,Default Mode,0.37,Default Mode,"Yeo, low confidence"
+184,PoCG.R,Postcentral Gyrus,Right,Parietal,Dorsal Attention,Dorsal Attention,0.49,Dorsal Attention,"Yeo, low confidence"
+185,FFG.R,Fusiform Gyrus,Right,Temporal,Visual,Visual,0.99,Visual,"Yeo, high confidence"
+186,IOG.R,Inferior Occipital Gyrus,Right,Occipital,Visual,Visual,0.95,Visual,"Yeo, high confidence"
+187,PCUN.R,Precuneus,Right,Parietal,Dorsal Attention,Default Mode,0.36,Dorsal Attention,"Yeo, low confidence"
+188,ITG.R,Inferior Temporal Gyrus,Right,Temporal,Limbic,Limbic,0.9,Limbic,"Yeo, high confidence"
+189,IPL.R,Inferior Parietal Lobule,Right,Parietal,Control,Control,0.69,Control,"Yeo, high confidence"
+190,PoCG.R,Postcentral Gyrus,Right,Parietal,Somatomotor,Somatomotor,0.91,Somatomotor,"Yeo, high confidence"
+191,IPL.R,Inferior Parietal Lobule,Right,Parietal,Control,Default Mode,0.43,Control,"Yeo, low confidence"
+192,CRB.R,Cerebellum,Right,Cerebellum,NA,NA,NA,Cerebellar,anatomy
+193,MFG.R,Middle Frontal Gyrus,Right,Frontal,Control,Control,0.71,Control,"Yeo, high confidence"
+194,CAL.R,Calcerine Cortex,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+195,IPL.R,Inferior Parietal Lobule,Right,Parietal,Default Mode,Default Mode,0.53,Default Mode,"Yeo, low confidence"
+196,ORBsupb.R,Orbital (Superior),Right,Frontal,Limbic,Limbic,0.81,Limbic,"Yeo, high confidence"
+197,LING.R,Lingual,Right,Occipital,Visual,Visual,1,Visual,"Yeo, high confidence"
+198,ORBsupb.R,Orbital (Superior),Right,Frontal,Limbic,Limbic,0.89,Limbic,"Yeo, high confidence"
+199,FFG.R,Fusiform Gyrus,Right,Temporal,Visual,Visual,0.96,Visual,"Yeo, high confidence"
+200,MTG.R,Middle Temporal Gyrus,Right,Temporal,Default Mode,Default Mode,0.7,Default Mode,"Yeo, high confidence"

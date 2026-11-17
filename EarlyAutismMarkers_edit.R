@@ -2588,9 +2588,33 @@ atlasParcels$AllNetworks <- vapply(atlasParcels$ROI, function(roi) {
   inLists <- inLists[inLists %in% names(networkAllLabels)]
   if (length(inLists) == 0) 'None' else paste(networkAllLabels[inLists], collapse = '; ')
 }, character(1))
+# A network for EVERY parcel. A parcel in one of the hand-built lists above keeps that network (first of: Cerebellar, Limbic, Default Mode, Somatomotor,
+# Subcortical, Auditory, Visual). The other parcels take the network proposed by the Yeo mock-up (EarlyAutismMarkers_NetworkMembership.R; also in
+# membership_yeo_proposed.csv): the fetal cortex was approximately registered onto the adult Yeo 7-network atlas (Schaefer 400) and each cortical parcel
+# took the Yeo network it overlaps most; cerebellum, brainstem and subcortical parcels were assigned by anatomy. Two registrations were compared, and the
+# parcels where they disagree are listed in yeoLowConfidence. This is an approximate placement, least reliable in frontal and central cortex.
+yeoProposal <- list(
+  `Cerebellar` = c(6,13,17,54,99,101,113,129,142,192),
+  `Subcortical` = c(31,32,39,51,80,92,97,107,111,134,139,145,151,173),
+  `Brainstem` = c(27,47,59,79,118,157,165,175),
+  `Limbic` = c(5,9,20,29,43,50,56,68,81,86,108,120,125,133,143,148,160,188,196,198),
+  `Default Mode` = c(11,18,21,22,23,24,28,34,36,40,46,53,55,61,63,66,67,69,70,74,84,85,88,96,100,104,106,110,123,128,137,141,155,159,163,168,178,183,195,200),
+  `Somatomotor` = c(2,3,8,12,14,26,33,37,41,48,49,62,64,73,115,122,126,144,152,161,164,166,171,182,190),
+  `Visual` = c(10,15,19,25,30,35,42,52,57,60,72,75,87,91,98,105,114,116,131,135,149,153,162,172,174,181,185,186,194,197,199),
+  `Dorsal Attention` = c(1,7,44,45,71,132,138,158,167,176,179,184,187),
+  `Salience / Ventral Attention` = c(4,38,65,78,82,83,93,94,102,112,119,130,136,147,154,169,170,177),
+  `Control` = c(16,58,76,77,89,90,95,103,109,117,121,124,127,140,146,150,156,180,189,191,193))
+yeoLowConfidence <- c(26,33,36,38,40,42,46,48,50,55,62,66,69,70,71,76,78,88,90,91,93,102,105,108,119,124,132,141,146,155,156,167,169,176,177,183,184,187,191,195)
+
+yeoProposalLabel <- vapply(atlasParcels$Parcel, function(p) names(yeoProposal)[which(vapply(yeoProposal, function(v) p %in% v, logical(1)))[1]], character(1))
+atlasListLabel <- sub(';.*$', '', atlasParcels$AllNetworks)
+atlasParcels$NetworkComplete <- ifelse(atlasListLabel != 'None', atlasListLabel, yeoProposalLabel)
+atlasParcels$NetworkBasis <- ifelse(atlasListLabel != 'None', 'Hand-built list',
+                             ifelse(yeoProposalLabel == 'Brainstem', 'Anatomy',
+                             ifelse(atlasParcels$Parcel %in% yeoLowConfidence, 'Yeo mock-up, low confidence', 'Yeo mock-up, high confidence')))
 atlasParcels$NetworkOriginal <- networkMembership(networkSpecsOriginal)
 atlasParcels$ChangedFromOriginal <- ifelse(atlasParcels$Network != atlasParcels$NetworkOriginal, 'Yes', '')
-atlasParcels <- atlasParcels[, c('Parcel', 'ROI', 'Label', 'Hemisphere', 'X', 'Y', 'Z', 'Network', 'AllNetworks', 'NetworkOriginal', 'ChangedFromOriginal')]
+atlasParcels <- atlasParcels[, c('Parcel', 'ROI', 'Label', 'Hemisphere', 'X', 'Y', 'Z', 'Network', 'AllNetworks', 'NetworkComplete', 'NetworkBasis', 'NetworkOriginal', 'ChangedFromOriginal')]
 rownames(atlasParcels) <- NULL
 cat('\nAtlas parcels:', nrow(atlasParcels), '\n'); print(table(atlasParcels$Network))
 saveTable(atlasParcels, 'supplemental_atlas_parcels')
@@ -2771,7 +2795,7 @@ if (canRender3D) {
   parcelNetworkColors <- unname(networkColors[networkOfParcel])
   parcelNetworkColors[is.na(parcelNetworkColors)] <- '#C8C8C8'
 
-  threeDFigure <- function(colors, unlabeledColor, bottom = NULL) {
+  threeDFigure <- function(colors, unlabeledColor, bottom = NULL, bottomHeight = .07) {
     # Eight views. Top row: left lateral, right lateral, top, front. Bottom row: left medial, right medial, bottom, back.
     # The medial views draw one hemisphere only (left hemisphere seen from the right, right hemisphere seen from the left).
     draw <- function(view, hemisphere = NULL) atlasRender(painted, view, colors, hemisphere, unlabeledColor)
@@ -2779,7 +2803,7 @@ if (canRender3D) {
                   draw('right', 'left'), draw('left', 'right'), draw('underside'), draw('back'))
     grid <- ggpubr::ggarrange(plotlist = views, nrow = 2, ncol = 4, font.label = list(size = 14, face = 'bold'),
                               labels = c('A  Left lateral', 'B  Right lateral', 'C  Top', 'D  Front', 'E  Left medial', 'F  Right medial', 'G  Bottom', 'H  Back'))
-    if (!is.null(bottom)) { grid <- ggpubr::ggarrange(grid, bottom, nrow = 2, heights = c(1, .07)) }
+    if (!is.null(bottom)) { grid <- ggpubr::ggarrange(grid, bottom, nrow = 2, heights = c(1, bottomHeight)) }
     grid + theme(plot.background = element_rect(fill = 'white', color = NA))
   }
   networkKeyNames <- c(unname(networkNodeLabels), 'Unassigned')
@@ -2804,6 +2828,19 @@ if (canRender3D) {
   showFigure(threeDFigure(parcelColors, '#BDBDBD'), 'supplemental_atlas_3d_parcels', width = 16, height = 8.4)
   showFigure(threeDFigure(parcelNetworkColors, '#C8C8C8', bottom = networkKey), 'supplemental_atlas_3d_networks', width = 16, height = 9)
   showFigure(threeDFigure(parcelAllColors, '#C8C8C8', bottom = allKey), 'supplemental_atlas_3d_networks_all', width = 16, height = 9)
+
+  # (4) Every parcel in a network: the hand-built lists where a parcel is in one, the Yeo mock-up for the rest
+  completeNames <- c('Cerebellar', 'Subcortical', 'Brainstem', 'Limbic', 'Default Mode', 'Somatomotor', 'Visual', 'Auditory', 'Dorsal Attention', 'Salience / Ventral Attention', 'Control')
+  completeColors <- c(unname(networkNodeColors['CRB']), unname(networkNodeColors['SubCort']), '#9E9E9E', unname(networkNodeColors['Limbic']), unname(networkNodeColors['DMN']),
+                      '#F0E442', '#E7298A', '#00B8D4', '#8DB600', '#F4978E', '#34495E')
+  parcelCompleteColors <- completeColors[match(atlasParcels$NetworkComplete[match(1:200, atlasParcels$Parcel)], completeNames)]
+  completeKeyX <- c(.02, .19, .36, .50, .66, .84, .02, .19, .36, .50, .78)
+  completeKeyY <- c(rep(.72, 6), rep(.28, 5))
+  completeKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+    annotate('rect', xmin = .005, xmax = .995, ymin = .02, ymax = .98, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('point', x = completeKeyX + .015, y = completeKeyY, shape = 21, size = 6, fill = completeColors, colour = '#404040', stroke = .6) +
+    annotate('text', x = completeKeyX + .035, y = completeKeyY, label = completeNames, hjust = 0, size = 12 / .pt)
+  showFigure(threeDFigure(parcelCompleteColors, '#C8C8C8', bottom = completeKey, bottomHeight = .12), 'supplemental_atlas_3d_networks_complete', width = 16, height = 9.6)
 } else {
   message('3D atlas render skipped: the rgl and png packages, the brain mesh file and a screen are needed')
 }
