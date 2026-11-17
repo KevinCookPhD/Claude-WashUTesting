@@ -2581,9 +2581,16 @@ networkMembership <- function(specs) {
   }, character(1))
 }
 atlasParcels$Network <- networkMembership(networkSpecsRevised)
+# All seven hand-built lists (the four networks of interest plus Somatomotor, Auditory and Visual); a parcel in two lists shows both
+networkAllLabels <- c(networkNodeLabels, SomMot = 'Somatomotor', Auditory = 'Auditory', Visual = 'Visual')
+atlasParcels$AllNetworks <- vapply(atlasParcels$ROI, function(roi) {
+  inLists <- names(networkSpecsRevised)[vapply(networkSpecsRevised, function(spec) isTRUE(spec$match(roi)), logical(1))]
+  inLists <- inLists[inLists %in% names(networkAllLabels)]
+  if (length(inLists) == 0) 'None' else paste(networkAllLabels[inLists], collapse = '; ')
+}, character(1))
 atlasParcels$NetworkOriginal <- networkMembership(networkSpecsOriginal)
 atlasParcels$ChangedFromOriginal <- ifelse(atlasParcels$Network != atlasParcels$NetworkOriginal, 'Yes', '')
-atlasParcels <- atlasParcels[, c('Parcel', 'ROI', 'Label', 'Hemisphere', 'X', 'Y', 'Z', 'Network', 'NetworkOriginal', 'ChangedFromOriginal')]
+atlasParcels <- atlasParcels[, c('Parcel', 'ROI', 'Label', 'Hemisphere', 'X', 'Y', 'Z', 'Network', 'AllNetworks', 'NetworkOriginal', 'ChangedFromOriginal')]
 rownames(atlasParcels) <- NULL
 cat('\nAtlas parcels:', nrow(atlasParcels), '\n'); print(table(atlasParcels$Network))
 saveTable(atlasParcels, 'supplemental_atlas_parcels')
@@ -2780,8 +2787,20 @@ if (canRender3D) {
     annotate('point', x = networkKeyX, y = .5, shape = 21, size = 6, fill = networkKeyColors, colour = '#404040', stroke = .6) +
     annotate('text', x = networkKeyX + .025, y = .5, label = networkKeyNames, hjust = 0, size = 12 / .pt)
 
+  # (3) Parcels colored by all seven lists. A parcel in two lists takes the first of: Cerebellar, Limbic, Default Mode, Somatomotor, Subcortical, Auditory, Visual
+  allColors <- c(unname(networkNodeColors[c('CRB', 'Limbic', 'DMN')]), '#F0E442', unname(networkNodeColors['SubCort']), '#00B8D4', '#E7298A')
+  allNames <- unname(networkAllLabels[c('CRB', 'Limbic', 'DMN', 'SomMot', 'SubCort', 'Auditory', 'Visual')])
+  firstList <- sub(';.*$', '', atlasParcels$AllNetworks[match(1:200, atlasParcels$Parcel)])
+  parcelAllColors <- ifelse(firstList %in% allNames, allColors[match(firstList, allNames)], '#C8C8C8')
+  allKeyNames <- c(allNames, 'Unassigned'); allKeyColors <- c(allColors, '#C8C8C8'); allKeyX <- c(.03, .15, .27, .40, .53, .67, .78, .89)
+  allKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+    annotate('rect', xmin = .005, xmax = .995, ymin = .1, ymax = .9, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('point', x = allKeyX, y = .5, shape = 21, size = 6, fill = allKeyColors, colour = '#404040', stroke = .6) +
+    annotate('text', x = allKeyX + .02, y = .5, label = allKeyNames, hjust = 0, size = 12 / .pt)
+
   showFigure(threeDFigure(parcelColors, '#BDBDBD'), 'supplemental_atlas_3d_parcels', width = 13, height = 9)
   showFigure(threeDFigure(parcelNetworkColors, '#C8C8C8', bottom = networkKey), 'supplemental_atlas_3d_networks', width = 13, height = 9.6)
+  showFigure(threeDFigure(parcelAllColors, '#C8C8C8', bottom = allKey), 'supplemental_atlas_3d_networks_all', width = 13, height = 9.6)
 } else {
   message('3D atlas render skipped: the rgl and png packages, the brain mesh file and a screen are needed')
 }
