@@ -46,18 +46,168 @@ if (!exists('networksOfInterest')) { stop("networksOfInterest is not defined. Re
 pmaNetworks <- networksOfInterest
 message('PMACheck networks: ', paste(pmaNetworks, collapse = ', '))
 
+# The connectivity models with an interaction (copied from the earlier version of EarlyAutismMarkers_edit.R, which now uses models without an interaction) ----
+
+# Fit both models for every connection (column) of the network.
+# Returns the main-effects table (fcGLM) and the interaction table (fcIntxGLM).
+fitNetworkModels <- function(tdFCNetwork, asdFCNetwork, tdDemo, asdDemo) {
+
+  lmeCtrl <- lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')
+
+  fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
+  colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
+
+  fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
+  colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
+
+  for(i in 1:nrow(fcGLM)){
+
+    tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
+    colnames(tempTD) <- c('ID','FC')
+    tempTD$Grp <- 'TD'
+    tempTD <- merge(tempTD, tdDemo)
+
+    tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
+    colnames(tempASD) <- c('ID','FC')
+    tempASD$Grp <- 'ASD'
+    tempASD <- merge(tempASD, asdDemo)
+
+    glmFrame <- rbind(tempTD, tempASD)
+    glmFrame$FC <- as.numeric(glmFrame$FC)
+    glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+
+    tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
+
+    fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+    fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
+    fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+    fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
+    fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+    fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+    fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+    fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+    fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+
+    tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
+
+    fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
+    # group means in the interaction table are model-adjusted (emmeans)
+    adjustMeans <- as.data.frame(emmeans(tempGLM, 'Grp', data=glmFrame))
+    fcIntxGLM$TD.Mean[i] <- adjustMeans$emmean[2]
+    fcIntxGLM$TD.SE[i] <- adjustMeans$SE[2]
+    fcIntxGLM$ASD.Mean[i] <- adjustMeans$emmean[1]
+    fcIntxGLM$ASD.SE[i] <- adjustMeans$SE[1]
+    fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
+    fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
+    fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
+    fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
+    fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
+    fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
+  }
+
+  list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
+}
+
+# Fit both models for a chunk of connections (columns). Self-contained (no global objects) so it can run on a worker.
+# tdBase / asdBase: each group's demographics merged once, with rowIdx = the row of that participant in the FC matrix.
+fitWholeBrainChunk <- function(tdChunk, asdChunk, tdBase, asdBase) {
+
+  lmeCtrl <- nlme::lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')
+  nConn <- ncol(tdChunk)
+  mainMat <- matrix(NA_real_, nConn, 7)   # TD.Mean, ASD.Mean, Grp.B, Grp.p, GA.B, GA.p, nIncluded
+  intxMat <- matrix(NA_real_, nConn, 11)  # TD.Mean, ASD.Mean, TD.SE, ASD.SE, Grp.B, Grp.p, GA.B, GA.p, Intx.B, Intx.p, nIncluded
+
+  for(j in seq_len(nConn)){
+
+    tempTD <- tdBase
+    tempTD$FC <- tdChunk[tdBase$rowIdx, j]
+
+    tempASD <- asdBase
+    tempASD$FC <- asdChunk[asdBase$rowIdx, j]
+
+    glmFrame <- rbind(tempTD, tempASD)
+    glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
+
+    # As an alternative, include the ones that have a missing here or there
+    # Lose three significant connections, but gain two more that are BS to Cun and to FFG
+    # glmFrame <- glmFrame[complete.cases(glmFrame),]
+
+    # connections with any missing value are left as NA
+    if(is.na(sum(glmFrame$FC))) { next }
+
+    # whole-brain group means are raw means (the network tables use model-adjusted means)
+    tdMean <- mean(as.numeric(tempTD$FC), na.rm = T)
+    asdMean <- mean(as.numeric(tempASD$FC), na.rm = T)
+
+    tempGLM <- nlme::lme(data=glmFrame, FC ~ as.factor(Grp) + ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
+    tTable <- summary(tempGLM)$tTable
+    mainMat[j,] <- c(tdMean, asdMean, tTable[2,1], tTable[2,5], tTable[3,1], tTable[3,5], nrow(glmFrame))
+
+    tempGLM <- nlme::lme(data=glmFrame, FC ~ as.factor(Grp) * ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
+    tTable <- summary(tempGLM)$tTable
+    tdSE <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
+    asdSE <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
+    intxMat[j,] <- c(tdMean, asdMean, tdSE, asdSE, tTable[2,1], tTable[2,5], tTable[3,1], tTable[3,5],
+                     tTable[4,1], tTable[4,5], nrow(glmFrame))
+  }
+
+  list(main = mainMat, intx = intxMat)
+}
+
+# Run fitWholeBrainChunk over every connection, split across nCores workers (nCores = 1 runs in this session).
+# Returns the main-effects table (fcGLM) and the interaction table (fcIntxGLM), one row per connection.
+runWholeBrainModels <- function(tdFC, asdFC, tdDemo, asdDemo, nCores) {
+
+  # Merge each group's demographics once instead of once per connection
+  tdBase <- merge(data.frame(ID=rownames(tdFC), rowIdx=seq_len(nrow(tdFC)), Grp='TD', stringsAsFactors=FALSE), tdDemo)
+  asdBase <- merge(data.frame(ID=rownames(asdFC), rowIdx=seq_len(nrow(asdFC)), Grp='ASD', stringsAsFactors=FALSE), asdDemo)
+  tdMat <- as.matrix(tdFC)
+  asdMat <- as.matrix(asdFC)
+
+  nConn <- ncol(tdMat)
+  chunks <- parallel::splitIndices(nConn, max(1, min(nConn, nCores * 4)))
+  # each worker gets only its own columns
+  chunkData <- lapply(chunks, function(cols) list(td = tdMat[, cols, drop=FALSE], asd = asdMat[, cols, drop=FALSE]))
+
+  startTime <- Sys.time()
+  message('Fitting ', nConn, ' connections (', length(chunks), ' chunks, ', nCores, ' core(s))...')
+  if (nCores > 1) {
+    cl <- parallel::makeCluster(nCores)
+    on.exit(parallel::stopCluster(cl))
+    parallel::clusterExport(cl, c('tdBase', 'asdBase'), envir = environment())
+    parallel::clusterExport(cl, 'fitWholeBrainChunk', envir = globalenv())
+    workerFun <- function(d) fitWholeBrainChunk(d$td, d$asd, tdBase, asdBase)
+    environment(workerFun) <- globalenv()   # so only the exported objects (not this function's data) travel to the workers
+    results <- parallel::parLapply(cl, chunkData, workerFun)
+  } else {
+    results <- lapply(seq_along(chunkData), function(k) {
+      message('  chunk ', k, ' of ', length(chunkData))
+      fitWholeBrainChunk(chunkData[[k]]$td, chunkData[[k]]$asd, tdBase, asdBase)
+    })
+  }
+  message('Done in ', round(as.numeric(difftime(Sys.time(), startTime, units='mins')), 1), ' minutes')
+
+  fcGLM <- data.frame(ROI = colnames(tdMat), do.call(rbind, lapply(results, `[[`, 'main')), stringsAsFactors = FALSE)
+  colnames(fcGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean','Grp.B','Grp.p','GA.B','GA.p', 'nIncluded')
+
+  fcIntxGLM <- data.frame(ROI = colnames(tdMat), do.call(rbind, lapply(results, `[[`, 'intx')), stringsAsFactors = FALSE)
+  colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean', 'TD.SE', 'ASD.SE','Grp.B','Grp.p','GA.B','GA.p', 'Intx.B','Intx.p', 'nIncluded')
+
+  list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
+}
+
 # Make sure the data and functions from EarlyAutismMarkers_edit.R are available ----
 
 pmaNeeded <- c('fetalMatched', 'tissueData', 'tissueDataRaw', 'tissueExclude', 'regionalData', 'regionalDataRaw', 'regionalExclude',
                'prepVolumeAnalysis', 'fitRoiModels', 'runRoiModels', 'addFDR', 'addFDRfc',
-               'tdFC', 'asdFC', 'tdDemoFinal', 'asdDemoFinal', 'connROIs', 'networkSpecs', 'fitNetworkModels',
+               'tdFC', 'asdFC', 'tdDemoFinal', 'asdDemoFinal', 'connROIs', 'networkSpecs',
                'cached', 'showFigure', 'connectionLabel', 'groupColors', 'figDir')
 pmaMissing <- pmaNeeded[!vapply(pmaNeeded, exists, logical(1))]
 if (length(pmaMissing) > 0) {
   stop('Run EarlyAutismMarkers_edit.R first. These objects are missing: ', paste(pmaMissing, collapse = ', '))
 }
-if (includeWholeBrain && !all(vapply(c('runWholeBrainModels', 'nCores'), exists, logical(1)))) {
-  stop('The whole-brain models need runWholeBrainModels and nCores from EarlyAutismMarkers_edit.R')
+if (includeWholeBrain && !exists('nCores')) {
+  stop('The whole-brain models need nCores from EarlyAutismMarkers_edit.R')
 }
 if (!all(names(centerings) %in% names(centeringLabels))) { stop('Every centering needs a label in centeringLabels') }
 

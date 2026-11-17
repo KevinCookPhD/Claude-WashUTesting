@@ -89,10 +89,29 @@ networkNodeLabels <- c(CRB = 'Cerebellar', DMN = 'Default Mode', Limbic = 'Limbi
 
 ## Network Settings ----
 
-# The a priori networks of interest. Only these are analyzed in the network sections (and in the PMACheck and NetworkMeans scripts),
-# so the FDR corrections across networks cover just these. The other networks defined in networkSpecs (SomMot, Auditory, Visual)
-# stay defined but are not run; add a name here to run it again.
+# The a priori networks of interest. Only these are analyzed in the connectivity sections (and in the PMACheck and NetworkMeans scripts).
 networksOfInterest <- c('CRB', 'Limbic', 'DMN', 'SubCort')
+
+# Network membership: TRUE uses the revised lists (the parcel-by-parcel decisions, see membership_decisions.csv); FALSE uses the original lists.
+useRevisedNetworks <- TRUE
+
+# Connectivity is analyzed in three tiers. Every model is  connectivity ~ group + scan age  (no interaction) with a random intercept per participant;
+# the group estimate is Low minus High Risk, adjusted for age (positive = Low Risk higher).
+#   Tier 1  network averages, within each network and between each pair of networks. FDR across the networks, and across the pairs (separately).
+#   Tier 2  ROI-to-ROI connections, inside the networks (and pairs) that pass Tier 1. FDR across the connections of each network on its own.
+#   Tier 3  exploratory whole brain: every ROI to every other ROI. FDR across all the connections.
+# A Tier 1 result opens Tier 2 for that network (or pair) when its FDR-adjusted p is below this
+tier1Gate <- .05
+
+# Also look at the connections BETWEEN two networks in Tier 2 when that pair passes Tier 1
+tier2IncludeBetween <- TRUE
+
+# Networks that did not pass the Tier 1 gate but are still run through Tier 2 for exploratory reporting (for example a supplement). They are
+# marked gated = FALSE in the tables and never change the FDR of the gated networks. Use character(0) for none.
+tier2ExploratoryNetworks <- c('DMN')
+
+# How the connections of a network are combined in Tier 1: 'mean' = plain average; 'absmean' = average of absolute values
+networkScore <- 'mean'
 
 ## Table Output Settings ----
 
@@ -1402,131 +1421,455 @@ asdFC <- allASDFC[rownames(allASDFC) %in% asdDemoFinal$ID,]
 rm(list=c('allTDFC', 'allASDFC'))
 
 
-## 3b. Whole Brain Approach ----
+## 3b. Network Definitions ----
 
-# First step is to just do a whole brain search
+# The a priori networks (Cerebellar, Limbic, Default Mode, Subcortical) are defined by parcel number. The parcels were classified by hand from their
+# location, their functional cluster (NetworkNum in r200_Net.csv) and the Yeo 7-network parcellation; the decisions made parcel by parcel are in
+# membership_decisions.csv, with the resulting table in membership_revised.csv. networkSpecsOriginal keeps the earlier lists (useRevisedNetworks <- FALSE).
 
-# Here, let's run all 19,900 ROI-ROI connections
+## First -- divide out the connections into an ROI1 and ROI2 table
 
-# It's more exploratory and FDR will kill us for sure
+connROIs <- as.data.frame(matrix(ncol=2, nrow=ncol(tdFC)))
+colnames(connROIs) <- c('ROI1','ROI2')
 
-
-##### WHOLE BRAIN LINEAR MODEL APPROACH #####
-
-# Fit both models for a chunk of connections (columns). Self-contained (no global objects) so it can run on a worker.
-# tdBase / asdBase: each group's demographics merged once, with rowIdx = the row of that participant in the FC matrix.
-fitWholeBrainChunk <- function(tdChunk, asdChunk, tdBase, asdBase) {
-
-  lmeCtrl <- nlme::lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')
-  nConn <- ncol(tdChunk)
-  mainMat <- matrix(NA_real_, nConn, 7)   # TD.Mean, ASD.Mean, Grp.B, Grp.p, GA.B, GA.p, nIncluded
-  intxMat <- matrix(NA_real_, nConn, 11)  # TD.Mean, ASD.Mean, TD.SE, ASD.SE, Grp.B, Grp.p, GA.B, GA.p, Intx.B, Intx.p, nIncluded
-
-  for(j in seq_len(nConn)){
-
-    tempTD <- tdBase
-    tempTD$FC <- tdChunk[tdBase$rowIdx, j]
-
-    tempASD <- asdBase
-    tempASD$FC <- asdChunk[asdBase$rowIdx, j]
-
-    glmFrame <- rbind(tempTD, tempASD)
-    glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-
-    # As an alternative, include the ones that have a missing here or there
-    # Lose three significant connections, but gain two more that are BS to Cun and to FFG
-    # glmFrame <- glmFrame[complete.cases(glmFrame),]
-
-    # connections with any missing value are left as NA
-    if(is.na(sum(glmFrame$FC))) { next }
-
-    # whole-brain group means are raw means (the network tables use model-adjusted means)
-    tdMean <- mean(as.numeric(tempTD$FC), na.rm = T)
-    asdMean <- mean(as.numeric(tempASD$FC), na.rm = T)
-
-    tempGLM <- nlme::lme(data=glmFrame, FC ~ as.factor(Grp) + ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
-    tTable <- summary(tempGLM)$tTable
-    mainMat[j,] <- c(tdMean, asdMean, tTable[2,1], tTable[2,5], tTable[3,1], tTable[3,5], nrow(glmFrame))
-
-    tempGLM <- nlme::lme(data=glmFrame, FC ~ as.factor(Grp) * ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
-    tTable <- summary(tempGLM)$tTable
-    tdSE <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-    asdSE <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-    intxMat[j,] <- c(tdMean, asdMean, tdSE, asdSE, tTable[2,1], tTable[2,5], tTable[3,1], tTable[3,5],
-                     tTable[4,1], tTable[4,5], nrow(glmFrame))
-  }
-
-  list(main = mainMat, intx = intxMat)
+for(i in 1:nrow(connROIs)){
+  tempROI <- colnames(tdFC)[i]
+  
+  connROIs$ROI1[i] <- strsplit(tempROI,'_')[[1]][1]
+  connROIs$ROI2[i] <- strsplit(tempROI,'_')[[1]][2] 
+  
 }
 
-# Run fitWholeBrainChunk over every connection, split across nCores workers (nCores = 1 runs in this session).
-# Returns the main-effects table (fcGLM) and the interaction table (fcIntxGLM), one row per connection.
-runWholeBrainModels <- function(tdFC, asdFC, tdDemo, asdDemo, nCores) {
 
-  # Merge each group's demographics once instead of once per connection
-  tdBase <- merge(data.frame(ID=rownames(tdFC), rowIdx=seq_len(nrow(tdFC)), Grp='TD', stringsAsFactors=FALSE), tdDemo)
-  asdBase <- merge(data.frame(ID=rownames(asdFC), rowIdx=seq_len(nrow(asdFC)), Grp='ASD', stringsAsFactors=FALSE), asdDemo)
-  tdMat <- as.matrix(tdFC)
-  asdMat <- as.matrix(asdFC)
+# ROI number = the third '.'-separated part of an ROI name (e.g. 'CAU.L.39' -> 39)
+roiNumber <- function(roi) as.numeric(vapply(strsplit(roi, '.', fixed = TRUE), function(x) x[3], character(1)))
 
-  nConn <- ncol(tdMat)
-  chunks <- parallel::splitIndices(nConn, max(1, min(nConn, nCores * 4)))
-  # each worker gets only its own columns
-  chunkData <- lapply(chunks, function(cols) list(td = tdMat[, cols, drop=FALSE], asd = asdMat[, cols, drop=FALSE]))
+# One entry per network:
+#   match         - function(roi names) -> TRUE for regions in the network
+#   xLabel        - x-axis label of the bar chart
+#   zeroLine      - draw a line at 0 on the bar chart
+networkSpecs <- list(
 
-  startTime <- Sys.time()
-  message('Fitting ', nConn, ' connections (', length(chunks), ' chunks, ', nCores, ' core(s))...')
-  if (nCores > 1) {
-    cl <- parallel::makeCluster(nCores)
+  CRB = list(match = function(roi) grepl('CRB', roi),
+             xLabel = 'Cerebellar Connections', zeroLine = TRUE),
+
+  # Originally c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200); parahippocampal gyrus added (43,86,125)
+  Limbic = list(match = function(roi) roiNumber(roi) %in% c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200,
+                                                            43,86,125),
+                xLabel = 'Limbic Connections', zeroLine = FALSE),
+
+  # Originally also included 43,86,125 (hippocampus and parahippocampal gyrus); removed
+  DMN = list(match = function(roi) roiNumber(roi) %in% c(4,11,18,22,23,34,40,42,48,53,70,85,88,96,100,102,104,106,123,124,128,137,150,152,156,163,168,171,176,178),
+             xLabel = 'Default Mode Connections', zeroLine = FALSE),
+
+  SomMot = list(match = function(roi) grepl('PreCG', roi) | grepl('PoCG', roi) | grepl('SMA', roi),
+                xLabel = 'Sensorimotor Connections', zeroLine = FALSE),
+
+  SubCort = list(match = function(roi) roiNumber(roi) %in% c(31,32,39,51,80,92,97,107,111,134,139,145,151),
+                 xLabel = 'Subcortical Connections', zeroLine = FALSE),
+
+  Auditory = list(match = function(roi) roiNumber(roi) %in% c(88,94,2,12,48,171,107,139,152,185),
+                  xLabel = 'Auditory Connections', zeroLine = FALSE),
+
+  Visual = list(match = function(roi) roiNumber(roi) %in% c(181,174,153,114,149,195,167,105,116,194,197,162,131,186,135,
+                                                            72,60,19,52,35,75,25,15,42,30,91,87,98,57),
+                xLabel = 'Visual Connections', zeroLine = FALSE)
+)
+
+# Revised membership: changes from the original lists
+#   Limbic        removed 61, 67, 200 (moved to Default Mode) and 94 (insula); added orbitofrontal 50 and 148
+#   Default Mode  removed 4, 42, 102, 150, 152, 156, 171, 176; added 21, 24, 28, 36, 46, 55, 61, 63, 67, 69, 74, 84, 110, 159, 183, 195, 200
+#   Subcortical   added 173 (a putamen parcel that was missing)
+#   Cerebellar    unchanged (every parcel named CRB)
+networkSpecsOriginal <- networkSpecs
+networkSpecsRevised <- networkSpecsOriginal
+networkSpecsRevised$Limbic <- list(match = function(roi) roiNumber(roi) %in% c(5,9,20,29,43,50,56,68,81,86,108,120,125,133,141,143,148,155,160,188,196,198),
+                                   xLabel = 'Limbic Connections', zeroLine = FALSE)
+networkSpecsRevised$DMN <- list(match = function(roi) roiNumber(roi) %in% c(11,18,21,22,23,24,28,34,36,40,46,48,53,55,61,63,67,69,70,74,84,85,88,96,100,104,106,110,123,124,128,137,159,163,168,178,183,195,200),
+                                xLabel = 'Default Mode Connections', zeroLine = FALSE)
+networkSpecsRevised$SubCort <- list(match = function(roi) roiNumber(roi) %in% c(31,32,39,51,80,92,97,107,111,134,139,145,151,173),
+                                    xLabel = 'Subcortical Connections', zeroLine = FALSE)
+networkSpecs <- if (useRevisedNetworks) networkSpecsRevised else networkSpecsOriginal
+message('Network membership: ', ifelse(useRevisedNetworks, 'revised', 'original'), ' lists for ', paste(networksOfInterest, collapse = ', '))
+
+# Bar chart of the group means for every connection in a network, ordered by group p-value, with a boxed legend to its right
+plotNetworkBars <- function(fcGLM, spec) {
+  longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
+  pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
+
+  # y axis fitted to this network's data: from the lowest bar (or 0) to the highest, on round tick marks.
+  # A network with few negative connections gets only a small negative range, not a symmetrical axis.
+  yBreaks <- pretty(c(0, longFCGLM$FC), n = 6)
+
+  barPlot <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
+    scale_y_continuous(limits=range(yBreaks), breaks=yBreaks, labels=fixedDecimalLabels, expand=c(0,0)) +
+    scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
+    scale_color_manual(values=c(groupColors[['low']], groupColors[['high']]))
+  if (spec$zeroLine) { barPlot <- barPlot + geom_hline(yintercept = 0, linewidth=1.5) }
+
+  barPlot <- barPlot +
+    geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
+    ylab('Connectivity Strength') + xlab(spec$xLabel) +
+    theme(axis.title.x = element_text(color = 'black', size = 16),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_text(color = 'black', size = 16),
+          axis.text.y = element_text(color = 'black', size = 12),
+          axis.ticks.y = element_blank(),
+          axis.line.x = element_line(color='black', linewidth = 1),
+          axis.line.y = element_line(color='black', linewidth = 1),
+          plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+          panel.grid.major.y = element_line(color = '#cccccc', linewidth = 1),
+          panel.grid.major.x = element_blank(),   # no vertical lines: with hundreds of bars they fill the panel with gray
+          panel.background = element_rect(fill='white'),
+          legend.position = 'none',
+          legend.text = element_text(color = 'black', size = 12),
+          legend.title=element_blank())
+
+  addRiskLegend(barPlot, 'network')
+}
+
+
+
+
+### Tier Helpers ----
+
+networkLabel <- function(net) {
+  if (exists('networkNodeLabels') && net %in% names(networkNodeLabels)) networkNodeLabels[[net]] else net
+}
+starFor <- function(p) ifelse(p < .05, '*', ifelse(p < .10, '+', ''))
+fmtP <- function(p) ifelse(p < .001, '<.001', sub('^0', '', sprintf('%.3f', p)))
+
+# The ROI-to-ROI model, for a set of connections (columns). Self-contained so it can run on a worker.
+# tdBase / asdBase: each group's demographics with rowIdx = the participant's row in the FC matrix.
+# Connections with any missing value are left as NA (as in the earlier whole-brain analysis).
+fitMainChunk <- function(tdChunk, asdChunk, tdBase, asdBase) {
+  ctrl <- nlme::lmeControl(msMaxIter = 200, tolerance = 1e-4, msTol = 1e-5, opt = 'optim')
+  out <- matrix(NA_real_, ncol(tdChunk), 9)       # TD.Mean, ASD.Mean, TD.SE, ASD.SE, Grp.B, Grp.p, GA.B, GA.p, nIncluded
+  for (j in seq_len(ncol(tdChunk))) {
+    tempTD <- tdBase; tempTD$FC <- tdChunk[tdBase$rowIdx, j]
+    tempASD <- asdBase; tempASD$FC <- asdChunk[asdBase$rowIdx, j]
+    d <- rbind(tempTD, tempASD)
+    d$shortID <- substr(d$ID, 1, nchar(d$ID) - 3)
+    if (is.na(sum(d$FC))) { next }
+    fit <- nlme::lme(FC ~ Grp + ScanGA, random = ~1 | factor(shortID), data = d, control = ctrl)
+    tt <- summary(fit)$tTable
+    out[j, ] <- c(mean(tempTD$FC), mean(tempASD$FC), sd(tempTD$FC) / sqrt(nrow(tempTD)), sd(tempASD$FC) / sqrt(nrow(tempASD)),
+                  tt[2, 1], tt[2, 5], tt[3, 1], tt[3, 5], nrow(d))
+  }
+  out
+}
+
+# Run fitMainChunk over connections, split across cores. Returns one row per connection.
+fitConnections <- function(tdMat, asdMat, tdDemo, asdDemo, cores = 1) {
+  tdBase <- merge(data.frame(ID = rownames(tdMat), rowIdx = seq_len(nrow(tdMat)), Grp = 'TD', stringsAsFactors = FALSE), tdDemo)
+  asdBase <- merge(data.frame(ID = rownames(asdMat), rowIdx = seq_len(nrow(asdMat)), Grp = 'ASD', stringsAsFactors = FALSE), asdDemo)
+  tdMat <- as.matrix(tdMat); asdMat <- as.matrix(asdMat)
+  chunks <- parallel::splitIndices(ncol(tdMat), max(1, min(ncol(tdMat), cores * 4)))
+  chunkData <- lapply(chunks, function(cols) list(td = tdMat[, cols, drop = FALSE], asd = asdMat[, cols, drop = FALSE]))
+  if (cores > 1 && length(chunkData) > 1) {
+    cl <- parallel::makeCluster(cores)
     on.exit(parallel::stopCluster(cl))
     parallel::clusterExport(cl, c('tdBase', 'asdBase'), envir = environment())
-    parallel::clusterExport(cl, 'fitWholeBrainChunk', envir = globalenv())
-    workerFun <- function(d) fitWholeBrainChunk(d$td, d$asd, tdBase, asdBase)
-    environment(workerFun) <- globalenv()   # so only the exported objects (not this function's data) travel to the workers
-    results <- parallel::parLapply(cl, chunkData, workerFun)
+    parallel::clusterExport(cl, 'fitMainChunk', envir = globalenv())
+    worker <- function(d) fitMainChunk(d$td, d$asd, tdBase, asdBase)
+    environment(worker) <- globalenv()
+    pieces <- parallel::parLapply(cl, chunkData, worker)
   } else {
-    results <- lapply(seq_along(chunkData), function(k) {
-      message('  chunk ', k, ' of ', length(chunkData))
-      fitWholeBrainChunk(chunkData[[k]]$td, chunkData[[k]]$asd, tdBase, asdBase)
-    })
+    pieces <- lapply(chunkData, function(d) fitMainChunk(d$td, d$asd, tdBase, asdBase))
   }
-  message('Done in ', round(as.numeric(difftime(Sys.time(), startTime, units='mins')), 1), ' minutes')
-
-  fcGLM <- data.frame(ROI = colnames(tdMat), do.call(rbind, lapply(results, `[[`, 'main')), stringsAsFactors = FALSE)
-  colnames(fcGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean','Grp.B','Grp.p','GA.B','GA.p', 'nIncluded')
-
-  fcIntxGLM <- data.frame(ROI = colnames(tdMat), do.call(rbind, lapply(results, `[[`, 'intx')), stringsAsFactors = FALSE)
-  colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'ASD.Mean', 'TD.SE', 'ASD.SE','Grp.B','Grp.p','GA.B','GA.p', 'Intx.B','Intx.p', 'nIncluded')
-
-  list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
+  res <- data.frame(ROI = colnames(tdMat), do.call(rbind, pieces), stringsAsFactors = FALSE)
+  colnames(res) <- c('ROI', 'TD.Mean', 'ASD.Mean', 'TD.SE', 'ASD.SE', 'Grp.B', 'Grp.p', 'GA.B', 'GA.p', 'nIncluded')
+  res
 }
 
-# The fit is cached: it is recomputed only if the connectivity data, demographics or the model code change (or rerun is TRUE)
-wholeBrainModels <- cached('wholebrain_models',
-                           inputs = list(tdFC, asdFC, tdDemoFinal, asdDemoFinal, deparse(fitWholeBrainChunk)),
-                           compute = function() runWholeBrainModels(tdFC, asdFC, tdDemoFinal, asdDemoFinal, nCores))
+## 3c. Tier 1: Network Averages ----
 
-fcGLM <- addFDRfc(wholeBrainModels$fcGLM)
-fcIntxGLM <- addFDRfc(wholeBrainModels$fcIntxGLM)
+inNetwork <- lapply(setNames(networksOfInterest, networksOfInterest), function(net) {
+  list(roi1 = networkSpecs[[net]]$match(connROIs$ROI1), roi2 = networkSpecs[[net]]$match(connROIs$ROI2))
+})
+withinMask <- function(net) inNetwork[[net]]$roi1 & inNetwork[[net]]$roi2
+# one region in each network, and not also a within-network connection (some regions belong to two networks)
+betweenMask <- function(a, b) {
+  ((inNetwork[[a]]$roi1 & inNetwork[[b]]$roi2) | (inNetwork[[b]]$roi1 & inNetwork[[a]]$roi2)) & !withinMask(a) & !withinMask(b)
+}
 
-print(subset(fcGLM, Grp.p.adjust <.05))
+scoreData <- function(mask) {
+  one <- function(fc, demo, grp) {
+    values <- as.matrix(fc[, mask, drop = FALSE])
+    if (networkScore == 'absmean') { values <- abs(values) }
+    d <- merge(data.frame(ID = rownames(fc), FC = rowMeans(values, na.rm = TRUE), stringsAsFactors = FALSE), demo[, c('ID', 'ScanGA')], by = 'ID')
+    d$Grp <- grp
+    d
+  }
+  d <- rbind(one(tdFC, tdDemoFinal, 'TD'), one(asdFC, asdDemoFinal, 'ASD'))
+  d <- d[is.finite(d$FC), ]
+  d$shortID <- substr(d$ID, 1, nchar(d$ID) - 3)
+  d$Grp <- factor(d$Grp, levels = c('ASD', 'TD'))        # ASD (High Risk) is the reference, so the estimate is Low minus High Risk
+  attr(d, 'nConnections') <- sum(mask)
+  d
+}
 
-print(subset(fcIntxGLM, Grp.p.adjust <.05))
-print(subset(fcIntxGLM, Intx.p.adjust <.05))
+fitScore <- function(d) {
+  fit <- nlme::lme(FC ~ Grp + ScanGA, random = ~1 | factor(shortID), data = d,
+                   control = nlme::lmeControl(msMaxIter = 200, tolerance = 1e-4, msTol = 1e-5, opt = 'optim'))
+  tt <- summary(fit)$tTable
+  adj <- as.data.frame(emmeans::emmeans(fit, 'Grp', data = d))
+  data.frame(nConnections = attr(d, 'nConnections'), nScans = nrow(d), nParticipants = length(unique(d$shortID)),
+             LowRisk.Mean = adj$emmean[adj$Grp == 'TD'], LowRisk.SE = adj$SE[adj$Grp == 'TD'],
+             HighRisk.Mean = adj$emmean[adj$Grp == 'ASD'], HighRisk.SE = adj$SE[adj$Grp == 'ASD'],
+             Diff.LowMinusHigh = tt['GrpTD', 'Value'], Diff.SE = tt['GrpTD', 'Std.Error'], Diff.df = tt['GrpTD', 'DF'],
+             Diff.inSD = tt['GrpTD', 'Value'] / sd(d$FC), Grp.p = tt['GrpTD', 'p-value'], GA.B = tt['ScanGA', 'Value'], GA.p = tt['ScanGA', 'p-value'],
+             stringsAsFactors = FALSE)
+}
 
-saveResultTable(fcGLM, 'wholebrain_main')
-saveResultTable(fcIntxGLM, 'wholebrain_intx')
+runScores <- function(masks, ids) {
+  masks <- masks[vapply(masks, sum, numeric(1)) > 0]
+  frames <- lapply(masks, scoreData)
+  fits <- do.call(rbind, lapply(names(frames), function(nm) cbind(ids[[nm]], fitScore(frames[[nm]]), stringsAsFactors = FALSE)))
+  fits$Grp.p.adjust <- p.adjust(fits$Grp.p, method = 'fdr')
+  fits$GA.p.adjust <- p.adjust(fits$GA.p, method = 'fdr')
+  rownames(fits) <- NULL
+  list(fits = fits, frames = frames)
+}
+
+withinMasks <- setNames(lapply(networksOfInterest, withinMask), networksOfInterest)
+withinIds <- setNames(lapply(networksOfInterest, function(n) data.frame(network = n, label = networkLabel(n), stringsAsFactors = FALSE)), networksOfInterest)
+tier1Within <- runScores(withinMasks, withinIds)
+
+pairs <- combn(networksOfInterest, 2, simplify = FALSE)
+pairNames <- vapply(pairs, paste, character(1), collapse = ' x ')
+betweenMasks <- setNames(lapply(pairs, function(p) betweenMask(p[1], p[2])), pairNames)
+betweenIds <- setNames(lapply(pairs, function(p) data.frame(network = paste(p, collapse = ' x '),
+                                                             label = paste(networkLabel(p[1]), 'x', networkLabel(p[2])), stringsAsFactors = FALSE)), pairNames)
+tier1Between <- runScores(betweenMasks, betweenIds)
+
+showColumns <- c('label', 'nConnections', 'nScans', 'LowRisk.Mean', 'HighRisk.Mean', 'Diff.LowMinusHigh', 'Diff.inSD', 'Grp.p', 'Grp.p.adjust', 'GA.p')
+tierWidth <- options(width = 220)
+cat('\n=== TIER 1: network averages (score = ', networkScore, ') ===\n', sep = '')
+cat('Diff.LowMinusHigh: Low minus High Risk, age-adjusted (positive = Low Risk higher); Diff.inSD: in SD of the scores.\n',
+    'p.adj: FDR within the table (', nrow(tier1Within$fits), ' networks; ', nrow(tier1Between$fits), ' network pairs). Gate for Tier 2: p.adj < ', tier1Gate, '\n', sep = '')
+cat('\nWITHIN networks\n'); print(format(tier1Within$fits[, showColumns], digits = 3), row.names = FALSE)
+cat('\nBETWEEN networks\n'); print(format(tier1Between$fits[, showColumns], digits = 3), row.names = FALSE)
+options(tierWidth)
+saveResultTable(tier1Within$fits, 'tier1_within')
+saveResultTable(tier1Between$fits, 'tier1_between')
+
+### Tier 1 Figures ----
+barsFor <- function(fits, xAngle = 0) {
+  labels <- fits$label
+  barData <- rbind(data.frame(label = labels, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
+                   data.frame(label = labels, Group = 'High Risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
+  barData$label <- factor(barData$label, levels = labels); barData$Group <- factor(barData$Group, levels = c('Low Risk', 'High Risk'))
+  starData <- data.frame(label = factor(labels, levels = labels), star = starFor(fits$Grp.p.adjust),
+                         y = pmax(fits$LowRisk.Mean + fits$LowRisk.SE, fits$HighRisk.Mean + fits$HighRisk.SE))
+  starData$y <- starData$y + .04 * diff(range(c(0, barData$Mean + barData$SE)))
+  ggplot2::ggplot(barData, ggplot2::aes(x = label, y = Mean, fill = Group, color = Group)) +
+    ggplot2::geom_col(position = ggplot2::position_dodge(.8), width = .72, linewidth = .8) +
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = Mean - SE, ymax = Mean + SE), position = ggplot2::position_dodge(.8), width = .25, color = 'black', linewidth = .6) +
+    ggplot2::geom_text(data = starData, ggplot2::aes(x = label, y = y, label = star), inherit.aes = FALSE, size = 7) +
+    ggplot2::scale_fill_manual(values = c('Low Risk' = networkBarFill[['low']], 'High Risk' = networkBarFill[['high']]), name = NULL) +
+    ggplot2::scale_color_manual(values = c('Low Risk' = groupColors[['low']], 'High Risk' = groupColors[['high']]), name = NULL) +
+    ggplot2::labs(x = NULL, y = paste0('Average connectivity', ifelse(networkScore == 'absmean', ' (absolute values)', '')),
+                  caption = '* p.adj < .05, + p.adj < .10 (FDR within this figure); age-adjusted means +/- SE') +
+    ggplot2::theme_classic(base_size = 14) +
+    ggplot2::theme(legend.position = 'bottom', axis.text.y = ggplot2::element_text(color = 'black'),
+                   axis.text.x = ggplot2::element_text(color = 'black', angle = xAngle, hjust = ifelse(xAngle == 0, .5, 1), vjust = ifelse(xAngle == 0, 1, .5)))
+}
+showFigure(barsFor(tier1Within$fits), 'tier1_within_bars', width = 9, height = 6)
+showFigure(barsFor(tier1Between$fits, xAngle = 45), 'tier1_between_bars', width = 11, height = 7)
+
+cells <- rbind(
+  data.frame(row = tier1Within$fits$network, col = tier1Within$fits$network, diff = tier1Within$fits$Diff.LowMinusHigh, star = starFor(tier1Within$fits$Grp.p.adjust), stringsAsFactors = FALSE),
+  do.call(rbind, lapply(seq_along(pairs), function(i) {
+    r <- tier1Between$fits[tier1Between$fits$network == pairNames[i], ]
+    if (nrow(r) == 0) { return(NULL) }
+    data.frame(row = pairs[[i]], col = rev(pairs[[i]]), diff = r$Diff.LowMinusHigh, star = starFor(r$Grp.p.adjust), stringsAsFactors = FALSE)
+  })))
+cells$row <- factor(cells$row, levels = networksOfInterest, labels = vapply(networksOfInterest, networkLabel, character(1)))
+cells$col <- factor(cells$col, levels = rev(networksOfInterest), labels = rev(vapply(networksOfInterest, networkLabel, character(1))))
+cells$text <- paste0(sprintf('%.3f', cells$diff), '\n', cells$star)
+limit <- max(abs(cells$diff))
+tier1_matrix <- ggplot2::ggplot(cells, ggplot2::aes(x = row, y = col, fill = diff)) +
+  ggplot2::geom_tile(color = 'white', linewidth = 1) + ggplot2::geom_text(ggplot2::aes(label = text), size = 4, lineheight = .9) +
+  ggplot2::scale_fill_gradient2(low = groupColors[['high']], mid = 'white', high = groupColors[['low']], midpoint = 0, limits = c(-limit, limit), name = 'Low minus High\nRisk difference') +
+  ggplot2::labs(x = NULL, y = NULL, caption = 'Diagonal = within the network; off-diagonal = between two networks. Blue = Low Risk higher, red = High Risk higher.\n* p.adj < .05, + p.adj < .10 (FDR within the within and between families separately); age-adjusted') +
+  ggplot2::theme_minimal(base_size = 13) +
+  ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text.x = ggplot2::element_text(color = 'black', angle = 45, hjust = 1), axis.text.y = ggplot2::element_text(color = 'black'))
+showFigure(tier1_matrix, 'tier1_matrix', width = 8, height = 7)
+
+## 3d. Tier 2: ROI-to-ROI Connections Within Networks ----
+
+gatedWithin <- tier1Within$fits$network[tier1Within$fits$Grp.p.adjust < tier1Gate]
+gatedBetween <- if (tier2IncludeBetween) tier1Between$fits$network[tier1Between$fits$Grp.p.adjust < tier1Gate] else character(0)
+cat('\n=== TIER 2: ROI-to-ROI connections ===\n')
+cat('Networks significant in Tier 1 (p.adj <', tier1Gate, '):', ifelse(length(gatedWithin) == 0, 'none', paste(gatedWithin, collapse = ', ')), '\n')
+if (tier2IncludeBetween) { cat('Network pairs significant in Tier 1:', ifelse(length(gatedBetween) == 0, 'none', paste(gatedBetween, collapse = ', ')), '\n') }
+
+exploratoryWithin <- setdiff(intersect(tier2ExploratoryNetworks, networksOfInterest), gatedWithin)
+if (length(exploratoryWithin) > 0) { cat('Exploratory (not gated by Tier 1, reported separately):', paste(exploratoryWithin, collapse = ', '), '\n') }
+tier2Units <- c(setNames(lapply(gatedWithin, withinMask), gatedWithin),
+                setNames(lapply(gatedBetween, function(nm) { p <- strsplit(nm, ' x ', fixed = TRUE)[[1]]; betweenMask(p[1], p[2]) }), gatedBetween),
+                setNames(lapply(exploratoryWithin, withinMask), exploratoryWithin))
+tier2 <- NULL
+if (length(tier2Units) == 0) {
+  message('No network or pair passes the Tier 1 gate, so Tier 2 is empty.')
+} else {
+  tier2Parts <- lapply(names(tier2Units), function(unit) {
+    mask <- tier2Units[[unit]]
+    if (sum(mask) == 0) { message('No connections in ', unit, '; skipped'); return(NULL) }
+    tdN <- tdFC[, mask, drop = FALSE]; asdN <- asdFC[, mask, drop = FALSE]
+    fits <- cached(paste0('tier2_', gsub('[^A-Za-z0-9]+', '_', unit)),
+                   inputs = list(tdN, asdN, tdDemoFinal, asdDemoFinal, deparse(fitMainChunk), deparse(fitConnections)),
+                   compute = function() fitConnections(tdN, asdN, tdDemoFinal, asdDemoFinal, nCores))
+    cbind(unit = unit, fits, stringsAsFactors = FALSE)
+  })
+  tier2 <- do.call(rbind, tier2Parts); rownames(tier2) <- NULL
+  tier2$gated <- !tier2$unit %in% exploratoryWithin
+  # FDR across the connections of each network (or network pair) on its own: every unit is corrected separately
+  adjustTier2 <- function(p) ave(p, tier2$unit, FUN = function(x) p.adjust(x, method = 'fdr'))
+  tier2$Grp.p.adjust <- adjustTier2(tier2$Grp.p)
+  tier2$GA.p.adjust <- adjustTier2(tier2$GA.p)
+  tier2$label <- gsub('\n', ' ', connectionLabel(tier2$ROI))
+  tier2$direction <- ifelse(tier2$Grp.B > 0, 'Low Risk higher', 'High Risk higher')
+  tier2$status <- ifelse(tier2$Grp.p.adjust < .05, 'significant', ifelse(tier2$Grp.p.adjust < .10, 'trending', 'ns'))
+
+  summaryTier2 <- do.call(rbind, lapply(split(tier2, tier2$unit), function(d) data.frame(unit = d$unit[1], gated = d$gated[1], tested = nrow(d), sig05 = sum(d$Grp.p.adjust < .05, na.rm = TRUE),
+                                                                                       trend10 = sum(d$Grp.p.adjust >= .05 & d$Grp.p.adjust < .10, na.rm = TRUE),
+                                                                                       lowHigher = sum(d$Grp.p.adjust < .10 & d$Grp.B > 0, na.rm = TRUE),
+                                                                                       highHigher = sum(d$Grp.p.adjust < .10 & d$Grp.B < 0, na.rm = TRUE), stringsAsFactors = FALSE)))
+  rownames(summaryTier2) <- NULL
+  cat('\nConnections tested and significant/trending (FDR across the connections of each network on its own)\n')
+  print(summaryTier2, row.names = FALSE)
+  saveResultTable(tier2, 'tier2_connections')
+  saveTable(tier2[tier2$status != 'ns', ], 'tier2_significant_or_trending')
+
+  # bar chart per network (the same chart as the earlier network analyses); exploratory networks get '_exploratory' in the file name
+  for (unit in c(gatedWithin, exploratoryWithin)) {
+    d <- tier2[tier2$unit == unit, ]
+    showFigure(plotNetworkBars(d[, c('ROI', 'TD.Mean', 'ASD.Mean', 'Grp.p')], networkSpecs[[unit]]),
+               paste0('tier2_', unit, '_bars', ifelse(unit %in% exploratoryWithin, '_exploratory', '')), width = 12, height = 6, subfolder = componentFolder)
+  }
+}
+
+### Tier 2 Combined Figure ----
+
+# Every significant or trending (FDR p < .10) connection of the gated networks, one bar pair per connection: Low Risk vs High Risk group means.
+# Connections are ordered by network and then by group p-value.
+tier2Sig <- if (is.null(tier2)) NULL else tier2[tier2$gated & tier2$status != 'ns', ]
+if (!is.null(tier2Sig) && nrow(tier2Sig) > 0) {
+  tier2Sig <- tier2Sig[order(match(tier2Sig$unit, networksOfInterest), tier2Sig$Grp.p), ]
+  plotOrder <- unique(tier2Sig$ROI)
+  plotFrame <- rbind(data.frame(Connection = tier2Sig$ROI, Mean = tier2Sig$TD.Mean, Grp = 'Low Risk', stringsAsFactors = FALSE),
+                     data.frame(Connection = tier2Sig$ROI, Mean = tier2Sig$ASD.Mean, Grp = 'High Risk', stringsAsFactors = FALSE))
+  plotFrame$Connection <- factor(plotFrame$Connection, levels = plotOrder)
+  plotFrame$Grp <- factor(plotFrame$Grp, levels = c('Low Risk', 'High Risk'))
+
+  tier2_combined_bars <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
+    scale_y_continuous(labels=fixedDecimalLabels) +
+    scale_x_discrete(labels=setNames(connectionLabel(plotOrder), plotOrder)) +
+    scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
+    scale_color_manual(values=c(groupColors[['low']], groupColors[['high']])) +
+    geom_hline(yintercept = 0, lwd=1) +
+    geom_bar(stat='identity', position=position_dodge2(0.2), aes(color=Grp,fill=Grp)) +
+    ylab('Connectivity Strength') + xlab('Network Connections') +
+    theme(axis.title.x = element_text(color = 'black', size = 16),
+          axis.text.x = element_text(color = 'black', size = 6, angle=90, hjust=1, vjust=.5),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_text(color = 'black', size = 16),
+          axis.text.y = element_text(color = 'black', size = 12),
+          axis.ticks.y = element_blank(),
+          axis.line.x = element_line(color='black', linewidth = 1),
+          axis.line.y = element_line(color='black', linewidth = 1),
+          plot.title = element_text(color = 'black', size = 24, hjust=0.5),
+          panel.grid.major.y = element_line(color = '#aaaaaa'),
+          panel.grid.major.x = element_line(color = '#aaaaaa'),
+          panel.background = element_rect(fill='white'),
+          legend.position = 'none',
+          legend.text = element_text(color = 'black', size = 12),
+          legend.title=element_blank())
+
+  showFigure(addRiskLegend(tier2_combined_bars, 'network'), 'tier2_combined_bars', width = 12, height = 6)
+} else {
+  message('No gated Tier 2 connection is significant or trending, so no combined figure was made.')
+}
 
 
-write.table(fcIntxGLM, paste0(baseDir,'/functional/output/WholeBrain_WholeTable.csv'), col.names=T, row.names=F, sep=',')
-write.table(subset(fcIntxGLM, Grp.p.adjust <.05), paste0(baseDir,'/functional/output/WholeBrain_P05FDR.csv'), col.names=T, row.names=F, sep=',')
+### Tier 2 Glass Brain ----
+
+# Nodes of the four networks colored by network; edges are the significant or trending (FDR p < .10) Tier 2 connections of the gated networks,
+# blue where Low Risk is higher and red where High Risk is higher.
+
+loadGlassBrain()
+
+regionLabels <- read.csv(paste0(baseDir,'/functional/100PerHemiLabels_Decimal.1D'), header=F)
+roiNames <- paste0(regionLabels$V1, '.', seq_len(nrow(regionLabels)))
+
+networkGlassNodes <- do.call(rbind, lapply(names(networkNodeColors), function(net) {
+  ids <- which(networkSpecs[[net]]$match(roiNames))
+  data.frame(id = ids, fill = networkNodeColors[[net]], network = net, stringsAsFactors = FALSE)
+}))
+
+networkGlassEdges <- NULL
+if (!is.null(tier2Sig) && nrow(tier2Sig) > 0) {
+  networkGlassEdges <- connectionRegions(tier2Sig$ROI)
+  networkGlassEdges$dir <- ifelse(tier2Sig$Grp.B > 0, 'low', 'high')
+  message('Tier 2 glass brain: ', sum(networkGlassEdges$dir == 'low', na.rm = TRUE), ' Low > High Risk edges and ',
+          sum(networkGlassEdges$dir == 'high', na.rm = TRUE), ' High > Low Risk edges')
+}
+
+# Legend: one chip per network (node color with a lighter tint), then what the blue and red edges mean
+networkLegendPanel <- function() {
+  nNet <- length(networkNodeColors); yChip <- seq(.80, by = -.14, length.out = nNet)
+  tints <- vapply(networkNodeColors, tintColor, character(1), amount = .65)
+  ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed() + theme_void() +
+    annotate('rect', xmin = .02, xmax = .98, ymin = .04, ymax = .96, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('rect', xmin = .08, xmax = .14, ymin = yChip - .05, ymax = yChip + .05, fill = unname(networkNodeColors), colour = '#444444', linewidth = .4) +
+    annotate('rect', xmin = .14, xmax = .92, ymin = yChip - .05, ymax = yChip + .05, fill = unname(tints), colour = '#444444', linewidth = .4) +
+    annotate('text', x = .17, y = yChip, label = paste(networkNodeLabels[names(networkNodeColors)], 'Network'), hjust = 0, size = 4.2) +
+    annotate('segment', x = .04, xend = .96, y = .27, yend = .27, linewidth = .5) +
+    annotate('text', x = c(.27, .73), y = .20, label = c('Low > High Risk', 'High > Low Risk'), size = 3.6) +
+    annotate('segment', x = c(.12, .58), xend = c(.42, .88), y = .12, yend = .12, linewidth = 2.2,
+             colour = if (glassRendererActive == 'rgl') glassEdgeColors[c('low', 'high')] else groupLineColor[c('low', 'high')], lineend = 'round')
+}
+
+tier2_glass <- ggpubr::ggarrange(glassView('axial', networkGlassNodes, networkGlassEdges),
+                                glassView('posterior', networkGlassNodes, networkGlassEdges),
+                                glassView('lateral', networkGlassNodes, networkGlassEdges),
+                                networkLegendPanel(), nrow = 2, ncol = 2)
+showFigure(tier2_glass, 'tier2_glass', width = 9, height = 9)
 
 
-### Whole Brain Figures ----
+## 3e. Tier 3: Exploratory Whole Brain ----
+
+cat('\n=== TIER 3: exploratory whole-brain connectivity ===\n')
+tier3Fits <- cached('tier3_wholebrain',
+                    inputs = list(tdFC, asdFC, tdDemoFinal, asdDemoFinal, deparse(fitMainChunk), deparse(fitConnections)),
+                    compute = function() {
+                      message('Fitting ', ncol(tdFC), ' connections on ', nCores, ' core(s)...')
+                      fitConnections(tdFC, asdFC, tdDemoFinal, asdDemoFinal, nCores)
+                    })
+tier3 <- tier3Fits
+tier3$Grp.p.adjust <- p.adjust(tier3$Grp.p, method = 'fdr')
+tier3$GA.p.adjust <- p.adjust(tier3$GA.p, method = 'fdr')
+tier3$direction <- ifelse(tier3$Grp.B > 0, 'Low Risk higher', 'High Risk higher')
+cat('Connections tested:', sum(!is.na(tier3$Grp.p)), 'of', nrow(tier3), '\n')
+cat('Group effect, FDR p < .05:', sum(tier3$Grp.p.adjust < .05, na.rm = TRUE), ' (Low Risk higher:', sum(tier3$Grp.p.adjust < .05 & tier3$Grp.B > 0, na.rm = TRUE),
+    ', High Risk higher:', sum(tier3$Grp.p.adjust < .05 & tier3$Grp.B < 0, na.rm = TRUE), ')\n')
+cat('Group effect, FDR p < .10:', sum(tier3$Grp.p.adjust < .10, na.rm = TRUE), '\n')
+top <- head(tier3[order(tier3$Grp.p), c('ROI', 'TD.Mean', 'ASD.Mean', 'Grp.B', 'Grp.p', 'Grp.p.adjust')], 15)
+tierWidth <- options(width = 200); cat('\nSmallest p-values:\n'); print(format(top, digits = 3), row.names = FALSE); options(tierWidth)
+saveResultTable(tier3, 'tier3_wholebrain')
+saveTable(tier3[which(tier3$Grp.p.adjust < .10), ], 'tier3_wholebrain_significant_or_trending')
 
 
-wholeBrainTable <- read.csv(paste0(baseDir,'/functional/output/WholeBrain_WholeTable.csv'))
-wholeBrainTableFDR <- read.csv(paste0(baseDir,'/functional/output/WholeBrain_P05FDR.csv'))
+### Tier 3 Figures ----
+
+
+# Tier 3 results: every connection (wholeBrainTable) and the ones that pass FDR p < .05 (wholeBrainTableFDR). Grp.B is the age-adjusted Low minus High
+# Risk difference, so Grp.B > 0 means Low Risk is higher.
+wholeBrainTable <- tier3
+wholeBrainTableFDR <- tier3[which(tier3$Grp.p.adjust < .05), ]
 
 ## Connectogram here
 # Create a dataframe for plotting
@@ -1767,7 +2110,7 @@ chordDiagram.Base <- data.frame(
 
 tableRow <- match(chordDiagram.Base$ConnFull, wholeBrainTable$ROI)
 inTableOnce <- !is.na(tableRow) & !(chordDiagram.Base$ConnFull %in% wholeBrainTable$ROI[duplicated(wholeBrainTable$ROI)])
-chordDiagram.Base$MeanDiff <- ifelse(inTableOnce, wholeBrainTable$TD.Mean[tableRow] - wholeBrainTable$ASD.Mean[tableRow], 0)
+chordDiagram.Base$MeanDiff <- ifelse(inTableOnce, wholeBrainTable$Grp.B[tableRow], 0)      # age-adjusted Low minus High Risk difference
 
 chordDiagram.Base$ASDConn <- as.numeric(chordDiagram.Base$MeanDiff < 0)
 chordDiagram.Base$TDConn <- as.numeric(chordDiagram.Base$MeanDiff > 0)
@@ -1901,10 +2244,10 @@ connParts <- strsplit(wholeBrainTable$ROI, '_', useBytes=T)
 lobeIndex1 <- roiLobeIndex(vapply(connParts, function(x) x[1], character(1)))
 lobeIndex2 <- roiLobeIndex(vapply(connParts, function(x) x[2], character(1)))
 
-# Significant connections (FDR) and whether TD or ASD has the higher mean
+# Significant connections (FDR) and whether Low Risk (TD) or High Risk (ASD) is higher (age-adjusted)
 sigRow <- match(wholeBrainTable$ROI, wholeBrainTableFDR$ROI)
 isSig <- !is.na(sigRow)
-tdHigher <- isSig & ((wholeBrainTableFDR$TD.Mean[sigRow] > wholeBrainTableFDR$ASD.Mean[sigRow]) %in% TRUE)
+tdHigher <- isSig & ((wholeBrainTableFDR$Grp.B[sigRow] > 0) %in% TRUE)
 
 allConnDesc <- countLobePairs(lobeIndex1, lobeIndex2)
 allConnDescSig <- countLobePairs(lobeIndex1[isSig], lobeIndex2[isSig])
@@ -1970,7 +2313,7 @@ wholebrain_lobeHeatmap_ASD <- lobeHeatmapPlot(allConnDescSig.ASD, high = groupCo
 showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, height = 7, subfolder = componentFolder)
 
 
-### Whole Brain Glass Brains ----
+### Tier 3 Glass Brains ----
 
 # Significant whole-brain connections (FDR) drawn on a translucent brain: lateral view above, posterior view below.
 # Low Risk (blue) = connections where Low Risk is higher; High Risk (red) = connections where High Risk is higher.
@@ -1978,7 +2321,7 @@ showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, 
 loadGlassBrain()
 
 wholeBrainEdges <- connectionRegions(wholeBrainTableFDR$ROI)
-wholeBrainEdges$dir <- ifelse(wholeBrainTableFDR$TD.Mean > wholeBrainTableFDR$ASD.Mean, 'low', 'high')
+wholeBrainEdges$dir <- ifelse(wholeBrainTableFDR$Grp.B > 0, 'low', 'high')
 allRegionNodes <- data.frame(id = seq_len(nrow(roiCoordinates)), fill = '#505050')
 message('Whole-brain glass brains: ', sum(wholeBrainEdges$dir == 'low', na.rm = TRUE), ' Low > High Risk edges and ',
         sum(wholeBrainEdges$dir == 'high', na.rm = TRUE), ' High > Low Risk edges')
@@ -1997,7 +2340,7 @@ wholebrain_glass_ASD <- wholeBrainGlass('high')
 showFigure(wholebrain_glass_ASD, 'wholebrain_glass_ASD', width = 4.5, height = 9, subfolder = componentFolder)
 
 
-### Whole Brain Composite Figure ----
+### Tier 3 Composite Figure ----
 
 # Low Risk (left half: A, B, C) and High Risk (right half: D, E, F). In each half: glass brains (A / D),
 # the lobe heatmap (B / E) and the chord diagram (C / F).
@@ -2045,365 +2388,6 @@ drawWholeBrainComposite <- function() {
 }
 
 showBaseFigure('wholebrain_composite', width = 16, height = 13, drawFun = drawWholeBrainComposite)
-
-
-## 3c. Smaller Network Approach ----
-
-# Here we are subdividing out into smaller networks
-
-# This will (A) help with the crazy FDR correction and (B) more pointedly target questions about connectivity within networks such as the CRB
-
-# Biggest job, however, is to define the networks in a rigorous way
-
-
-## First -- divide out the connections into an ROI1 and ROI2 table
-
-connROIs <- as.data.frame(matrix(ncol=2, nrow=ncol(tdFC)))
-colnames(connROIs) <- c('ROI1','ROI2')
-
-for(i in 1:nrow(connROIs)){
-  tempROI <- colnames(tdFC)[i]
-  
-  connROIs$ROI1[i] <- strsplit(tempROI,'_')[[1]][1]
-  connROIs$ROI2[i] <- strsplit(tempROI,'_')[[1]][2] 
-  
-}
-
-
-### Network Analyses ----
-
-# For each network, take the connections where BOTH regions belong to the network, then for every connection fit
-#   (1) FC ~ Grp + ScanGA   and   (2) FC ~ Grp * ScanGA   (random intercept per subject).
-# Each network writes its tables to functional/output and gets a bar chart (network_<name>_bars).
-
-
-# ROI number = the third '.'-separated part of an ROI name (e.g. 'CAU.L.39' -> 39)
-roiNumber <- function(roi) as.numeric(vapply(strsplit(roi, '.', fixed = TRUE), function(x) x[3], character(1)))
-
-# One entry per network:
-#   match         - function(roi names) -> TRUE for regions in the network
-#   xLabel        - x-axis label of the bar chart
-#   zeroLine      - draw a line at 0 on the bar chart
-networkSpecs <- list(
-
-  CRB = list(match = function(roi) grepl('CRB', roi),
-             xLabel = 'Cerebellar Connections', zeroLine = TRUE),
-
-  # Originally c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200); parahippocampal gyrus added (43,86,125)
-  Limbic = list(match = function(roi) roiNumber(roi) %in% c(5,9,20,29,56,61,67,68,81,86,94,108,120,133,141,143,155,160,188,196,198,200,
-                                                            43,86,125),
-                xLabel = 'Limbic Connections', zeroLine = FALSE),
-
-  # Originally also included 43,86,125 (hippocampus and parahippocampal gyrus); removed
-  DMN = list(match = function(roi) roiNumber(roi) %in% c(4,11,18,22,23,34,40,42,48,53,70,85,88,96,100,102,104,106,123,124,128,137,150,152,156,163,168,171,176,178),
-             xLabel = 'Default Mode Connections', zeroLine = FALSE),
-
-  SomMot = list(match = function(roi) grepl('PreCG', roi) | grepl('PoCG', roi) | grepl('SMA', roi),
-                xLabel = 'Sensorimotor Connections', zeroLine = FALSE),
-
-  SubCort = list(match = function(roi) roiNumber(roi) %in% c(31,32,39,51,80,92,97,107,111,134,139,145,151),
-                 xLabel = 'Subcortical Connections', zeroLine = FALSE),
-
-  Auditory = list(match = function(roi) roiNumber(roi) %in% c(88,94,2,12,48,171,107,139,152,185),
-                  xLabel = 'Auditory Connections', zeroLine = FALSE),
-
-  Visual = list(match = function(roi) roiNumber(roi) %in% c(181,174,153,114,149,195,167,105,116,194,197,162,131,186,135,
-                                                            72,60,19,52,35,75,25,15,42,30,91,87,98,57),
-                xLabel = 'Visual Connections', zeroLine = FALSE)
-)
-
-# Fit both models for every connection (column) of the network.
-# Returns the main-effects table (fcGLM) and the interaction table (fcIntxGLM).
-fitNetworkModels <- function(tdFCNetwork, asdFCNetwork, tdDemo, asdDemo) {
-
-  lmeCtrl <- lmeControl(msMaxIter=200, tolerance=1e-4, msTol=1e-5, opt='optim')
-
-  fcGLM <- as.data.frame(matrix(ncol=10, nrow=ncol(tdFCNetwork)))
-  colnames(fcGLM) <- c('ROI', 'TD.Mean','TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','pEta2')
-
-  fcIntxGLM <- as.data.frame(matrix(ncol=12, nrow=ncol(tdFCNetwork)))
-  colnames(fcIntxGLM) <- c('ROI', 'TD.Mean', 'TD.SE', 'ASD.Mean','ASD.SE','Grp.B','Grp.p','GA.B','GA.p','Intx.B','Intx.p','pEta2')
-
-  for(i in 1:nrow(fcGLM)){
-
-    tempTD <- as.data.frame(cbind(rownames(tdFCNetwork),tdFCNetwork[,i]))
-    colnames(tempTD) <- c('ID','FC')
-    tempTD$Grp <- 'TD'
-    tempTD <- merge(tempTD, tdDemo)
-
-    tempASD <- as.data.frame(cbind(rownames(asdFCNetwork),asdFCNetwork[,i]))
-    colnames(tempASD) <- c('ID','FC')
-    tempASD$Grp <- 'ASD'
-    tempASD <- merge(tempASD, asdDemo)
-
-    glmFrame <- rbind(tempTD, tempASD)
-    glmFrame$FC <- as.numeric(glmFrame$FC)
-    glmFrame$shortID <- substr(glmFrame$ID, 0, nchar(glmFrame$ID)-3)
-
-    tempGLM <- lme(data=glmFrame, FC ~ Grp + ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
-
-    fcGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-    fcGLM$TD.Mean[i] <- mean(as.numeric(tempTD$FC), na.rm = T)
-    fcGLM$TD.SE[i] <- sd(as.numeric(tempTD$FC), na.rm = T)/sqrt(length(as.numeric(tempTD$FC)))
-    fcGLM$ASD.Mean[i] <- mean(as.numeric(tempASD$FC), na.rm = T)
-    fcGLM$ASD.SE[i] <- sd(as.numeric(tempASD$FC), na.rm = T)/sqrt(length(as.numeric(tempASD$FC)))
-    fcGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-    fcGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-    fcGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-    fcGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-
-    tempGLM <- lme(data=glmFrame, FC ~ Grp * ScanGA, random= ~1|factor(shortID), control=lmeCtrl)
-
-    fcIntxGLM$ROI[i] <- colnames(tdFCNetwork)[i]
-    # group means in the interaction table are model-adjusted (emmeans)
-    adjustMeans <- as.data.frame(emmeans(tempGLM, 'Grp', data=glmFrame))
-    fcIntxGLM$TD.Mean[i] <- adjustMeans$emmean[2]
-    fcIntxGLM$TD.SE[i] <- adjustMeans$SE[2]
-    fcIntxGLM$ASD.Mean[i] <- adjustMeans$emmean[1]
-    fcIntxGLM$ASD.SE[i] <- adjustMeans$SE[1]
-    fcIntxGLM$Grp.B[i] <- summary(tempGLM)$tTable[2,1]
-    fcIntxGLM$Grp.p[i] <- summary(tempGLM)$tTable[2,5]
-    fcIntxGLM$GA.B[i] <- summary(tempGLM)$tTable[3,1]
-    fcIntxGLM$GA.p[i] <- summary(tempGLM)$tTable[3,5]
-    fcIntxGLM$Intx.B[i] <- summary(tempGLM)$tTable[4,1]
-    fcIntxGLM$Intx.p[i] <- summary(tempGLM)$tTable[4,5]
-  }
-
-  list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
-}
-
-# Write a network's tables to functional/output (these files are read back for the connectivity figures below)
-writeNetworkTables <- function(name, fcGLM, fcIntxGLM) {
-  out <- function(tbl, suffix) {
-    write.table(tbl, paste0(baseDir,'/functional/output/', name, '_', suffix, '.csv'), col.names=T, row.names=F, sep=',')
-  }
-  out(fcGLM, 'WholeTable')
-  out(subset(fcGLM, Grp.p <.05), 'P05')
-  out(subset(fcGLM, Grp.p <.01), 'P01')
-  out(subset(fcGLM, Grp.p <.001), 'P001')
-  out(subset(fcGLM, Grp.p.adjust <.05), 'P05FDR')
-
-  out(subset(fcIntxGLM, Grp.p.adjust <.05 | Intx.p.adjust < .05), 'Intx_P05FDR')
-  out(subset(fcIntxGLM, Grp.p.adjust <.1 | Intx.p.adjust < .1), 'Intx_P10FDR')
-  out(fcIntxGLM, 'Intx_Wholebrain')
-}
-
-# Run one network: select its connections, fit the models (cached), FDR-correct, print what survives, and write the tables
-runNetworkAnalysis <- function(name, spec) {
-  bothROIMatch <- spec$match(connROIs$ROI1) & spec$match(connROIs$ROI2)
-
-  # The fit is cached per network: it is recomputed only if this network's connections, the demographics or the model code change
-  tdNetwork <- tdFC[,bothROIMatch]
-  asdNetwork <- asdFC[,bothROIMatch]
-  models <- cached(paste0('network_', name),
-                   inputs = list(tdNetwork, asdNetwork, tdDemoFinal, asdDemoFinal, deparse(fitNetworkModels)),
-                   compute = function() fitNetworkModels(tdNetwork, asdNetwork, tdDemoFinal, asdDemoFinal))
-  fcGLM <- addFDRfc(models$fcGLM)
-  fcIntxGLM <- addFDRfc(models$fcIntxGLM)
-
-  message(name, ': ', sum(bothROIMatch), ' connections')
-  print(subset(fcGLM, Grp.p.adjust <.05))
-  print(subset(fcIntxGLM, Grp.p.adjust <.05))
-  print(subset(fcIntxGLM, Intx.p.adjust <.05))
-
-  writeNetworkTables(name, fcGLM, fcIntxGLM)
-  saveResultTable(fcGLM, paste0('network_', name, '_main'))
-  saveResultTable(fcIntxGLM, paste0('network_', name, '_intx'))
-  list(fcGLM = fcGLM, fcIntxGLM = fcIntxGLM)
-}
-
-# Bar chart of the group means for every connection in a network, ordered by group p-value, with a boxed legend to its right
-plotNetworkBars <- function(fcGLM, spec) {
-  longFCGLM <- melt(fcGLM, id.vars=c('ROI'), measure.vars = c('TD.Mean','ASD.Mean'), variable.name='Group', value.name='FC')
-  pValOrder <- fcGLM$ROI[order(fcGLM$Grp.p, decreasing = T)]
-
-  # y axis fitted to this network's data: from the lowest bar (or 0) to the highest, on round tick marks.
-  # A network with few negative connections gets only a small negative range, not a symmetrical axis.
-  yBreaks <- pretty(c(0, longFCGLM$FC), n = 6)
-
-  barPlot <- ggplot(data=longFCGLM, aes(x=factor(ROI, levels=pValOrder, ordered=is.ordered(T)), y=FC, group=factor(Group))) +
-    scale_y_continuous(limits=range(yBreaks), breaks=yBreaks, labels=fixedDecimalLabels, expand=c(0,0)) +
-    scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
-    scale_color_manual(values=c(groupColors[['low']], groupColors[['high']]))
-  if (spec$zeroLine) { barPlot <- barPlot + geom_hline(yintercept = 0, linewidth=1.5) }
-
-  barPlot <- barPlot +
-    geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
-    ylab('Connectivity Strength') + xlab(spec$xLabel) +
-    theme(axis.title.x = element_text(color = 'black', size = 16),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_text(color = 'black', size = 16),
-          axis.text.y = element_text(color = 'black', size = 12),
-          axis.ticks.y = element_blank(),
-          axis.line.x = element_line(color='black', linewidth = 1),
-          axis.line.y = element_line(color='black', linewidth = 1),
-          plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-          panel.grid.major.y = element_line(color = '#cccccc', linewidth = 1),
-          panel.grid.major.x = element_blank(),   # no vertical lines: with hundreds of bars they fill the panel with gray
-          panel.background = element_rect(fill='white'),
-          legend.position = 'none',
-          legend.text = element_text(color = 'black', size = 12),
-          legend.title=element_blank())
-
-  addRiskLegend(barPlot, 'network')
-}
-
-
-### Run Network Analyses ----
-
-
-networkResults <- list()
-for (net in networksOfInterest) {
-  networkResults[[net]] <- runNetworkAnalysis(net, networkSpecs[[net]])
-  showFigure(plotNetworkBars(networkResults[[net]]$fcGLM, networkSpecs[[net]]),
-             paste0('network_', net, '_bars'), width = 12, height = 6, subfolder = componentFolder)
-}
-
-#### Network Connectivity Figures ----
-
-
-# Read in the output of the above analyses for plotting
-FCTable.TrendOnly.DMN <- read.csv(paste0(baseDir,'/functional/output/DMN_Intx_P10FDR.csv'), stringsAsFactors=F)
-FCTable.TrendOnly.Limbic <- read.csv(paste0(baseDir,'/functional/output/Limbic_Intx_P10FDR.csv'), stringsAsFactors=F)
-FCTable.TrendOnly.Subcort <- read.csv(paste0(baseDir,'/functional/output/SubCort_Intx_P10FDR.csv'), stringsAsFactors=F)
-FCTable.TrendOnly.CRB <- read.csv(paste0(baseDir,'/functional/output/CRB_Intx_P10FDR.csv'), stringsAsFactors=F)
-
-FCTable.TrendOnly.DMN$Net <- 'DMN'
-FCTable.TrendOnly.Limbic$Net <- 'Limbic'
-FCTable.TrendOnly.Subcort$Net <- 'Subcort'
-FCTable.TrendOnly.CRB$Net <- 'CRB'
-
-FCTable.TrendOnly.All <- rbind(rbind(rbind(FCTable.TrendOnly.DMN, FCTable.TrendOnly.Limbic),
-                                    FCTable.TrendOnly.Subcort),
-                              FCTable.TrendOnly.CRB)
-
-
-# Plots
-
-plotOrder <- c('CAU.L.39_THA.R.139',
-  'PAL.L.97_PUT.R.111',
-  'CAU.L.39_THA.L.80',
-  'THA.L.51_PUT.L.92',
-  'PAL.L.97_PAL.R.107',
-  'PAL.L.97_THA.R.139',
-  'PAL.R.107_PUT.R.145',
-  'TPOmid.L.9_ITG.R.188',
-  'REC.L.20_TPOmid.R.108',
-  'REC.L.20_ORBsupb.R.155',
-  'ITG.L.56_ITG.R.188',
-  'SFGdor.L.67_AMY.R.133',
-  'SFGdor.L.67_ORBsupb.R.196',
-  'ORBsupb.R.143_ITG.R.188',
-  'ITG.R.188_ORBsupb.R.196',
-  'ITG.R.188_ORBsupb.R.198',
-  'SFGmed.L.18_ACG.R.123',
-  'MTG.L.22_ACG.L.34',
-  'MTG.L.22_ACG.R.156',
-  'PCUN.L.23_STG.L.88',
-  'MTG.L.96_STG.R.102',
-  'SFGmed.R.128_MTG.R.150',
-  'PHG.L.43_PCUN.R.178',
-  'CRB.L.13_CRB.R.142',
-  'CRB.L.13_CRB.R.192',
-  'CRB.L.17_CRB.L.99',
-  'CRB.L.17_CRB.R.192',
-  'CRB.L.54_CRB.R.192',
-  'CRB.L.99_CRB.R.142',
-  'CRB.L.99_CRB.R.192',
-  'CRB.R.129_CRB.R.192')
-
-
-plotFrame.TD <- FCTable.TrendOnly.All[,c('ROI','TD.Mean', 'TD.SE')]
-colnames(plotFrame.TD) <- c('Connection','Mean','SE')
-plotFrame.ASD <- FCTable.TrendOnly.All[,c('ROI','ASD.Mean', 'ASD.SE')]
-colnames(plotFrame.ASD) <- c('Connection','Mean','SE')
-plotFrame.TD$Grp <- 'Low Risk'
-plotFrame.ASD$Grp <- 'High Risk'
-
-plotFrame <- as.data.frame(rbind(plotFrame.TD, plotFrame.ASD))
-plotFrame$Connection <- factor(plotFrame$Connection, levels=plotOrder)
-plotFrame$Grp <- factor(plotFrame$Grp, levels=c('Low Risk', 'High Risk'))
-plotFrame$Mean <- as.numeric(plotFrame$Mean)
-plotFrame$SE <- as.numeric(plotFrame$SE)
-
-##plot ggeffects maybe ggprdict?
-##need marginal means? -- emmeans? Give the SE from the model itself
-
-network_combined_bars_p10 <- ggplot(data=plotFrame, aes(x=Connection, y=Mean, Group=Grp)) +
-  scale_y_continuous(labels=fixedDecimalLabels) +
-  scale_x_discrete(labels=setNames(connectionLabel(plotOrder), plotOrder)) +
-  scale_fill_manual(values=c(networkBarFill[['low']], networkBarFill[['high']])) +
-  scale_color_manual(values=c(groupColors[['low']], groupColors[['high']])) +
-  geom_hline(yintercept = 0, lwd=1) +
-  geom_bar(stat='identity', position=position_dodge2(0.2), aes(color=Grp,fill=Grp)) +
-  # geom_errorbar(position=position_dodge2(0.2), aes(ymin=Mean-SE, ymax=Mean+SE), size=.2) +
-  ylab('Connectivity Strength') + xlab('Network Connections') +
-  theme(axis.title.x = element_text(color = 'black', size = 16),
-        axis.text.x = element_text(color = 'black', size = 6, angle=90, hjust=1, vjust=.5),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
-        axis.text.y = element_text(color = 'black', size = 12),
-        axis.ticks.y = element_blank(),
-        axis.line.x = element_line(color='black', linewidth = 1),
-        axis.line.y = element_line(color='black', linewidth = 1),
-        plot.title = element_text(color = 'black', size = 24, hjust=0.5),
-        panel.grid.major.y = element_line(color = '#aaaaaa'),
-        panel.grid.major.x = element_line(color = '#aaaaaa'),
-        panel.background = element_rect(fill='white'),
-        legend.position = 'none',
-        legend.text = element_text(color = 'black', size = 12),
-        legend.title=element_blank())
-
-showFigure(addRiskLegend(network_combined_bars_p10, 'network'), 'network_combined_bars_p10', width = 12, height = 6)
-
-
-#### Network Glass Brain ----
-
-# Nodes of the four networks colored by network; edges are the connections with p.adj < .10 (the same ones as the bar chart above),
-# blue where Low Risk is higher and red where High Risk is higher. Needs the network tables written by the network analyses.
-
-loadGlassBrain()
-
-regionLabels <- read.csv(paste0(baseDir,'/functional/100PerHemiLabels_Decimal.1D'), header=F)
-roiNames <- paste0(regionLabels$V1, '.', seq_len(nrow(regionLabels)))
-
-networkGlassNodes <- do.call(rbind, lapply(names(networkNodeColors), function(net) {
-  ids <- which(networkSpecs[[net]]$match(roiNames))
-  data.frame(id = ids, fill = networkNodeColors[[net]], network = net, stringsAsFactors = FALSE)
-}))
-
-networkGlassEdges <- do.call(rbind, lapply(names(networkNodeColors), function(net) {
-  tbl <- read.csv(paste0(baseDir,'/functional/output/', net, '_Intx_P10FDR.csv'), stringsAsFactors = FALSE)
-  if (nrow(tbl) == 0) { return(NULL) }
-  edges <- connectionRegions(tbl$ROI)
-  edges$dir <- ifelse(tbl$TD.Mean > tbl$ASD.Mean, 'low', 'high')
-  edges
-}))
-
-message('Network glass brain: ', sum(networkGlassEdges$dir == 'low', na.rm = TRUE), ' Low > High Risk edges and ',
-        sum(networkGlassEdges$dir == 'high', na.rm = TRUE), ' High > Low Risk edges')
-
-# Legend: one chip per network (node color with a lighter tint), then what the blue and red edges mean
-networkLegendPanel <- function() {
-  nNet <- length(networkNodeColors); yChip <- seq(.80, by = -.14, length.out = nNet)
-  tints <- vapply(networkNodeColors, tintColor, character(1), amount = .65)
-  ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed() + theme_void() +
-    annotate('rect', xmin = .02, xmax = .98, ymin = .04, ymax = .96, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('rect', xmin = .08, xmax = .14, ymin = yChip - .05, ymax = yChip + .05, fill = unname(networkNodeColors), colour = '#444444', linewidth = .4) +
-    annotate('rect', xmin = .14, xmax = .92, ymin = yChip - .05, ymax = yChip + .05, fill = unname(tints), colour = '#444444', linewidth = .4) +
-    annotate('text', x = .17, y = yChip, label = paste(networkNodeLabels[names(networkNodeColors)], 'Network'), hjust = 0, size = 4.2) +
-    annotate('segment', x = .04, xend = .96, y = .27, yend = .27, linewidth = .5) +
-    annotate('text', x = c(.27, .73), y = .20, label = c('Low > High Risk', 'High > Low Risk'), size = 3.6) +
-    annotate('segment', x = c(.12, .58), xend = c(.42, .88), y = .12, yend = .12, linewidth = 2.2,
-             colour = if (glassRendererActive == 'rgl') glassEdgeColors[c('low', 'high')] else groupLineColor[c('low', 'high')], lineend = 'round')
-}
-
-network_glass <- ggpubr::ggarrange(glassView('axial', networkGlassNodes, networkGlassEdges),
-                                   glassView('posterior', networkGlassNodes, networkGlassEdges),
-                                   glassView('lateral', networkGlassNodes, networkGlassEdges),
-                                   networkLegendPanel(), nrow = 2, ncol = 2)
-showFigure(network_glass, 'network_glass', width = 9, height = 9)
 
 
 # 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----

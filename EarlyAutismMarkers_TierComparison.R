@@ -1,8 +1,8 @@
 # TIER 2 COMPARISON: ORIGINAL vs REVISED NETWORK MEMBERSHIP ----
 #
 # Lists the ROI-to-ROI connections that gained or lost significance when the network membership changed from the original lists to the revised ones
-# (networkSpecs_revised.R). Both versions are fitted here (and cached separately, so neither overwrites the other), connection by connection,
-# with the same model as EarlyAutismMarkers_ConnectivityTiers.R:  connectivity ~ Group + scan age, random intercept per participant.
+# (networkSpecsRevised in EarlyAutismMarkers_edit.R). Both versions are fitted here (and cached separately, so neither overwrites the other), connection by connection,
+# with the same model as the Tier 2 analysis in EarlyAutismMarkers_edit.R:  connectivity ~ Group + scan age, random intercept per participant.
 #
 # A connection can change status for two reasons, and the table says which:
 #   membership  the connection is inside the network in only one of the two versions (a parcel was added or removed)
@@ -23,13 +23,11 @@ if (length(cmpMissing) > 0) { stop('Run EarlyAutismMarkers_edit.R first. These o
 
 # The two sets of network definitions ----
 
-revisedFile <- if (exists('baseDir') && file.exists(file.path(baseDir, 'functional', 'atlasParcellattion', 'networkSpecs_revised.R')))
-  file.path(baseDir, 'functional', 'atlasParcellattion', 'networkSpecs_revised.R') else 'networkSpecs_revised.R'
-if (!file.exists(revisedFile)) { stop('networkSpecs_revised.R not found: ', revisedFile) }
-if (exists('networkSpecsOriginal')) { originalSpecs <- networkSpecsOriginal } else { originalSpecs <- networkSpecs }
-source(revisedFile)                      # defines the revised networkSpecs (and keeps networkSpecsOriginal)
-revisedSpecs <- networkSpecs
-networkSpecs <- originalSpecs            # leave the session as it was, with the original definitions
+if (!exists('networkSpecsOriginal') || !exists('networkSpecsRevised')) {
+  stop('networkSpecsOriginal and networkSpecsRevised are not defined; run EarlyAutismMarkers_edit.R through the network definitions (section 3b) first')
+}
+originalSpecs <- networkSpecsOriginal
+revisedSpecs <- networkSpecsRevised
 specsOf <- list(original = originalSpecs, revised = revisedSpecs)
 
 # The same connection model as the Tiers script (copied so this file stands alone) ----
