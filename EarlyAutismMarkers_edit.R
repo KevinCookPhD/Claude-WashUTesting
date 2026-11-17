@@ -1866,7 +1866,7 @@ tier2Figure <- function(palette = networkNodeColors) {
                            x = vapply(usedNets, function(u) (sum(shown$unit == u) + 1) / 2, numeric(1)),
                            tint = vapply(palette[usedNets], tintColor, character(1), amount = .72), solid = unname(palette[usedNets]),
                            name = paste(networkNodeLabels[usedNets], 'Network'), stringsAsFactors = FALSE)
-  background$text <- textColorFor(background$solid)
+  background$text <- 'white'      # white network names on every band
   dividers <- do.call(rbind, lapply(usedNets, function(u) {
     n <- sum(shown$unit == u)
     if (n > 1) data.frame(unit = factor(u, levels = usedNets), x = seq_len(n - 1) + .5) else NULL
