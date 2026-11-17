@@ -77,6 +77,20 @@ cat("Project labels, QA:     ", paste(sort(unique(qa2$project)),   collapse = ",
 # CHECK: if "in both" is much lower than expected, the sheets label projects or
 # scan numbers differently; match on FullID or scanPMA instead.
 
+cat("\n--- Why don't the scans match? ---\n")
+cat("Infants present in BOTH sheets:", length(intersect(paste(omni2$project, omni2$shortID),
+                                                         paste(qa2$project,   qa2$shortID))), "\n")
+cat("Omnibus 'Scan' values that are not whole numbers (these become NA):\n")
+print(omni %>% filter(is.na(suppressWarnings(as.integer(scan)))) %>% count(scan, sort = TRUE), n = 20)
+
+# Side-by-side look at one infant who is in both sheets
+ex <- intersect(omni2$shortID, qa2$shortID)[1]
+cat("\nExample infant in both sheets:", ex, "\n--- omnibus rows (raw Scan column) ---\n")
+print(omni %>% filter(str_to_lower(str_trim(as.character(id))) == ex) %>%
+        select(id, scan, scanpma, fullid), n = 20)
+cat("--- QA rows ---\n")
+print(qa2 %>% filter(shortID == ex) %>% select(shortID, scanNo, scanPMA, scanDate), n = 20)
+
 # ---- 4. One row per scan ---------------------------------------------------------
 # Where a scan is in both sheets, the newer QA sheet's value wins; the omnibus
 # value fills any gap.
@@ -163,6 +177,10 @@ infants <- scans %>%
   mutate(current_age_yrs = as.numeric(Sys.Date() - dob) / 365.25)
 
 # ---- 8. Cohort summary (the ten requested metrics) -----------------------------------
+# min/max that return NA (not Inf/-Inf) when a cohort has no values, e.g. no derivable DOB
+safe_min <- function(x) if (all(is.na(x))) x[NA_integer_][1] else min(x, na.rm = TRUE)
+safe_max <- function(x) if (all(is.na(x))) x[NA_integer_][1] else max(x, na.rm = TRUE)
+
 cohort_summary <- infants %>%
   group_by(cohort) %>%
   summarize(
@@ -172,10 +190,11 @@ cohort_summary <- infants %>%
     `4 Preterm-period scans`   = sum(n_preterm),
     `5 Term-age scans`         = sum(n_term),
     `6 Mean GA at birth (wk)`  = round(mean(birthGA, na.rm = TRUE), 1),
-    `7 Earliest DOB`           = suppressWarnings(min(dob, na.rm = TRUE)),
-    `8 Latest DOB`             = suppressWarnings(max(dob, na.rm = TRUE)),
-    `9 Current age range (yr)` = paste0(round(suppressWarnings(min(current_age_yrs, na.rm = TRUE)), 1), "-",
-                                        round(suppressWarnings(max(current_age_yrs, na.rm = TRUE)), 1)),
+    `7 Earliest DOB`           = safe_min(dob),
+    `8 Latest DOB`             = safe_max(dob),
+    `9 Current age range (yr)` = if_else(all(is.na(current_age_yrs)), NA_character_,
+                                         paste0(round(safe_min(current_age_yrs), 1), "-",
+                                                round(safe_max(current_age_yrs), 1))),
     `10 Mean current age (yr)` = round(mean(current_age_yrs, na.rm = TRUE), 1),
     n_missing_dob              = sum(is.na(dob)),   # infants with no derivable DOB
     .groups = "drop"
