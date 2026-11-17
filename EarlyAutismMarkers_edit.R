@@ -1679,23 +1679,35 @@ barsFor <- function(fits, xAngle = 0) {
 showFigure(barsFor(tier1Within$fits), 'tier1_within_bars', width = 9, height = 6)
 showFigure(barsFor(tier1Between$fits, xAngle = 45), 'tier1_between_bars', width = 11, height = 7)
 
+# Low minus High Risk difference for every network (the diagonal, within the network) and every pair of networks (below the diagonal, between the two).
+# Only the lower triangle is drawn: the matrix is symmetric, so the upper triangle would repeat it.
 cells <- rbind(
-  data.frame(row = tier1Within$fits$network, col = tier1Within$fits$network, diff = tier1Within$fits$Diff.LowMinusHigh, star = starFor(tier1Within$fits$Grp.p.adjust), stringsAsFactors = FALSE),
+  data.frame(across = tier1Within$fits$network, down = tier1Within$fits$network, diff = tier1Within$fits$Diff.LowMinusHigh, star = starFor(tier1Within$fits$Grp.p.adjust), stringsAsFactors = FALSE),
   do.call(rbind, lapply(seq_along(pairs), function(i) {
     r <- tier1Between$fits[tier1Between$fits$network == pairNames[i], ]
     if (nrow(r) == 0) { return(NULL) }
-    data.frame(row = pairs[[i]], col = rev(pairs[[i]]), diff = r$Diff.LowMinusHigh, star = starFor(r$Grp.p.adjust), stringsAsFactors = FALSE)
+    data.frame(across = pairs[[i]][1], down = pairs[[i]][2], diff = r$Diff.LowMinusHigh, star = starFor(r$Grp.p.adjust), stringsAsFactors = FALSE)
   })))
-cells$row <- factor(cells$row, levels = networksOfInterest, labels = vapply(networksOfInterest, networkLabel, character(1)))
-cells$col <- factor(cells$col, levels = rev(networksOfInterest), labels = rev(vapply(networksOfInterest, networkLabel, character(1))))
+cells <- cells[match(cells$down, networksOfInterest) >= match(cells$across, networksOfInterest), ]      # lower triangle, diagonal included
+networkNamesInOrder <- vapply(networksOfInterest, networkLabel, character(1))
+cells$across <- factor(cells$across, levels = networksOfInterest, labels = networkNamesInOrder)
+cells$down <- factor(cells$down, levels = rev(networksOfInterest), labels = rev(networkNamesInOrder))
 cells$text <- paste0(sprintf('%.3f', cells$diff), '\n', cells$star)
-limit <- max(abs(cells$diff))
-tier1_matrix <- ggplot2::ggplot(cells, ggplot2::aes(x = row, y = col, fill = diff)) +
-  ggplot2::geom_tile(color = 'white', linewidth = 1) + ggplot2::geom_text(ggplot2::aes(label = text), size = 4, lineheight = .9) +
-  ggplot2::scale_fill_gradient2(low = groupColors[['high']], mid = 'white', high = groupColors[['low']], midpoint = 0, limits = c(-limit, limit), name = 'Low minus High\nRisk difference') +
-  ggplot2::labs(x = NULL, y = NULL, caption = 'Diagonal = within the network; off-diagonal = between two networks. Blue = Low Risk higher, red = High Risk higher.\n* p.adj < .05, + p.adj < .10 (FDR within the within and between families separately); age-adjusted') +
-  ggplot2::theme_minimal(base_size = 13) +
-  ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text.x = ggplot2::element_text(color = 'black', angle = 45, hjust = 1), axis.text.y = ggplot2::element_text(color = 'black'))
+
+# Color scale: symmetric around zero, with the limits rounded up to the next .05 so the bar ends on a round number. Ticks every .05, labels every .1.
+limit <- max(.05, ceiling(max(abs(cells$diff)) / .05 - 1e-9) * .05)
+matrixBreaks <- seq(-limit, limit, by = .05)
+matrixLabels <- function(x) ifelse(abs(x * 10 - round(x * 10)) < 1e-8, formatC(x, format = 'f', digits = 1), '')
+tier1_matrix <- ggplot2::ggplot(cells, ggplot2::aes(x = across, y = down, fill = diff)) +
+  ggplot2::geom_tile(color = 'white', linewidth = 1) + ggplot2::geom_text(ggplot2::aes(label = text), size = 4.5, lineheight = .9) +
+  ggplot2::scale_x_discrete(drop = FALSE) + ggplot2::scale_y_discrete(drop = FALSE) +
+  ggplot2::scale_fill_gradient2(low = groupColors[['high']], mid = 'white', high = groupColors[['low']], midpoint = 0, limits = c(-limit, limit),
+                                breaks = matrixBreaks, labels = matrixLabels, name = 'Low minus High Risk\nconnectivity difference') +
+  ggplot2::guides(fill = ggplot2::guide_colorbar(ticks.colour = 'black', ticks.linewidth = .6, frame.colour = 'black', frame.linewidth = .5)) +
+  ggplot2::labs(x = NULL, y = NULL) +
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text = ggplot2::element_text(color = 'black'),
+                 legend.key.height = grid::unit(1.3, 'cm'), legend.key.width = grid::unit(.7, 'cm'))      # the color bar is 5 key heights tall
 showFigure(tier1_matrix, 'tier1_matrix', width = 8, height = 7)
 
 ## 3d. Tier 2: ROI-to-ROI Connections Within Networks ----
