@@ -2551,6 +2551,63 @@ showBaseFigure('wholebrain_composite', width = 16, height = 13, drawFun = drawWh
 } # end Tier 3 (runTier3)
 
 
+## 3f. Supplemental: The Atlas on a Glass Brain, and the Parcel Table ----
+
+# Every parcel of the functional atlas drawn as a node on the glass brain, colored by network (parcels in none of the four networks are gray, 'Unassigned'), plus a table of
+# every parcel with its center of mass and network membership.
+loadGlassBrain()
+
+atlasParcels <- data.frame(ROI = unique(c(connROIs$ROI1, connROIs$ROI2)), stringsAsFactors = FALSE)
+atlasParcels$Parcel <- roiNumber(atlasParcels$ROI)
+atlasParcels <- atlasParcels[order(atlasParcels$Parcel), ]
+atlasParcels$Label <- vapply(atlasParcels$ROI, function(roi) {
+  fields <- strsplit(roi, '.', fixed = TRUE)[[1]]
+  hasHemisphere <- length(fields) >= 3 && fields[2] %in% c('L', 'R')
+  name <- roiFullName(if (hasHemisphere) paste(fields[1], fields[2], sep = '.') else fields[1])
+  if (roi %in% names(cerebellarLabels)) { name <- cerebellarLabels[[roi]] }
+  if (hasHemisphere) paste(c(L = 'Left', R = 'Right')[[fields[2]]], name) else name
+}, character(1))
+atlasParcels$Hemisphere <- ifelse(grepl('\\.L\\.', atlasParcels$ROI), 'Left', ifelse(grepl('\\.R\\.', atlasParcels$ROI), 'Right', 'Midline'))
+
+# Center of mass: the atlas-space coordinates, in the standard orientation (X right, Y anterior, Z superior)
+atlasParcels$X <- roiCoordinates$X[atlasParcels$Parcel]
+atlasParcels$Y <- roiCoordinates$Y[atlasParcels$Parcel]
+atlasParcels$Z <- roiCoordinates$Z[atlasParcels$Parcel]
+
+# Network membership: the revised lists used in the analyses, and the original lists for comparison
+networkMembership <- function(specs) {
+  vapply(atlasParcels$ROI, function(roi) {
+    inNetworks <- networksOfInterest[vapply(specs[networksOfInterest], function(spec) isTRUE(spec$match(roi)), logical(1))]      # only the four networks of interest
+    if (length(inNetworks) == 0) 'None' else paste(networkNodeLabels[inNetworks], collapse = '; ')
+  }, character(1))
+}
+atlasParcels$Network <- networkMembership(networkSpecsRevised)
+atlasParcels$NetworkOriginal <- networkMembership(networkSpecsOriginal)
+atlasParcels$ChangedFromOriginal <- ifelse(atlasParcels$Network != atlasParcels$NetworkOriginal, 'Yes', '')
+atlasParcels <- atlasParcels[, c('Parcel', 'ROI', 'Label', 'Hemisphere', 'X', 'Y', 'Z', 'Network', 'NetworkOriginal', 'ChangedFromOriginal')]
+rownames(atlasParcels) <- NULL
+cat('\nAtlas parcels:', nrow(atlasParcels), '\n'); print(table(atlasParcels$Network))
+saveTable(atlasParcels, 'supplemental_atlas_parcels')
+
+# The figure: three views (radiological convention) and a one-line key
+atlasNodeColors <- c(networkNodeColors, None = '#A6A6A6')
+atlasNodes <- data.frame(id = atlasParcels$Parcel,
+                         fill = unname(atlasNodeColors[ifelse(atlasParcels$Network %in% networkNodeLabels, names(networkNodeLabels)[match(atlasParcels$Network, networkNodeLabels)], 'None')]),
+                         stringsAsFactors = FALSE)
+atlasBrains <- lapply(c('axial', 'anterior', 'lateral'), function(view) glassView(view, atlasNodes, NULL, 'whole'))
+
+atlasKeyNames <- c(unname(networkNodeLabels), 'Unassigned')
+atlasKeyColors <- unname(atlasNodeColors[c(names(networkNodeLabels), 'None')])
+atlasKeyX <- c(.06, .26, .43, .64, .86)[seq_along(atlasKeyNames)]
+atlasKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+  annotate('rect', xmin = .01, xmax = .99, ymin = .15, ymax = .85, fill = 'white', colour = 'black', linewidth = 1) +
+  annotate('point', x = atlasKeyX, y = .5, shape = 21, size = 6, fill = atlasKeyColors, colour = '#404040', stroke = .6) +
+  annotate('text', x = atlasKeyX + .025, y = .5, label = atlasKeyNames, hjust = 0, size = 12 / .pt)
+supplemental_atlas <- ggpubr::ggarrange(ggpubr::ggarrange(atlasBrains[[1]], atlasBrains[[2]], atlasBrains[[3]], nrow = 1, ncol = 3), atlasKey,
+                                        nrow = 2, heights = c(1, .13))
+showFigure(supplemental_atlas, 'supplemental_atlas_glass', width = 13, height = 5.6)
+
+
 # 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----
 
 
