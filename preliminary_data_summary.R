@@ -119,6 +119,18 @@ cat("\n--- Scans per cohort (nothing should be UNASSIGNED) ---\n")
 print(count(scans, cohort))
 cat("\n--- Which sheet each cohort's scans come from (project label x cohort) ---\n")
 print(count(scans, project, cohort), n = 50)
+
+# What do the IDs actually look like? Shows each distinct ID "shape" (letters kept,
+# digits replaced with #) with how many infants and an example, by cohort.
+cat("\n--- ID shapes by cohort (use this to fix the cohort patterns) ---\n")
+id_shapes <- scans %>%
+  mutate(shortID_shape = str_replace_all(shortID, "\\d+", "#"),
+         fullID_shape  = str_replace_all(str_to_lower(as.character(FullID)), "\\d+", "#")) %>%
+  group_by(cohort, project, shortID_shape, fullID_shape) %>%
+  summarize(n_infants = n_distinct(participant), example = first(shortID), .groups = "drop") %>%
+  arrange(cohort, desc(n_infants))
+print(id_shapes, n = 100, width = Inf)
+write_csv(id_shapes, file.path(dir, "id_shapes.csv"))
 if (any(scans$cohort == "UNASSIGNED")) {
   cat("Unassigned IDs:\n")
   print(distinct(filter(scans, cohort == "UNASSIGNED"), project, shortID, FullID))
