@@ -1141,8 +1141,8 @@ regionalFigureROIs <- data.frame(
   intxBreakStep  = c(.001,  .001,  .001,  .0005, .0025, .00025, .005),
   stringsAsFactors = FALSE)
 
-# Participants dropped from the figures (the regional stats above drop only the first and third)
-regionalFigureExclude <- c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')
+# Participants dropped from the figures: the same ones as the regional statistics above, so the figures show the data that was analyzed
+regionalFigureExclude <- regionalExclude
 
 # ROIs whose adjusted p-value (pAdjCol) is below the threshold
 significantROIs <- function(tbl, pAdjCol, threshold) {
