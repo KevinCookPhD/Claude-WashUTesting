@@ -1276,13 +1276,14 @@ combinedFigureThreshold <- .10
 
 # Names used on the y axis for regions that are not in regionalFigureROIs (the column name with the underscores removed is looked up here)
 regionNameOverrides <- c('Thalamus HighIntensity' = 'Thalamus', 'Lentiform' = 'Pallidum')
+fullNameOverrides <- c(FusiformAnt_GM_R = 'Anterior Fusiform (R)')      # whole y-axis names, by column name
 
 # Short region name for a y-axis title, e.g. 'Hippocampus (L)': drops 'Volume' and abbreviates the side
 shortRegionName <- function(roi) {
   spec <- regionalFigureROIs[regionalFigureROIs$roi == roi,]
   baseName <- gsub('_', ' ', sub('_[LR]$', '', roi)); side <- sub('^.*_([LR])$', '\\1', roi)
   if (baseName %in% names(regionNameOverrides)) { baseName <- regionNameOverrides[[baseName]] }
-  name <- if (nrow(spec) == 1) sub(' Volume$', '', spec$label) else if (grepl('_[LR]$', roi)) paste0(baseName, ' (', side, ')') else baseName
+  name <- if (roi %in% names(fullNameOverrides)) fullNameOverrides[[roi]] else if (nrow(spec) == 1) sub(' Volume$', '', spec$label) else if (grepl('_[LR]$', roi)) paste0(baseName, ' (', side, ')') else baseName
   name <- sub('\\(Left\\)', '(L)', name); sub('\\(Right\\)', '(R)', name)
 }
 
@@ -1319,7 +1320,9 @@ combinedLegendPanel <- function() {
 combinedTable <- glmRegionalNormedVolTable.Itx
 combinedTable$bestP <- pmin(combinedTable$Grp.p.Adj, combinedTable$Itx.p.Adj, na.rm = TRUE)
 combinedTable <- combinedTable[which(combinedTable$bestP < combinedFigureThreshold), ]
-combinedTable <- combinedTable[order(combinedTable$bestP), ]
+# Panel order: the regions listed here first (those that qualify), then any other qualifying region by p-value
+combinedOrder <- c('HPC_L', 'HPC_R', 'Amyg_L', 'FusiformAnt_GM_R', 'Caudate_R', 'Thalamus_HighIntensity_L', 'Subthalamic_L', 'Lentiform_R', 'Lentiform_L')
+combinedTable <- combinedTable[order(match(combinedTable$ROI, combinedOrder), combinedTable$bestP), ]
 message('Combined regional figure: ', nrow(combinedTable), ' region(s) with a group or interaction effect at FDR p < ', combinedFigureThreshold)
 if (nrow(combinedTable) > 0) {
   saveTable(combinedTable[, c('ROI', 'Grp.p.Adj', 'Itx.p.Adj')], 'regional_combined_regions')
