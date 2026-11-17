@@ -1659,7 +1659,7 @@ saveResultTable(tier1Between$fits, 'tier1_between')
 ### Tier 1 Figures ----
 # Group bars in the same style as the regional volume figures: light group fill with a black outline, thick black error bars, gray horizontal gridlines and
 # no axis ticks. The boxed Low Risk / High Risk legend sits inside the plot, in the top right corner.
-barsFor <- function(fits, xAngle = 0) {
+barsFor <- function(fits, xAngle = 0, legendTop = NULL) {      # legendTop = y value (in data units) that the top of the legend box lines up with
   labels <- fits$label
   barData <- rbind(data.frame(label = labels, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
                    data.frame(label = labels, Group = 'High Risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
@@ -1672,10 +1672,11 @@ barsFor <- function(fits, xAngle = 0) {
   starData$y <- starData$y + .05 * diff(range(c(0, barData$Mean + barData$SE)))
   yBreaks <- pretty(c(0, barData$Mean - barData$SE, barData$Mean + barData$SE, starData$y * 1.08), n = 6)
 
+  legendY <- if (is.null(legendTop)) .985 else (legendTop - min(yBreaks)) / diff(range(yBreaks))      # as a fraction of the panel height
   legendInside <- if (utils::packageVersion('ggplot2') >= '3.5.0') {
-    ggplot2::theme(legend.position = 'inside', legend.position.inside = c(.985, .985), legend.justification = c(1, 1))
+    ggplot2::theme(legend.position = 'inside', legend.position.inside = c(.985, legendY), legend.justification = c(1, 1))
   } else {
-    ggplot2::theme(legend.position = c(.985, .985), legend.justification = c(1, 1))
+    ggplot2::theme(legend.position = c(.985, legendY), legend.justification = c(1, 1))
   }
   ggplot2::ggplot(barData, ggplot2::aes(x = label, y = Mean, fill = Group)) +
     ggplot2::geom_col(position = ggplot2::position_dodge(.85), width = .8, color = '#000000', linewidth = 1) +
@@ -1700,7 +1701,7 @@ tier1Columns <- c('label', 'LowRisk.Mean', 'LowRisk.SE', 'HighRisk.Mean', 'HighR
 tier1Combined <- rbind(data.frame(family = 'Within networks', tier1Within$fits[, tier1Columns], stringsAsFactors = FALSE),
                        data.frame(family = 'Between networks', tier1Between$fits[, tier1Columns], stringsAsFactors = FALSE))
 tier1Combined$family <- factor(tier1Combined$family, levels = c('Within networks', 'Between networks'))
-tier1_bars <- barsFor(tier1Combined, xAngle = 40) +
+tier1_bars <- barsFor(tier1Combined, xAngle = 40, legendTop = .65) +      # legend box top lines up with y = 0.65
   ggplot2::facet_grid(~family, scales = 'free_x', space = 'free_x') +
   ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(color = 'black', size = 18))
 showFigure(tier1_bars, 'tier1_bars', width = 11, height = 6)
