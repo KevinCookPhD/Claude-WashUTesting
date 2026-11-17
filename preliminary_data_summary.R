@@ -20,7 +20,7 @@ delim     <- NULL        # NULL = auto-detect (tab, comma or semicolon); or set 
 TERM_PMA  <- 37          # weeks: scans before this = preterm period, at/after = term age
 
 # Fixed color per cohort (first three slots of a colorblind-checked palette)
-cohort_cols <- c("Preterm" = "#2a78d6", "OneSize (1z)" = "#eb6834", "PROTECT" = "#1baf7a")
+cohort_cols <- c("Preterm" = "#2a78d6", "Onesie" = "#eb6834", "PROTECT" = "#1baf7a")
 
 # ---- 1. Read both sheets -----------------------------------------------------
 # Detect the delimiter from the header line (tab, comma, semicolon) unless set above
@@ -115,14 +115,14 @@ cat("Scans whose PMA differs between sheets:", nrow(disagree), "\n")
 
 # ---- 5. Assign study cohorts -------------------------------------------------------
 # Looks for the study name in project, shortID, or FullID, ignoring case.
-# OneSize is tested first in case its IDs also contain "preterm".
+# Onesie is tested first in case its IDs also contain "preterm".
 if (!"FullID" %in% names(scans)) scans$FullID <- NA_character_
 
 scans <- scans %>%
   mutate(
     id_text = str_to_lower(paste(project, shortID, FullID, sep = " | ")),
     cohort = case_when(
-      str_detect(id_text, "onesi|one_si|1z") ~ "OneSize (1z)",   # CHECK: matches onesize, onesie, 1z
+      str_detect(id_text, "onesi|one_si|1z") ~ "Onesie",   # CHECK: matches onesize, onesie, 1z
       str_detect(id_text, "protect") ~ "PROTECT",
       str_detect(id_text, "preterm") ~ "Preterm",   # CHECK: add |preemie if needed
       TRUE ~ "UNASSIGNED"
