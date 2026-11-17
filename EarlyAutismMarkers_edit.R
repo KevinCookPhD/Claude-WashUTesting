@@ -2619,10 +2619,9 @@ rownames(atlasParcels) <- NULL
 cat('\nAtlas parcels:', nrow(atlasParcels), '\n'); print(table(atlasParcels$Network))
 saveTable(atlasParcels, 'supplemental_atlas_parcels')
 
-# The figure: the atlas itself, slice by slice. Each parcel is a different color, chosen so that parcels that touch never share a color. Rows are axial,
+# The figure: the atlas itself, slice by slice. Two versions: every parcel its own color, and colored by network (the complete membership). Rows are axial,
 # coronal and sagittal slices, in the radiological convention (the right side of the brain on the left of the picture; sagittal slices have the front on the left).
 atlasFile <- file.path(baseDir, 'functional', 'atlasParcellattion', 'tcorr_cluster_100ROIs_per_hemi.nii')      # fetal atlas, labels 1-200
-atlasPalette <- c('#E69F00', '#56B4E9', '#009E73', '#F0E442', '#0072B2', '#D55E00', '#CC79A7', '#7B68C8', '#A0522D', '#00A6A6', '#8DA000', '#E8A0A0')
 
 # Read an uncompressed or gzipped NIfTI-1 file in base R. Returns the voxel array and the voxel-to-world matrix.
 readNifti <- function(path) {
@@ -2646,7 +2645,7 @@ atlasLabels <- atlasVolume$data
 atlasLabels[!(atlasLabels %in% 1:200)] <- 0
 atlasAffine <- atlasVolume$affine
 
-# Which parcels touch (share a voxel face), then a greedy coloring so that touching parcels get different colors
+# Which parcels touch (share a voxel face); used to hand out colors so that touching parcels look different
 touching <- list()
 for (axis in 1:3) {
   a <- switch(axis, atlasLabels[-dim(atlasLabels)[1], , ], atlasLabels[, -dim(atlasLabels)[2], ], atlasLabels[, , -dim(atlasLabels)[3]])
@@ -2656,14 +2655,59 @@ for (axis in 1:3) {
 }
 touching <- unique(do.call(rbind, touching))
 neighbours <- lapply(1:200, function(p) c(touching[touching[, 1] == p, 2], touching[touching[, 2] == p, 1]))
-parcelColorIndex <- integer(200)
-for (p in order(-lengths(neighbours))) {
-  used <- parcelColorIndex[neighbours[[p]]]
-  parcelColorIndex[p] <- min(setdiff(seq_len(length(atlasPalette) + 1), used))
+message('Atlas figure: ', sum(lengths(neighbours)) / 2, ' pairs of touching parcels')
+
+# Colors for the atlas figures (3D and slices). (1) every parcel its own color; (2) by the four networks of interest; (3) by all seven hand-built lists;
+# (4) by the complete membership. Each comes with the key shown under the figure.
+# (1) Every parcel its own color: 200 distinct colors, handed out so that parcels that touch get colors that are far apart
+hueStep <- 137.508      # the golden angle spreads the hues evenly however many colors are used
+distinctColors <- hcl((seq_len(200) * hueStep) %% 360, c = rep(c(70, 50, 60, 40), 50), l = rep(c(45, 62, 78, 88), each = 1, length.out = 200) + rep(c(0, 4, -4, 2), 50), fixup = TRUE)
+colorLab <- convertColor(t(col2rgb(distinctColors)) / 255, from = 'sRGB', to = 'Lab')
+colorDistance <- as.matrix(dist(colorLab))
+distinctColorOfParcel <- rep(NA_integer_, 200)
+for (parcel in order(-lengths(neighbours))) {
+  free <- setdiff(seq_len(200), distinctColorOfParcel)
+  around <- distinctColorOfParcel[neighbours[[parcel]]]; around <- around[!is.na(around)]
+  distinctColorOfParcel[parcel] <- if (length(around) == 0) free[1] else free[which.max(apply(colorDistance[free, around, drop = FALSE], 1, min))]
 }
-if (max(parcelColorIndex) > length(atlasPalette)) { message('The atlas palette has too few colors; ', max(parcelColorIndex), ' are needed. Some touching parcels will share a color.') }
-parcelColor <- atlasPalette[(parcelColorIndex - 1) %% length(atlasPalette) + 1]
-message('Atlas figure: ', sum(lengths(neighbours)) / 2, ' pairs of touching parcels, colored with ', max(parcelColorIndex), ' colors')
+parcelColors <- distinctColors[distinctColorOfParcel]
+
+# (2) Parcels colored by network (the revised membership); parcels in none of the four networks are light gray
+networkOfParcel <- atlasParcels$Network[match(1:200, atlasParcels$Parcel)]
+networkColors <- c(setNames(unname(networkNodeColors[names(networkNodeLabels)]), unname(networkNodeLabels)), None = '#C8C8C8')
+parcelNetworkColors <- unname(networkColors[networkOfParcel])
+parcelNetworkColors[is.na(parcelNetworkColors)] <- '#C8C8C8'
+
+networkKeyNames <- c(unname(networkNodeLabels), 'Unassigned')
+networkKeyColors <- unname(networkColors[c(unname(networkNodeLabels), 'None')])
+networkKeyX <- c(.07, .26, .44, .65, .84)
+networkKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+  annotate('rect', xmin = .02, xmax = .98, ymin = .1, ymax = .9, fill = 'white', colour = 'black', linewidth = 1) +
+  annotate('point', x = networkKeyX, y = .5, shape = 21, size = 6, fill = networkKeyColors, colour = '#404040', stroke = .6) +
+  annotate('text', x = networkKeyX + .025, y = .5, label = networkKeyNames, hjust = 0, size = 12 / .pt)
+
+# (3) Parcels colored by all seven lists. A parcel in two lists takes the first of: Cerebellar, Limbic, Default Mode, Somatomotor, Subcortical, Auditory, Visual
+allColors <- c(unname(networkNodeColors[c('CRB', 'Limbic', 'DMN')]), '#F0E442', unname(networkNodeColors['SubCort']), '#00B8D4', '#E7298A')
+allNames <- unname(networkAllLabels[c('CRB', 'Limbic', 'DMN', 'SomMot', 'SubCort', 'Auditory', 'Visual')])
+firstList <- sub(';.*$', '', atlasParcels$AllNetworks[match(1:200, atlasParcels$Parcel)])
+parcelAllColors <- ifelse(firstList %in% allNames, allColors[match(firstList, allNames)], '#C8C8C8')
+allKeyNames <- c(allNames, 'Unassigned'); allKeyColors <- c(allColors, '#C8C8C8'); allKeyX <- c(.03, .15, .27, .40, .53, .67, .78, .89)
+allKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+  annotate('rect', xmin = .005, xmax = .995, ymin = .1, ymax = .9, fill = 'white', colour = 'black', linewidth = 1) +
+  annotate('point', x = allKeyX, y = .5, shape = 21, size = 6, fill = allKeyColors, colour = '#404040', stroke = .6) +
+  annotate('text', x = allKeyX + .02, y = .5, label = allKeyNames, hjust = 0, size = 12 / .pt)
+
+# (4) Every parcel in a network: the hand-built lists where a parcel is in one, the Yeo mock-up for the rest
+completeNames <- c('Cerebellar', 'Subcortical', 'Brainstem', 'Limbic', 'Default Mode', 'Somatomotor', 'Visual', 'Auditory', 'Dorsal Attention', 'Salience / Ventral Attention', 'Control')
+completeColors <- c(unname(networkNodeColors['CRB']), unname(networkNodeColors['SubCort']), '#9E9E9E', unname(networkNodeColors['Limbic']), unname(networkNodeColors['DMN']),
+                    '#F0E442', '#E7298A', '#00B8D4', '#8DB600', '#F4978E', '#34495E')
+parcelCompleteColors <- completeColors[match(atlasParcels$NetworkComplete[match(1:200, atlasParcels$Parcel)], completeNames)]
+completeKeyX <- c(.02, .19, .36, .50, .66, .84, .02, .19, .36, .54, .82)
+completeKeyY <- c(rep(.72, 6), rep(.28, 5))
+completeKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+  annotate('rect', xmin = .005, xmax = .995, ymin = .02, ymax = .98, fill = 'white', colour = 'black', linewidth = 1) +
+  annotate('point', x = completeKeyX + .015, y = completeKeyY, shape = 21, size = 6, fill = completeColors, colour = '#404040', stroke = .6) +
+  annotate('text', x = completeKeyX + .035, y = completeKeyY, label = completeNames, hjust = 0, size = 12 / .pt)
 
 # One slice: view is 'axial', 'coronal' or 'sagittal'; fraction is how far through the brain (0-1)
 atlasSlice <- function(view, fraction) {
@@ -2679,16 +2723,20 @@ atlasSlice <- function(view, fraction) {
   data.frame(h = world[, axes[1]], v = world[, axes[2]], parcel = plane[inPlane], size = abs(diag(atlasAffine[1:3, 1:3])[axes[1]]))
 }
 
-atlasPanel <- function(view, fraction) {
-  d <- atlasSlice(view, fraction); d$color <- parcelColor[d$parcel]
+atlasPanel <- function(view, fraction, colors) {
+  d <- atlasSlice(view, fraction); d$color <- colors[d$parcel]
   ggplot(d, aes(x = h, y = v, fill = color)) + geom_tile(width = d$size[1], height = d$size[1]) + scale_fill_identity() +
     scale_x_reverse() + coord_fixed() + theme_void() + theme(plot.background = element_rect(fill = 'white', color = NA))      # high x (right) and high y (front) on the left of the picture
 }
 atlasFractions <- c(.2, .32, .44, .56, .68, .8)
-atlasRows <- lapply(c('axial', 'coronal', 'sagittal'), function(view) ggpubr::ggarrange(plotlist = lapply(atlasFractions, function(f) atlasPanel(view, f)), nrow = 1, ncol = length(atlasFractions)))
-supplemental_atlas <- ggpubr::ggarrange(plotlist = atlasRows, nrow = 3, ncol = 1, labels = c('A', 'B', 'C'), font.label = list(size = 14, face = 'bold')) +
-  theme(plot.background = element_rect(fill = 'white', color = NA))
-showFigure(supplemental_atlas, 'supplemental_atlas', width = 13, height = 6.6)
+atlasSliceFigure <- function(colors, bottom = NULL, bottomHeight = .16) {
+  rows <- lapply(c('axial', 'coronal', 'sagittal'), function(view) ggpubr::ggarrange(plotlist = lapply(atlasFractions, function(f) atlasPanel(view, f, colors)), nrow = 1, ncol = length(atlasFractions)))
+  grid <- ggpubr::ggarrange(plotlist = rows, nrow = 3, ncol = 1, labels = c('A  Axial', 'B  Coronal', 'C  Sagittal'), font.label = list(size = 14, face = 'bold'))
+  if (!is.null(bottom)) { grid <- ggpubr::ggarrange(grid, bottom, nrow = 2, heights = c(1, bottomHeight)) }
+  grid + theme(plot.background = element_rect(fill = 'white', color = NA))
+}
+showFigure(atlasSliceFigure(parcelColors), 'supplemental_atlas_slices_parcels', width = 13, height = 6.6)
+showFigure(atlasSliceFigure(parcelCompleteColors, bottom = completeKey), 'supplemental_atlas_slices_networks', width = 13, height = 7.6)
 
 # The same atlas painted onto the brain surface (the mesh used for the glass brains), so the parcels sit on a smooth, folded brain. Every point of the surface
 # takes the label of the parcel that dominates around it (each parcel is blurred slightly first, so the borders between parcels are smooth).
@@ -2776,25 +2824,6 @@ canRender3D <- file.exists(brainMeshFile) && requireNamespace('rgl', quietly = T
 if (canRender3D) {
   painted <- paintAtlasOnSurface()
 
-  # (1) Every parcel its own color: 200 distinct colors, handed out so that parcels that touch get colors that are far apart
-  hueStep <- 137.508      # the golden angle spreads the hues evenly however many colors are used
-  distinctColors <- hcl((seq_len(200) * hueStep) %% 360, c = rep(c(70, 50, 60, 40), 50), l = rep(c(45, 62, 78, 88), each = 1, length.out = 200) + rep(c(0, 4, -4, 2), 50), fixup = TRUE)
-  colorLab <- convertColor(t(col2rgb(distinctColors)) / 255, from = 'sRGB', to = 'Lab')
-  colorDistance <- as.matrix(dist(colorLab))
-  distinctColorOfParcel <- rep(NA_integer_, 200)
-  for (parcel in order(-lengths(neighbours))) {
-    free <- setdiff(seq_len(200), distinctColorOfParcel)
-    around <- distinctColorOfParcel[neighbours[[parcel]]]; around <- around[!is.na(around)]
-    distinctColorOfParcel[parcel] <- if (length(around) == 0) free[1] else free[which.max(apply(colorDistance[free, around, drop = FALSE], 1, min))]
-  }
-  parcelColors <- distinctColors[distinctColorOfParcel]
-
-  # (2) Parcels colored by network (the revised membership); parcels in none of the four networks are light gray
-  networkOfParcel <- atlasParcels$Network[match(1:200, atlasParcels$Parcel)]
-  networkColors <- c(setNames(unname(networkNodeColors[names(networkNodeLabels)]), unname(networkNodeLabels)), None = '#C8C8C8')
-  parcelNetworkColors <- unname(networkColors[networkOfParcel])
-  parcelNetworkColors[is.na(parcelNetworkColors)] <- '#C8C8C8'
-
   threeDFigure <- function(colors, unlabeledColor, bottom = NULL, bottomHeight = .07) {
     # Eight views. Top row: left lateral, right lateral, top, front. Bottom row: left medial, right medial, bottom, back.
     # The medial views draw one hemisphere only (left hemisphere seen from the right, right hemisphere seen from the left).
@@ -2806,40 +2835,10 @@ if (canRender3D) {
     if (!is.null(bottom)) { grid <- ggpubr::ggarrange(grid, bottom, nrow = 2, heights = c(1, bottomHeight)) }
     grid + theme(plot.background = element_rect(fill = 'white', color = NA))
   }
-  networkKeyNames <- c(unname(networkNodeLabels), 'Unassigned')
-  networkKeyColors <- unname(networkColors[c(unname(networkNodeLabels), 'None')])
-  networkKeyX <- c(.07, .26, .44, .65, .84)
-  networkKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
-    annotate('rect', xmin = .02, xmax = .98, ymin = .1, ymax = .9, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('point', x = networkKeyX, y = .5, shape = 21, size = 6, fill = networkKeyColors, colour = '#404040', stroke = .6) +
-    annotate('text', x = networkKeyX + .025, y = .5, label = networkKeyNames, hjust = 0, size = 12 / .pt)
-
-  # (3) Parcels colored by all seven lists. A parcel in two lists takes the first of: Cerebellar, Limbic, Default Mode, Somatomotor, Subcortical, Auditory, Visual
-  allColors <- c(unname(networkNodeColors[c('CRB', 'Limbic', 'DMN')]), '#F0E442', unname(networkNodeColors['SubCort']), '#00B8D4', '#E7298A')
-  allNames <- unname(networkAllLabels[c('CRB', 'Limbic', 'DMN', 'SomMot', 'SubCort', 'Auditory', 'Visual')])
-  firstList <- sub(';.*$', '', atlasParcels$AllNetworks[match(1:200, atlasParcels$Parcel)])
-  parcelAllColors <- ifelse(firstList %in% allNames, allColors[match(firstList, allNames)], '#C8C8C8')
-  allKeyNames <- c(allNames, 'Unassigned'); allKeyColors <- c(allColors, '#C8C8C8'); allKeyX <- c(.03, .15, .27, .40, .53, .67, .78, .89)
-  allKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
-    annotate('rect', xmin = .005, xmax = .995, ymin = .1, ymax = .9, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('point', x = allKeyX, y = .5, shape = 21, size = 6, fill = allKeyColors, colour = '#404040', stroke = .6) +
-    annotate('text', x = allKeyX + .02, y = .5, label = allKeyNames, hjust = 0, size = 12 / .pt)
-
   showFigure(threeDFigure(parcelColors, '#BDBDBD'), 'supplemental_atlas_3d_parcels', width = 16, height = 8.4)
   showFigure(threeDFigure(parcelNetworkColors, '#C8C8C8', bottom = networkKey), 'supplemental_atlas_3d_networks', width = 16, height = 9)
   showFigure(threeDFigure(parcelAllColors, '#C8C8C8', bottom = allKey), 'supplemental_atlas_3d_networks_all', width = 16, height = 9)
 
-  # (4) Every parcel in a network: the hand-built lists where a parcel is in one, the Yeo mock-up for the rest
-  completeNames <- c('Cerebellar', 'Subcortical', 'Brainstem', 'Limbic', 'Default Mode', 'Somatomotor', 'Visual', 'Auditory', 'Dorsal Attention', 'Salience / Ventral Attention', 'Control')
-  completeColors <- c(unname(networkNodeColors['CRB']), unname(networkNodeColors['SubCort']), '#9E9E9E', unname(networkNodeColors['Limbic']), unname(networkNodeColors['DMN']),
-                      '#F0E442', '#E7298A', '#00B8D4', '#8DB600', '#F4978E', '#34495E')
-  parcelCompleteColors <- completeColors[match(atlasParcels$NetworkComplete[match(1:200, atlasParcels$Parcel)], completeNames)]
-  completeKeyX <- c(.02, .19, .36, .50, .66, .84, .02, .19, .36, .50, .78)
-  completeKeyY <- c(rep(.72, 6), rep(.28, 5))
-  completeKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
-    annotate('rect', xmin = .005, xmax = .995, ymin = .02, ymax = .98, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('point', x = completeKeyX + .015, y = completeKeyY, shape = 21, size = 6, fill = completeColors, colour = '#404040', stroke = .6) +
-    annotate('text', x = completeKeyX + .035, y = completeKeyY, label = completeNames, hjust = 0, size = 12 / .pt)
   showFigure(threeDFigure(parcelCompleteColors, '#C8C8C8', bottom = completeKey, bottomHeight = .12), 'supplemental_atlas_3d_networks_complete', width = 16, height = 9.6)
 } else {
   message('3D atlas render skipped: the rgl and png packages, the brain mesh file and a screen are needed')
