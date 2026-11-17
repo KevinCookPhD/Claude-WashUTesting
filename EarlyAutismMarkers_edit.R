@@ -74,6 +74,9 @@ glassMeshAlpha <- .18                     # rgl: brain surface opacity (0-1)
 glassEdgesOnTop <- TRUE                    # rgl: TRUE draws the edges solid over the brain surface (not veiled by it); FALSE lets the glass veil them
 glassEdgeColors <- c(low = '#6C9BE3', high = '#E57373')     # rgl: edge colors (Low > High Risk, High > Low Risk)
 glassNodeRadius <- c(network = 2.6, whole = 1.4)            # rgl: node radius (mm) for the network and whole-brain figures
+glassLightAmbient <- '#808080'            # rgl: ambient light on the nodes and edges (lights the sides turned away from the light; brighter = lighter-looking)
+glassLightDiffuse <- '#E0E0E0'            # rgl: direct light ('#FFFFFF' is the brightest)
+glassColorLighten <- 0                    # rgl: mix node and edge colors with white (0 = as given, .3 = noticeably lighter)
 glassTubeRadius <- c(network = .85, whole = .45)            # rgl: edge tube radius (mm)
 
 # (ggplot renderer only) How the brain is drawn so that nodes and edges look inside it: the brain is cut into this many depth layers, and each node and
@@ -611,8 +614,9 @@ glassBrainRgl <- function(view, nodes, edges = NULL, size = 'network') {
   on.exit(rgl::close3d())
   rgl::bg3d('white')
   rgl::clear3d('lights')
-  rgl::light3d(theta = 0, phi = 0, viewpoint.rel = TRUE, ambient = '#808080', diffuse = '#E0E0E0', specular = '#000000')
+  rgl::light3d(theta = 0, phi = 0, viewpoint.rel = TRUE, ambient = glassLightAmbient, diffuse = glassLightDiffuse, specular = '#000000')
   xyz <- as.matrix(roiCoordinates)
+  lighten <- function(col) if (glassColorLighten > 0) unname(vapply(col, tintColor, character(1), amount = glassColorLighten)) else col
   R <- rgl::rotationMatrix
   userMatrix <- switch(view,
                        axial = if (glassAxialPosteriorAtTop) R(pi, 1, 0, 0) else R(0, 1, 0, 0),
@@ -624,12 +628,16 @@ glassBrainRgl <- function(view, nodes, edges = NULL, size = 'network') {
     rgl::clear3d('shapes')
     if (withEdges && hasEdges) {
       for (k in seq_len(nrow(edges))) {
+        tubeColor <- lighten(if ('color' %in% colnames(edges)) edges$color[k] else glassEdgeColors[[edges$dir[k]]])
         rgl::shade3d(rgl::cylinder3d(rbind(xyz[edges$a[k], ], xyz[edges$b[k], ]), radius = glassTubeRadius[[size]], sides = 16),
-                     color = if ('color' %in% colnames(edges)) edges$color[k] else glassEdgeColors[[edges$dir[k]]], alpha = 1, specular = 'black')      # edges$color (optional) sets each edge's color
+                     color = tubeColor, ambient = tubeColor, alpha = 1, specular = 'black')      # edges$color (optional) sets each edge's color
       }
     }
     if (withNodes) {
-      rgl::spheres3d(xyz[nodes$id, , drop = FALSE], radius = glassNodeRadius[[size]], color = nodes$fill, specular = 'black', shininess = 1)
+      nodeColors <- lighten(nodes$fill)
+      for (nodeColor in unique(nodeColors)) {      # one call per color, because the ambient color must be a single value
+        rgl::spheres3d(xyz[nodes$id[nodeColors == nodeColor], , drop = FALSE], radius = glassNodeRadius[[size]], color = nodeColor, ambient = nodeColor, specular = 'black', shininess = 1)
+      }
     }
     # The surface is always in the scene (invisible when left out) so every picture has the same framing
     rgl::shade3d(glassMesh3d, color = glassMeshColor, alpha = ifelse(withMesh, glassMeshAlpha, 0), specular = 'black', shininess = 1, override = FALSE)
