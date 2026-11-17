@@ -441,26 +441,28 @@ roiFullName <- function(sector) {
   ifelse(abbrev %in% names(roiFullNames), roiFullNames[abbrev], sector)
 }
 
+# Approximate cerebellar lobule for each cerebellar parcel (hand-labeled from the parcel locations, so approximate).
+cerebellarLabels <- c(CRB.L.17 = 'Lobules I-V', CRB.R.142 = 'Lobules I-V',
+                      CRB.L.99 = 'Lobule VIIIA + VIIIB', CRB.R.101 = 'Lobule VIIIA + VIIIB',
+                      CRB.L.6 = 'Crus II', CRB.R.113 = 'Crus II',
+                      CRB.L.13 = 'Crus I', CRB.R.192 = 'Crus I',
+                      CRB.L.54 = 'Lobule VII', CRB.R.129 = 'Lobule VII')
+
 # Label for a connection ID such as 'CAU.L.39_THA.R.139': both regions with hemisphere, on two lines,
-# e.g. "Left Caudate -\nRight Thalamus". Connections that would share a label within `ids` also get their region numbers,
-# e.g. "Left Cerebellum -\nRight Cerebellum (#13, #142)". Returns a vector the same length as ids.
+# e.g. "Left Caudate -\nRight Thalamus". Cerebellar parcels use their lobule, e.g. "Left Crus I". Returns a vector the same
+# length as ids.
 connectionLabel <- function(ids) {
   regionLabel <- function(region) {
     fields <- strsplit(region, '.', fixed = TRUE)[[1]]            # abbreviation, hemisphere (none for the brainstem), number
     hasHemisphere <- length(fields) >= 3 && fields[2] %in% c('L', 'R')
     name <- roiFullName(if (hasHemisphere) paste(fields[1], fields[2], sep = '.') else fields[1])
+    if (region %in% names(cerebellarLabels)) { name <- cerebellarLabels[[region]] }
     if (hasHemisphere) paste(c(L = 'Left', R = 'Right')[[fields[2]]], name) else name
   }
-  regionNumber <- function(region) { fields <- strsplit(region, '.', fixed = TRUE)[[1]]; fields[length(fields)] }
-
   regions <- strsplit(ids, '_', fixed = TRUE)
   first <- vapply(regions, function(x) regionLabel(x[1]), character(1))
   second <- vapply(regions, function(x) regionLabel(x[2]), character(1))
-  base <- paste0(first, ' -\n', second)
-
-  ambiguous <- duplicated(base) | duplicated(base, fromLast = TRUE)
-  numbers <- vapply(regions, function(x) paste0(' (#', regionNumber(x[1]), ', #', regionNumber(x[2]), ')'), character(1))
-  ifelse(ambiguous, paste0(base, numbers), base)
+  paste0(first, ' -\n', second)
 }
 
 # ---- Glass brain helpers ----
