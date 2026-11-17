@@ -27,6 +27,11 @@ tier2IncludeBetween <- TRUE
 # 'allTier2' = one FDR across every Tier 2 connection together
 tier2FDR <- 'withinNetwork'
 
+# Networks that did NOT pass the Tier 1 gate but are still taken through Tier 2 for exploratory reporting (for example in a supplement).
+# They are marked 'exploratory' (gated = FALSE) in the tables and figure names, and they never change the FDR of the gated networks.
+# Use character(0) for none.
+tier2ExploratoryNetworks <- c('DMN')
+
 # The whole-brain exploratory tier fits ~20,000 models; FALSE skips it
 runTier3 <- TRUE
 
@@ -246,14 +251,18 @@ cat('\n=== TIER 2: ROI-to-ROI connections ===\n')
 cat('Networks significant in Tier 1 (p.adj <', tier1Gate, '):', ifelse(length(gatedWithin) == 0, 'none', paste(gatedWithin, collapse = ', ')), '\n')
 if (tier2IncludeBetween) { cat('Network pairs significant in Tier 1:', ifelse(length(gatedBetween) == 0, 'none', paste(gatedBetween, collapse = ', ')), '\n') }
 
+exploratoryWithin <- setdiff(intersect(tier2ExploratoryNetworks, networksOfInterest), gatedWithin)
+if (length(exploratoryWithin) > 0) { cat('Exploratory (not gated by Tier 1, reported separately):', paste(exploratoryWithin, collapse = ', '), '\n') }
 tier2Units <- c(setNames(lapply(gatedWithin, withinMask), gatedWithin),
-                setNames(lapply(gatedBetween, function(nm) { p <- strsplit(nm, ' x ', fixed = TRUE)[[1]]; betweenMask(p[1], p[2]) }), gatedBetween))
+                setNames(lapply(gatedBetween, function(nm) { p <- strsplit(nm, ' x ', fixed = TRUE)[[1]]; betweenMask(p[1], p[2]) }), gatedBetween),
+                setNames(lapply(exploratoryWithin, withinMask), exploratoryWithin))
 tier2 <- NULL
 if (length(tier2Units) == 0) {
   message('No network or pair passes the Tier 1 gate, so Tier 2 is empty.')
 } else {
   tier2Parts <- lapply(names(tier2Units), function(unit) {
     mask <- tier2Units[[unit]]
+    if (sum(mask) == 0) { message('No connections in ', unit, '; skipped'); return(NULL) }
     tdN <- tdFC[, mask, drop = FALSE]; asdN <- asdFC[, mask, drop = FALSE]
     fits <- cached(paste0('tiers_t2_', gsub('[^A-Za-z0-9]+', '_', unit)),
                    inputs = list(tdN, asdN, tdDemoFinal, asdDemoFinal, deparse(fitMainChunk), deparse(fitConnections)),
@@ -261,13 +270,22 @@ if (length(tier2Units) == 0) {
     cbind(unit = unit, fits, stringsAsFactors = FALSE)
   })
   tier2 <- do.call(rbind, tier2Parts); rownames(tier2) <- NULL
-  tier2$Grp.p.adj <- if (tier2FDR == 'allTier2') p.adjust(tier2$Grp.p, method = 'fdr') else ave(tier2$Grp.p, tier2$unit, FUN = function(p) p.adjust(p, method = 'fdr'))
-  tier2$GA.p.adj <- if (tier2FDR == 'allTier2') p.adjust(tier2$GA.p, method = 'fdr') else ave(tier2$GA.p, tier2$unit, FUN = function(p) p.adjust(p, method = 'fdr'))
+  tier2$gated <- !tier2$unit %in% exploratoryWithin
+  # FDR: within each network, or (allTier2) across all the gated connections together; exploratory networks are always corrected on their own
+  adjustTier2 <- function(p) {
+    out <- rep(NA_real_, length(p))
+    pooled <- if (tier2FDR == 'allTier2') tier2$gated else rep(FALSE, length(p))
+    if (any(pooled)) { out[pooled] <- p.adjust(p[pooled], method = 'fdr') }
+    for (u in unique(tier2$unit[!pooled])) { i <- which(tier2$unit == u & !pooled); out[i] <- p.adjust(p[i], method = 'fdr') }
+    out
+  }
+  tier2$Grp.p.adj <- adjustTier2(tier2$Grp.p)
+  tier2$GA.p.adj <- adjustTier2(tier2$GA.p)
   tier2$label <- gsub('\n', ' ', connectionLabel(tier2$ROI))
   tier2$direction <- ifelse(tier2$Grp.B > 0, 'Low Risk higher', 'High Risk higher')
   tier2$status <- ifelse(tier2$Grp.p.adj < .05, 'significant', ifelse(tier2$Grp.p.adj < .10, 'trending', 'ns'))
 
-  summaryTier2 <- do.call(rbind, lapply(split(tier2, tier2$unit), function(d) data.frame(unit = d$unit[1], tested = nrow(d), sig05 = sum(d$Grp.p.adj < .05, na.rm = TRUE),
+  summaryTier2 <- do.call(rbind, lapply(split(tier2, tier2$unit), function(d) data.frame(unit = d$unit[1], gated = d$gated[1], tested = nrow(d), sig05 = sum(d$Grp.p.adj < .05, na.rm = TRUE),
                                                                                        trend10 = sum(d$Grp.p.adj >= .05 & d$Grp.p.adj < .10, na.rm = TRUE),
                                                                                        lowHigher = sum(d$Grp.p.adj < .10 & d$Grp.B > 0, na.rm = TRUE),
                                                                                        highHigher = sum(d$Grp.p.adj < .10 & d$Grp.B < 0, na.rm = TRUE), stringsAsFactors = FALSE)))
@@ -277,11 +295,11 @@ if (length(tier2Units) == 0) {
   saveTierTable(tier2, 'tier2_connections')
   saveTierTable(tier2[tier2$status != 'ns', ], 'tier2_significant_or_trending')
 
-  # bar chart per network (the same chart as the earlier network analyses), for the gated within-network units
-  for (unit in gatedWithin) {
+  # bar chart per network (the same chart as the earlier network analyses); exploratory networks get '_exploratory' in the file name
+  for (unit in c(gatedWithin, exploratoryWithin)) {
     d <- tier2[tier2$unit == unit, ]
-    showFigure(plotNetworkBars(d[, c('ROI', 'TD.Mean', 'ASD.Mean', 'Grp.p')], networkSpecs[[unit]]), paste0('tier2_', unit, '_bars'),
-               width = 12, height = 6, subfolder = tiersFolder)
+    showFigure(plotNetworkBars(d[, c('ROI', 'TD.Mean', 'ASD.Mean', 'Grp.p')], networkSpecs[[unit]]),
+               paste0('tier2_', unit, '_bars', ifelse(unit %in% exploratoryWithin, '_exploratory', '')), width = 12, height = 6, subfolder = tiersFolder)
   }
 }
 
