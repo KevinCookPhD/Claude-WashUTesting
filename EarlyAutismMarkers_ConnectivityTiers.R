@@ -7,7 +7,7 @@
 #   TIER 1  Network averages: the average connectivity within each a priori network and between each pair of them
 #           (one score per scan). FDR across the networks (within) and across the network pairs (between), separately.
 #   TIER 2  ROI-to-ROI connections, ONLY inside the networks (and pairs) that are significant in Tier 1.
-#           FDR across the connections of each network (or across all Tier 2 connections; see tier2FDR).
+#           FDR is applied across the connections of each network (or network pair) on its own, never across networks.
 #   TIER 3  Exploratory: every ROI to every other ROI (whole brain), FDR across all connections.
 #
 # HOW TO RUN: first run EarlyAutismMarkers_edit.R (so the data and functions are in the R session), then run this whole file.
@@ -22,10 +22,6 @@ tier1Gate <- .05
 
 # Also look at the ROI-to-ROI connections BETWEEN two networks when that pair is significant in Tier 1
 tier2IncludeBetween <- TRUE
-
-# 'withinNetwork' = FDR across the connections of each gated network separately (as in the earlier network analyses);
-# 'allTier2' = one FDR across every Tier 2 connection together
-tier2FDR <- 'withinNetwork'
 
 # Networks that did NOT pass the Tier 1 gate but are still taken through Tier 2 for exploratory reporting (for example in a supplement).
 # They are marked 'exploratory' (gated = FALSE) in the tables and figure names, and they never change the FDR of the gated networks.
@@ -58,7 +54,6 @@ tierNeeded <- c('tdFC', 'asdFC', 'tdDemoFinal', 'asdDemoFinal', 'connROIs', 'net
 tierMissing <- tierNeeded[!vapply(tierNeeded, exists, logical(1))]
 if (length(tierMissing) > 0) { stop('Run EarlyAutismMarkers_edit.R first (current version). These objects are missing: ', paste(tierMissing, collapse = ', ')) }
 if (!networkScore %in% c('mean', 'absmean')) { stop("networkScore must be 'mean' or 'absmean'") }
-if (!tier2FDR %in% c('withinNetwork', 'allTier2')) { stop("tier2FDR must be 'withinNetwork' or 'allTier2'") }
 if (useRevisedNetworks) {
   if (!file.exists(revisedNetworksFile)) { stop('Revised network file not found: ', revisedNetworksFile, '. Put networkSpecs_revised.R there or set revisedNetworksFile.') }
   source(revisedNetworksFile)            # replaces networkSpecs for the four networks and keeps the old ones in networkSpecsOriginal
@@ -271,14 +266,8 @@ if (length(tier2Units) == 0) {
   })
   tier2 <- do.call(rbind, tier2Parts); rownames(tier2) <- NULL
   tier2$gated <- !tier2$unit %in% exploratoryWithin
-  # FDR: within each network, or (allTier2) across all the gated connections together; exploratory networks are always corrected on their own
-  adjustTier2 <- function(p) {
-    out <- rep(NA_real_, length(p))
-    pooled <- if (tier2FDR == 'allTier2') tier2$gated else rep(FALSE, length(p))
-    if (any(pooled)) { out[pooled] <- p.adjust(p[pooled], method = 'fdr') }
-    for (u in unique(tier2$unit[!pooled])) { i <- which(tier2$unit == u & !pooled); out[i] <- p.adjust(p[i], method = 'fdr') }
-    out
-  }
+  # FDR across the connections of each network (or network pair) on its own: every unit is corrected separately
+  adjustTier2 <- function(p) ave(p, tier2$unit, FUN = function(x) p.adjust(x, method = 'fdr'))
   tier2$Grp.p.adj <- adjustTier2(tier2$Grp.p)
   tier2$GA.p.adj <- adjustTier2(tier2$GA.p)
   tier2$label <- gsub('\n', ' ', connectionLabel(tier2$ROI))
@@ -290,7 +279,7 @@ if (length(tier2Units) == 0) {
                                                                                        lowHigher = sum(d$Grp.p.adj < .10 & d$Grp.B > 0, na.rm = TRUE),
                                                                                        highHigher = sum(d$Grp.p.adj < .10 & d$Grp.B < 0, na.rm = TRUE), stringsAsFactors = FALSE)))
   rownames(summaryTier2) <- NULL
-  cat('\nConnections tested and significant/trending (FDR ', ifelse(tier2FDR == 'allTier2', 'across all Tier 2 connections', 'within each network'), ')\n', sep = '')
+  cat('\nConnections tested and significant/trending (FDR across the connections of each network on its own)\n')
   print(summaryTier2, row.names = FALSE)
   saveTierTable(tier2, 'tier2_connections')
   saveTierTable(tier2[tier2$status != 'ns', ], 'tier2_significant_or_trending')
