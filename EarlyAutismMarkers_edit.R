@@ -1681,46 +1681,6 @@ saveResultTable(tier1Within$fits, 'tier1_within')
 saveResultTable(tier1Between$fits, 'tier1_between')
 
 ### Tier 1 Figures ----
-# Group bars in the same style as the regional volume figures: light group fill with a black outline, thick black error bars, gray horizontal gridlines and
-# no axis ticks. The boxed Low Risk / High Risk legend sits inside the plot, in the top right corner.
-barsFor <- function(fits, xAngle = 0, legendTop = NULL) {      # legendTop = y value (in data units) that the top of the legend box lines up with
-  labels <- fits$label
-  barData <- rbind(data.frame(label = labels, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
-                   data.frame(label = labels, Group = 'High Risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
-  barData$label <- factor(barData$label, levels = labels); barData$Group <- factor(barData$Group, levels = c('Low Risk', 'High Risk'))
-  # connectivity is Fisher z; show it as the correlation r (tanh), with the error bar ends converted the same way
-  barData$Lower <- tanh(barData$Mean - barData$SE); barData$Upper <- tanh(barData$Mean + barData$SE); barData$Mean <- tanh(barData$Mean)
-  starData <- data.frame(label = factor(labels, levels = labels), star = starFor(fits$Grp.p.adjust),
-                         y = pmax(tanh(fits$LowRisk.Mean + fits$LowRisk.SE), tanh(fits$HighRisk.Mean + fits$HighRisk.SE)))
-  if ('family' %in% colnames(fits)) { barData$family <- rep(fits$family, 2); starData$family <- fits$family }      # for faceting
-
-  # y axis from the lowest bar (or 0) to just above the highest, on round tick marks (the stars sit above their bars)
-  starData$y <- starData$y + .05 * diff(range(c(0, barData$Upper)))
-  yBreaks <- pretty(c(0, barData$Lower, barData$Upper, starData$y * 1.08), n = 6)
-
-  legendY <- if (is.null(legendTop)) .985 else (legendTop - min(yBreaks)) / diff(range(yBreaks))      # as a fraction of the panel height
-  legendInside <- if (utils::packageVersion('ggplot2') >= '3.5.0') {
-    ggplot2::theme(legend.position = 'inside', legend.position.inside = c(.985, legendY), legend.justification = c(1, 1))
-  } else {
-    ggplot2::theme(legend.position = c(.985, legendY), legend.justification = c(1, 1))
-  }
-  ggplot2::ggplot(barData, ggplot2::aes(x = label, y = Mean, fill = Group)) +
-    ggplot2::geom_col(position = ggplot2::position_dodge(.85), width = .8, color = '#000000', linewidth = 1) +
-    ggplot2::geom_errorbar(ggplot2::aes(ymin = Lower, ymax = Upper), position = ggplot2::position_dodge(.85), width = .22, linewidth = 1.6, color = '#000000') +
-    ggplot2::geom_hline(yintercept = 0, linewidth = 1) +
-    ggplot2::geom_text(data = starData, ggplot2::aes(x = label, y = y, label = star), inherit.aes = FALSE, size = 9) +
-    ggplot2::scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
-    ggplot2::scale_y_continuous(limits = range(yBreaks), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
-    ggplot2::labs(x = NULL, y = paste0('Average connectivity (r)', ifelse(networkScore == 'absmean', ', absolute values', ''))) +
-    themeRegionalFigure(showXTitle = FALSE) +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(color = 'black', size = 12, angle = xAngle, hjust = ifelse(xAngle == 0, .5, 1), vjust = 1),
-                   legend.text = ggplot2::element_text(color = 'black', size = 12), legend.key.size = grid::unit(1, 'cm'),
-                   axis.title.y = ggplot2::element_text(color = 'black', size = 14),      # text sizes: 14 pt titles, 12 pt everything else
-                   legend.background = ggplot2::element_rect(fill = 'white', color = '#000000', linewidth = 1),
-                   legend.margin = ggplot2::margin(8, 14, 8, 8), legend.key = ggplot2::element_rect(fill = 'white', color = NA)) +
-    legendInside
-}
-
 # The within-network and between-network bars in ONE plot: the two sets of results are stacked into one table with a 'family' column, and
 # facet_grid splits the plot into two panels that share the y axis (free_x lets each panel have its own bars, space = 'free_x' makes the panel
 # widths proportional to the number of bars).
@@ -1728,10 +1688,62 @@ tier1Columns <- c('label', 'LowRisk.Mean', 'LowRisk.SE', 'HighRisk.Mean', 'HighR
 tier1Combined <- rbind(data.frame(family = 'Within Networks', tier1Within$fits[, tier1Columns], stringsAsFactors = FALSE),
                        data.frame(family = 'Between Networks', tier1Between$fits[, tier1Columns], stringsAsFactors = FALSE))
 tier1Combined$family <- factor(tier1Combined$family, levels = c('Within Networks', 'Between Networks'))
-tier1_bars <- barsFor(tier1Combined, xAngle = 40, legendTop = tanh(.65)) +      # legend box top lines up with the same height as before (z = 0.65)
-  ggplot2::facet_grid(~family, scales = 'free_x', space = 'free_x') +
-  ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(color = 'black', size = 14))
-showFigure(tier1_bars, 'tier1_bars', width = 11, height = 6)
+# Same look as the Tier 2 figure: each bar pair sits on a tinted column (the network's color; gray for the pairs of networks) with white dividers, under a
+# solid band naming the panel. Connectivity is Fisher z in the models, shown here as r (tanh). Text sizes: 14 pt (titles, bands), 12 pt (everything else).
+tier1BarsFigure <- function(fits) {
+  fits$family <- factor(fits$family, levels = c('Within Networks', 'Between Networks'))
+  fits$position <- ave(seq_len(nrow(fits)), fits$family, FUN = seq_along)
+  barData <- rbind(data.frame(family = fits$family, label = fits$label, position = fits$position, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
+                   data.frame(family = fits$family, label = fits$label, position = fits$position, Group = 'High Risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
+  barData$Group <- factor(barData$Group, levels = c('Low Risk', 'High Risk'))
+  barData$Lower <- tanh(barData$Mean - barData$SE); barData$Upper <- tanh(barData$Mean + barData$SE); barData$Mean <- tanh(barData$Mean)
+  barData$label <- factor(barData$label, levels = fits$label)
+
+  starData <- data.frame(family = fits$family, position = fits$position, star = starFor(fits$Grp.p.adjust),
+                         y = pmax(tanh(fits$LowRisk.Mean + fits$LowRisk.SE), tanh(fits$HighRisk.Mean + fits$HighRisk.SE)))
+  yBreaks <- pretty(c(0, barData$Lower, barData$Upper, starData$y * 1.12), n = 6)
+  bottomY <- min(yBreaks); topY <- max(yBreaks); band <- .09 * (topY - bottomY)
+  starData$y <- starData$y + .02 * (topY - bottomY)
+
+  # column color: the network's own color within networks, light gray for the pairs of networks
+  networkOfLabel <- setNames(names(networkNodeLabels), networkNodeLabels)
+  fits$solid <- ifelse(fits$family == 'Within Networks', unname(networkNodeColors[networkOfLabel[fits$label]]), '#7F7F7F')
+  fits$tint <- vapply(fits$solid, tintColor, character(1), amount = .72)
+  fits$tint[fits$family != 'Within Networks'] <- '#EDEDED'
+  columns <- data.frame(family = fits$family, position = fits$position, tint = fits$tint, stringsAsFactors = FALSE)
+  dividers <- columns[columns$position > 1, ]; dividers$x <- dividers$position - .5
+  bands <- data.frame(family = factor(levels(fits$family), levels = levels(fits$family)), x = vapply(levels(fits$family), function(f) (sum(fits$family == f) + 1) / 2, numeric(1)),
+                      name = levels(fits$family), stringsAsFactors = FALSE)
+  legendXY <- c(.995, (topY - bottomY) / (topY + band - bottomY) - .015)
+
+  plot <- ggplot(barData, aes(x = label, y = Mean, fill = Group)) +
+    geom_rect(data = columns, aes(xmin = position - .5, xmax = position + .5), ymin = bottomY, ymax = topY + band, fill = columns$tint, inherit.aes = FALSE) +
+    geom_vline(data = dividers, aes(xintercept = x), color = 'white', linewidth = 1.4) +
+    geom_rect(data = bands, aes(xmin = -Inf, xmax = Inf), ymin = topY, ymax = topY + band, fill = '#595959', inherit.aes = FALSE) +
+    geom_text(data = bands, aes(x = x, y = topY + band / 2, label = name), color = 'white', inherit.aes = FALSE, size = 14 / .pt) +
+    geom_hline(yintercept = 0, linewidth = 1) +
+    geom_col(position = position_dodge(.85), width = .8, color = '#000000', linewidth = .8) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), position = position_dodge(.85), width = .25, linewidth = 1.1) +
+    geom_text(data = starData, aes(x = position, y = y, label = star), inherit.aes = FALSE, size = 9) +
+    scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
+    scale_x_discrete(expand = c(0, 0)) +
+    facet_grid(~family, scales = 'free_x', space = 'free_x') +
+    scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
+    labs(x = NULL, y = 'Average connectivity (r)') +
+    themeRegionalFigure(showXTitle = FALSE) +
+    theme(axis.text.x = element_text(size = 12, angle = 70, hjust = 1, vjust = 1), axis.title.y = element_text(color = 'black', size = 14),
+          strip.text = element_blank(), strip.background = element_blank(), panel.spacing = unit(.35, 'lines'),
+          legend.justification = c(1, 1), legend.text = element_text(color = 'black', size = 12), legend.key.size = unit(.8, 'cm'),
+          legend.background = element_rect(fill = 'white', color = '#000000', linewidth = 1), legend.margin = margin(6, 10, 6, 6),
+          legend.key = element_rect(fill = 'white', color = NA))
+  plot + if (utils::packageVersion('ggplot2') >= '3.5.0') {
+    theme(legend.position = 'inside', legend.position.inside = legendXY)
+  } else {
+    theme(legend.position = legendXY)
+  }
+}
+tier1_bars <- tier1BarsFigure(tier1Combined)
+showFigure(tier1_bars, 'tier1_bars', width = 11, height = 7)
 
 # Low minus High Risk difference for every network (the diagonal, within the network) and every pair of networks (below the diagonal, between the two).
 # Only the lower triangle is drawn: the matrix is symmetric, so the upper triangle would repeat it.
