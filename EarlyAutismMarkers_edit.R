@@ -1688,13 +1688,15 @@ barsFor <- function(fits, xAngle = 0, legendTop = NULL) {      # legendTop = y v
   barData <- rbind(data.frame(label = labels, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
                    data.frame(label = labels, Group = 'High Risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
   barData$label <- factor(barData$label, levels = labels); barData$Group <- factor(barData$Group, levels = c('Low Risk', 'High Risk'))
+  # connectivity is Fisher z; show it as the correlation r (tanh), with the error bar ends converted the same way
+  barData$Lower <- tanh(barData$Mean - barData$SE); barData$Upper <- tanh(barData$Mean + barData$SE); barData$Mean <- tanh(barData$Mean)
   starData <- data.frame(label = factor(labels, levels = labels), star = starFor(fits$Grp.p.adjust),
-                         y = pmax(fits$LowRisk.Mean + fits$LowRisk.SE, fits$HighRisk.Mean + fits$HighRisk.SE))
+                         y = pmax(tanh(fits$LowRisk.Mean + fits$LowRisk.SE), tanh(fits$HighRisk.Mean + fits$HighRisk.SE)))
   if ('family' %in% colnames(fits)) { barData$family <- rep(fits$family, 2); starData$family <- fits$family }      # for faceting
 
   # y axis from the lowest bar (or 0) to just above the highest, on round tick marks (the stars sit above their bars)
-  starData$y <- starData$y + .05 * diff(range(c(0, barData$Mean + barData$SE)))
-  yBreaks <- pretty(c(0, barData$Mean - barData$SE, barData$Mean + barData$SE, starData$y * 1.08), n = 6)
+  starData$y <- starData$y + .05 * diff(range(c(0, barData$Upper)))
+  yBreaks <- pretty(c(0, barData$Lower, barData$Upper, starData$y * 1.08), n = 6)
 
   legendY <- if (is.null(legendTop)) .985 else (legendTop - min(yBreaks)) / diff(range(yBreaks))      # as a fraction of the panel height
   legendInside <- if (utils::packageVersion('ggplot2') >= '3.5.0') {
@@ -1704,12 +1706,12 @@ barsFor <- function(fits, xAngle = 0, legendTop = NULL) {      # legendTop = y v
   }
   ggplot2::ggplot(barData, ggplot2::aes(x = label, y = Mean, fill = Group)) +
     ggplot2::geom_col(position = ggplot2::position_dodge(.85), width = .8, color = '#000000', linewidth = 1) +
-    ggplot2::geom_errorbar(ggplot2::aes(ymin = Mean - SE, ymax = Mean + SE), position = ggplot2::position_dodge(.85), width = .22, linewidth = 1.6, color = '#000000') +
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = Lower, ymax = Upper), position = ggplot2::position_dodge(.85), width = .22, linewidth = 1.6, color = '#000000') +
     ggplot2::geom_hline(yintercept = 0, linewidth = 1) +
     ggplot2::geom_text(data = starData, ggplot2::aes(x = label, y = y, label = star), inherit.aes = FALSE, size = 9) +
     ggplot2::scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
     ggplot2::scale_y_continuous(limits = range(yBreaks), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
-    ggplot2::labs(x = NULL, y = paste0('Average connectivity', ifelse(networkScore == 'absmean', ' (absolute values)', ''))) +
+    ggplot2::labs(x = NULL, y = paste0('Average connectivity (r)', ifelse(networkScore == 'absmean', ', absolute values', ''))) +
     themeRegionalFigure(showXTitle = FALSE) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(color = 'black', size = 12, angle = xAngle, hjust = ifelse(xAngle == 0, .5, 1), vjust = 1),
                    legend.text = ggplot2::element_text(color = 'black', size = 16), legend.key.size = grid::unit(1.2, 'cm'),
@@ -1725,7 +1727,7 @@ tier1Columns <- c('label', 'LowRisk.Mean', 'LowRisk.SE', 'HighRisk.Mean', 'HighR
 tier1Combined <- rbind(data.frame(family = 'Within Networks', tier1Within$fits[, tier1Columns], stringsAsFactors = FALSE),
                        data.frame(family = 'Between Networks', tier1Between$fits[, tier1Columns], stringsAsFactors = FALSE))
 tier1Combined$family <- factor(tier1Combined$family, levels = c('Within Networks', 'Between Networks'))
-tier1_bars <- barsFor(tier1Combined, xAngle = 40, legendTop = .65) +      # legend box top lines up with y = 0.65
+tier1_bars <- barsFor(tier1Combined, xAngle = 40, legendTop = tanh(.65)) +      # legend box top lines up with the same height as before (z = 0.65)
   ggplot2::facet_grid(~family, scales = 'free_x', space = 'free_x') +
   ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(color = 'black', size = 18))
 showFigure(tier1_bars, 'tier1_bars', width = 11, height = 6)
