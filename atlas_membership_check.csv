@@ -1,0 +1,201 @@
+ROINum,Name_Abrv,ROIName,Hemisphere,X,Y,Z,NetworkNum_file,in_CRB,in_Limbic,in_DMN,in_SubCort,in_SomMot,in_Auditory,in_Visual,n_networks,flags
+1,MTG.L,Middle Temporal Gyrus,Left,29.2969,21.8359,0.273441,14,0,0,0,0,0,0,0,0,in no network
+2,STG.L,Superior Temporal Gyrus,Left,24.7115,-7.25961,4.95193,17,0,0,0,0,0,1,0,1,
+3,PreCG.L,Precentral Gyrus,Left,28.3456,-9.81617,25.0735,17,0,0,0,0,1,0,0,1,
+4,ACG.L,Anterior Cingulate Gyrus,Left,0.365852,-23.3232,18.872,3,0,0,1,0,0,0,0,1,
+5,ORBsupb.L,Orbital (Superior),Left,4.53846,-25.5192,-8.40384,18,0,1,0,0,0,0,0,1,
+6,CRB.L,Cerebellum,Left,13.9,17.65,-19.3833,5,1,0,0,0,0,0,0,1,
+7,SPG.L,Superior Parietal Gyrus,Left,3.77193,17.9167,34.3202,6,0,0,0,0,0,0,0,0,in no network
+8,PreCG.L,Precentral Gyrus,Left,12.8169,0.862671,37.0247,6,0,0,0,0,1,0,0,1,
+9,TPOmid.L,Temporal Pole (Middle),Left,21.25,-16.8304,-15.4911,7,0,1,0,0,0,0,0,1,
+10,FFG.L,Fusiform Gyrus,Left,12.8618,10.5921,-3.38815,10,0,0,0,0,0,0,0,0,in no network
+11,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,3.14815,-38.6574,25.3704,19,0,0,1,0,0,0,0,1,
+12,INS.L,Insula,Left,21.4643,-3.03571,13.0357,11,0,0,0,0,0,1,0,1,
+13,CRB.L,Cerebellum,Left,14.5724,11.9408,-12.9276,5,1,0,0,0,0,0,0,1,
+14,PoCG.L,Postcentral Gyrus,Left,2.27612,6.54851,37.5933,6,0,0,0,0,1,0,0,1,
+15,CAL.L,Calcerine Cortex,Left,3.76437,28.3477,1.50863,9,0,0,0,0,0,0,1,1,
+16,ORBmid.L,Orbital (Middle),Left,17.234,-45.1862,-0.0265923,19,0,0,0,0,0,0,0,0,in no network
+17,CRB.L,Cerebellum,Left,3.77718,12.6087,-10.8967,5,1,0,0,0,0,0,0,1,
+18,SFGmed.L,Superior Frontal Gyrus (Medial),Left,1.86275,-44.0441,13.8971,19,0,0,1,0,0,0,0,1,
+19,IOG.L,Inferior Occipital Gyrus,Left,22,-28.75,-7.29166,18,0,0,0,0,0,0,1,1,node-table Y has the wrong sign (NIfTI centroid is posterior: Y=+28.8 in this file's AFNI convention); label IOG.L is consistent with the NIfTI
+20,REC.L,Rectus,Left,2.34043,-38.2713,-8.53723,18,0,1,0,0,0,0,0,1,
+21,IPL.L,Inferior Parietal Lobule,Left,24.2578,24.1016,22.0703,11,0,0,0,0,0,0,0,0,in no network
+22,MTG.L,Middle Temporal Gyrus,Left,34.4545,-2.61363,-5.52272,10,0,0,1,0,0,0,0,1,
+23,PCUN.L,Precuneus,Left,0.512817,13.6859,19.5192,9,0,0,1,0,0,0,0,1,
+24,MFG.L,Middle Frontal Gyrus,Left,21.2917,-16.6667,31.7917,17,0,0,0,0,0,0,0,0,in no network
+25,CUN.L,Cuneus,Left,3.94366,40.8627,0.651409,14,0,0,0,0,0,0,1,1,
+26,PCUN.L,Precuneus,Left,2.30769,5.86539,27.9327,6,0,0,0,0,0,0,0,0,in no network
+27,BS,Brainstem,Left,1.95652,-0.597824,-14.8913,5,0,0,0,0,0,0,0,0,in no network; brainstem parcel in the same functional cluster as the cerebellar parcels (NetworkNum 5) but not in the cerebellar list
+28,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,3.06122,-28.1378,33.699,3,0,0,0,0,0,0,0,0,in no network
+29,AMY.L,Amygdala,Left,12.6219,-12.9268,-6.85975,7,0,1,0,0,0,0,0,1,
+30,CUN.L,Cuneus,Left,4.33823,35.8088,13.125,9,0,0,0,0,0,0,1,1,
+31,CAU.L,Caudate,Left,9.45833,-2.79166,13.125,0,0,0,0,1,0,0,0,1,
+32,CAU.L,Caudate,Left,8.125,-14.1912,12.6838,0,0,0,0,1,0,0,0,1,
+33,IPL.L,Inferior Parietal Lobule,Left,30.6786,1.35714,26.5,11,0,0,0,0,0,0,0,0,in no network
+34,ACG.L,Anterior Cingulate Gyrus,Left,0.561222,-30.5867,3.75,3,0,0,1,0,0,0,0,1,
+35,IOG.L,Inferior Occipital Gyrus,Left,13.2917,37.9583,-7.16666,14,0,0,0,0,0,0,1,1,
+36,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,2.7551,-16.0459,38.3418,6,0,0,0,0,0,0,0,0,in no network
+37,MCG.L,Middle Cingulate Gyrus,Left,1.5625,-6.04166,27.9688,6,0,0,0,0,0,0,0,0,in no network
+38,INS.L,Insula,Left,20.6019,-26.8518,7.17593,17,0,0,0,0,0,0,0,0,in no network
+39,CAU.L,Caudate,Left,8.17307,-21.4103,5.60897,0,0,0,0,1,0,0,0,1,
+40,STG.L,Superior Temporal Gyrus,Left,33.0159,9.6627,8.23413,11,0,0,1,0,0,0,0,1,
+41,PreCG.L,Precentral Gyrus,Left,3.08823,-3.45588,39.8284,6,0,0,0,0,1,0,0,1,
+42,CUN.L,Cuneus,Left,3.93678,24.1523,12.1983,9,0,0,1,0,0,0,1,2,in more than one network: DMN/Visual
+43,PHG.L,Parahippocampal Gyrus,Left,12.2826,-8.60507,-15.0181,7,0,1,0,0,0,0,0,1,
+44,SPG.L,Superior Parietal Gyrus,Left,13.8806,21.959,28.7127,11,0,0,0,0,0,0,0,0,in no network
+45,ITG.L,Inferior Temporal Gyrus,Left,26.6304,16.1413,-9.11232,14,0,0,0,0,0,0,0,0,in no network
+46,MFG.L,Middle Frontal Gyrus,Left,12.5463,-43.6111,17.037,19,0,0,0,0,0,0,0,0,in no network
+47,BS,Brainstem,Left,2.92614,-0.625,-3.4375,0,0,0,0,0,0,0,0,0,in no network
+48,STG.L,Superior Temporal Gyrus,Left,33.2278,-1.06013,6.15506,17,0,0,1,0,0,1,0,2,in more than one network: DMN/Auditory
+49,PreCG.L,Precentral Gyrus,Left,20.8333,-4.61806,31.9792,11,0,0,0,0,1,0,0,1,
+50,ORBmid.L,Orbital (Middle),Left,12.2222,-34.9537,-7.31481,18,0,0,0,0,0,0,0,0,in no network
+51,THA.L,Thalamus,Left,2.14706,-6.39706,7.77942,0,0,0,0,1,0,0,0,1,
+52,MOG.L,Middle Occipital Gyrus,Left,20.1316,35.8553,1.77632,14,0,0,0,0,0,0,1,1,
+53,ACG.L,Anterior Cingulate Gyrus,Left,0.561222,-31.5561,14.9235,3,0,0,1,0,0,0,0,1,
+54,CRB.L,Cerebellum,Left,4.875,21.4688,-17.875,5,1,0,0,0,0,0,0,1,
+55,MFG.L,Middle Frontal Gyrus,Left,24.0254,-21.0805,23.411,17,0,0,0,0,0,0,0,0,in no network
+56,ITG.L,Inferior Temporal Gyrus,Left,26.194,-6.66045,-17.3321,7,0,1,0,0,0,0,0,1,
+57,MOG.L,Middle Occipital Gyrus,Left,25.0926,28.7963,10,11,0,0,0,0,0,0,1,1,
+58,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,21.5816,-40.8418,10.6378,19,0,0,0,0,0,0,0,0,in no network
+59,BS,Brainstem,Left,3.36207,5.90517,-20.431,7,0,0,0,0,0,0,0,0,in no network
+60,CAL.L,Calcerine Cortex,Left,8.77604,18.6458,3.02084,9,0,0,0,0,0,0,1,1,
+61,MTG.L,Middle Temporal Gyrus,Left,30.5078,-14.7266,-9.17968,10,0,1,0,0,0,0,0,1,
+62,PoCG.L,Postcentral Gyrus,Left,21.8651,5.49603,31.6865,11,0,0,0,0,1,0,0,1,
+63,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,12.418,-23.3811,33.5451,17,0,0,0,0,0,0,0,0,in no network
+64,SPG.L,Superior Parietal Gyrus,Left,12.3462,11.4808,36.4423,6,0,0,0,0,0,0,0,0,in no network
+65,INS.L,Insula,Left,21.7917,-15.9167,10.2917,17,0,0,0,0,0,0,0,0,in no network
+66,PCUN.L,Precuneus,Left,3.4434,25.4953,25.2123,9,0,0,0,0,0,0,0,0,in no network
+67,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,7.5,-49.0761,5.43479,19,0,1,0,0,0,0,0,1,
+68,ITG.L,Inferior Temporal Gyrus,Left,27.0968,4.1129,-13.2661,10,0,1,0,0,0,0,0,1,
+69,MTG.L,Middle Temporal Gyrus,Left,29.4141,18.7109,11.6406,11,0,0,0,0,0,0,0,0,in no network
+70,MCG.L,Middle Cingulate Gyrus,Left,0.277779,0.208336,18.8889,1,0,0,1,0,0,0,0,1,
+71,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,12.5,-10.9239,36.4312,6,0,0,0,0,0,0,0,0,in no network
+72,LING.L,Lingual,Left,11.2037,23.8117,-7.8858,14,0,0,0,0,0,0,1,1,
+73,PoCG.L,Postcentral Gyrus,Left,31.9718,-6.84859,16.5669,17,0,0,0,0,1,0,0,1,
+74,ORBinf.L,Orbital (Inferior),Left,17.8571,-26.4484,-3.67063,17,0,0,0,0,0,0,0,0,in no network
+75,LING.L,Lingual,Left,3.81579,34.057,-7.6535,14,0,0,0,0,0,0,1,1,
+76,MCG.L,Middle Cingulate Gyrus,Left,-0.416664,-12.6042,19.8958,3,0,0,0,0,0,0,0,0,in no network
+77,ORBinf.L,Orbital (Inferior),Left,23.4167,-35.7917,-0.66666,17,0,0,0,0,0,0,0,0,in no network
+78,SMG.L,Supramarginal Gyrus,Left,31.6797,12.3828,20.9375,11,0,0,0,0,0,0,0,0,in no network
+79,BS,Brainstem,Left,0.795456,7.72727,-31.25,5,0,0,0,0,0,0,0,0,in no network; brainstem parcel in the same functional cluster as the cerebellar parcels (NetworkNum 5) but not in the cerebellar list
+80,THA.L,Thalamus,Left,11.358,3.10185,4.49075,10,0,0,0,1,0,0,0,1,
+81,ORBsupb.L,Orbital (Superior),Left,8.01136,-45.9659,-5.68182,19,0,1,0,0,0,0,0,1,
+82,MCG.L,Middle Cingulate Gyrus,Left,1.0606,-18.8258,26.8561,3,0,0,0,0,0,0,0,0,in no network
+83,SMG.L,Supramarginal Gyrus,Left,28.3594,4.64844,14.6875,11,0,0,0,0,0,0,0,0,in no network
+84,MFG.L,Middle Frontal Gyrus,Left,13.2075,-33.75,27.0519,17,0,0,0,0,0,0,0,0,in no network
+85,SFGmed.L,Superior Frontal Gyrus (Medial),Left,1.1413,-42.1739,1.73913,19,0,0,1,0,0,0,0,1,
+86,PHG.L,Parahippocampal Gyrus,Left,15.3869,0.565475,-10.0298,10,0,1,0,0,0,0,0,1,
+87,MOG.L,Middle Occipital Gyrus,Left,16.3208,33.8915,14.1274,9,0,0,0,0,0,0,1,1,
+88,STG.L,Superior Temporal Gyrus,Left,30.6019,-11.8982,0.740746,17,0,0,1,0,0,1,0,2,in more than one network: DMN/Auditory
+89,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,22.193,-31.6886,20.943,17,0,0,0,0,0,0,0,0,in no network
+90,IPL.L,Inferior Parietal Lobule,Left,22.0982,14.2411,28.8839,11,0,0,0,0,0,0,0,0,in no network
+91,SPG.L,Superior Parietal Gyrus,Left,12.2761,29.0485,20.9515,9,0,0,0,0,0,0,1,1,
+92,PUT.L,Putamen,Left,3.30357,-14.6429,-1.0119,0,0,0,0,1,0,0,0,1,
+93,PreCG.L,Precentral Gyrus,Left,29.5833,-17.125,14.2083,17,0,0,0,0,1,0,0,1,
+94,INS.L,Insula,Left,21.8981,-16.7593,-2.40741,17,0,1,0,0,0,1,0,2,in more than one network: Limbic/Auditory
+95,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,27.3413,-29.1865,12.2817,17,0,0,0,0,0,0,0,0,in no network
+96,MTG.L,Middle Temporal Gyrus,Left,34.4583,8,-2.125,10,0,0,1,0,0,0,0,1,
+97,PAL.L,Pallidum,Left,13.2071,-9.05303,4.28031,17,0,0,0,1,0,0,0,1,
+98,SOG.L,Superior Occipital Gyrus,Left,11.5341,40.2841,7.27273,9,0,0,0,0,0,0,1,1,
+99,CRB.L,Cerebellum,Left,7.09559,12.7206,-23.75,5,1,0,0,0,0,0,0,1,
+100,PCG.L,Paracentral Lobule,Left,3.28947,12.0395,8.70614,1,0,0,1,0,0,0,0,1,ROIName is Paracentral Lobule but roiFullNames in the script says Posterior Cingulate for PCG
+101,CRB.R,Cerebellum,Right,-10.274,11.7637,-24.5377,5,1,0,0,0,0,0,0,1,
+102,STG.R,Superior Temporal Gyrus,Right,-36.25,14.9306,8.85417,15,0,0,1,0,0,0,0,1,
+103,PreCG.R,Precentral Gyrus,Right,-29.4583,-18.9167,26.25,13,0,0,0,0,1,0,0,1,
+104,ORBmed.R,Orbital (Medial),Right,-4.2347,-39.4643,0.484699,19,0,0,1,0,0,0,0,1,
+105,SPG.R,Superior Parietal Gyrus,Right,-12.9839,27.8226,20.8065,4,0,0,0,0,0,0,1,1,
+106,PCUN.R,Precuneus,Right,-7.62097,12.7823,8.42743,1,0,0,1,0,0,0,0,1,
+107,PAL.R,Pallidum,Right,-17.8431,-8.92157,2.20589,0,0,0,0,1,0,1,0,2,in more than one network: SubCort/Auditory
+108,TPOmid.R,Temporal Pole (Middle),Right,-25.2679,-17.8571,-17.0982,12,0,1,0,0,0,0,0,1,
+109,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,-17.1818,-19.3864,35.1591,2,0,0,0,0,0,0,0,0,in no network
+110,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,-8.88298,-27.4734,33.6436,3,0,0,0,0,0,0,0,0,in no network
+111,PUT.R,Putamen,Right,-12.7188,-21.6875,4.21875,0,0,0,0,1,0,0,0,1,
+112,INS.R,Insula,Right,-25.125,-25.5833,4.125,13,0,0,0,0,0,0,0,0,in no network
+113,CRB.R,Cerebellum,Right,-16.8667,18.35,-20.9167,5,1,0,0,0,0,0,0,1,
+114,SOG.R,Superior Occipital Gyrus,Right,-13.2746,36.6373,12.6232,16,0,0,0,0,0,0,1,1,
+115,PCL.R,Paracentral Lobule,Right,-5.83334,-3.58333,36.2917,2,0,0,0,0,0,0,0,0,in no network
+116,MOG.R,Middle Occipital Gyrus,Right,-23.6742,36.7424,1.32576,16,0,0,0,0,0,0,1,1,
+117,IFGtriang.R,Inferior Frontal Gryus (Triangularis),Right,-31.6827,-30.4327,7.88462,13,0,0,0,0,0,0,0,0,in no network
+118,BS,Brainstem,Right,-5.44643,2.09821,-3.03571,0,0,0,0,0,0,0,0,0,in no network
+119,MCG.R,Middle Cingulate Gyrus,Right,-5.92392,-15.7609,19.4022,3,0,0,0,0,0,0,0,0,in no network
+120,ITG.R,Inferior Temporal Gyrus,Right,-26.2903,-7.78226,-20.4839,8,0,1,0,0,0,0,0,1,
+121,ORBmid.R,Orbital (Middle),Right,-18.6111,-41.7593,-6.48148,18,0,0,0,0,0,0,0,0,in no network
+122,PoCG.R,Postcentral Gyrus,Right,-37.2785,-8.75,13.5918,15,0,0,0,0,1,0,0,1,
+123,ACG.R,Anterior Cingulate Gyrus,Right,-4.65117,-28.8081,3.40117,19,0,0,1,0,0,0,0,1,
+124,MCG.R,Middle Cingulate Gyrus,Right,-5.71429,4.33036,17.8571,1,0,0,1,0,0,0,0,1,
+125,PHG.R,Parahippocampal Gyrus,Right,-15.1712,-9.67466,-15.7021,8,0,1,0,0,0,0,0,1,
+126,PoCG.R,Postcentral Gyrus,Right,-10.6164,6.62671,37.4486,6,0,0,0,0,1,0,0,1,
+127,IFGoperc.R,Inferior Frontal Gryus (Opercularis),Right,-29.125,-26.125,19.4167,13,0,0,0,0,0,0,0,0,in no network
+128,SFGmed.R,Superior Frontal Gyrus (Medial),Right,-5.86956,-36.6123,23.9674,19,0,0,1,0,0,0,0,1,
+129,CRB.R,Cerebellum,Right,-7.56098,20.5183,-18.4146,5,1,0,0,0,0,0,0,1,
+130,SMG.R,Supramarginal Gyrus,Right,-37.8676,4.15441,14.9632,15,0,0,0,0,0,0,0,0,in no network
+131,IOG.R,Inferior Occipital Gyrus,Right,-17.9762,36.6071,-9.46428,18,0,0,0,0,0,0,1,1,
+132,PreCG.R,Precentral Gyrus,Right,-23.8934,-11.291,32.9713,13,0,0,0,0,1,0,0,1,
+133,AMY.R,Amygdala,Right,-17.5373,-15.056,-8.00373,8,0,1,0,0,0,0,0,1,
+134,THA.R,Thalamus,Right,-7.5,-7.23901,6.44231,0,0,0,0,1,0,0,0,1,
+135,MOG.R,Middle Occipital Gyrus,Right,-32.2321,26.1607,3.83929,16,0,0,0,0,0,0,1,1,
+136,IPL.R,Inferior Parietal Lobule,Right,-36.9186,2.81976,23.75,15,0,0,0,0,0,0,0,0,in no network
+137,SFGmed.R,Superior Frontal Gyrus (Medial),Right,-4.95283,-38.5142,10.8255,19,0,0,1,0,0,0,0,1,
+138,SPG.R,Superior Parietal Gyrus,Right,-15.9375,22.5,30.3571,4,0,0,0,0,0,0,0,0,in no network
+139,THA.R,Thalamus,Right,-15.7372,2.59615,5.16026,16,0,0,0,1,0,1,0,2,in more than one network: SubCort/Auditory
+140,IFGtriang.R,Inferior Frontal Gryus (Triangularis),Right,-27.0673,-36.25,14.3269,19,0,0,0,0,0,0,0,0,in no network
+141,TPOsup.R,Temporal Pole (Superior),Right,-29.6023,-16.6477,-4.51704,12,0,1,0,0,0,0,0,1,
+142,CRB.R,Cerebellum,Right,-6.375,13.3125,-10.6562,5,1,0,0,0,0,0,0,1,
+143,ORBsupb.R,Orbital (Superior),Right,-7.22826,-45.4891,-6.95652,19,0,1,0,0,0,0,0,1,
+144,PoCG.R,Postcentral Gyrus,Right,-19.7917,2.22222,35.1042,6,0,0,0,0,1,0,0,1,
+145,PUT.R,Putamen,Right,-7.02381,-15.6548,-2.51984,0,0,0,0,1,0,0,0,1,
+146,MFG.R,Middle Frontal Gyrus,Right,-19.4444,-28.5648,29.4444,13,0,0,0,0,0,0,0,0,in no network
+147,INS.R,Insula,Right,-27.5962,-13.9744,8.20513,13,0,0,0,0,0,0,0,0,in no network
+148,ORBinf.R,Orbital (Inferior),Right,-17.2881,-27.9025,-8.32627,18,0,0,0,0,0,0,0,0,in no network
+149,MOG.R,Middle Occipital Gyrus,Right,-23.7302,33.5119,11.25,16,0,0,0,0,0,0,1,1,
+150,MTG.R,Middle Temporal Gyrus,Right,-38.5909,5.75,-5.75,15,0,0,1,0,0,0,0,1,
+151,THA.R,Thalamus,Right,-14.5,-4.54167,12.25,0,0,0,0,1,0,0,0,1,
+152,STG.R,Superior Temporal Gyrus,Right,-37.9808,3.26923,4.8077,15,0,0,1,0,0,1,0,2,in more than one network: DMN/Auditory
+153,SOG.R,Superior Occipital Gyrus,Right,-10,40.6562,0.625004,16,0,0,0,0,0,0,1,1,
+154,PCL.R,Paracentral Lobule,Right,-6.72619,5.71429,27.5595,1,0,0,0,0,0,0,0,0,in no network
+155,ORBsupb.R,Orbital (Superior),Right,-11.3889,-48.7963,3.56482,19,0,1,0,0,0,0,0,1,
+156,ACG.R,Anterior Cingulate Gyrus,Right,-5.69767,-27.7616,15.6105,3,0,0,1,0,0,0,0,1,
+157,BS,Brainstem,Right,-4.69231,0.326927,-15.6731,5,0,0,0,0,0,0,0,0,in no network; brainstem parcel in the same functional cluster as the cerebellar parcels (NetworkNum 5) but not in the cerebellar list
+158,SPG.R,Superior Parietal Gyrus,Right,-17.7465,13.3979,34.9824,4,0,0,0,0,0,0,0,0,in no network
+159,ORBinf.R,Orbital (Inferior),Right,-26.6667,-33.4583,-3.75,18,0,0,0,0,0,0,0,0,in no network
+160,HIP.R,Hippocampus,Right,-19.1883,-0.957794,-12.4188,8,0,1,0,0,0,0,0,1,
+161,HES.R,Fusiform Gyrus,Right,-28.0422,-1.25,10.6777,15,0,0,0,0,0,0,0,0,in no network; abbreviation HES (Heschl) but ROIName says Fusiform Gyrus; no entry for HES in roiFullNames
+162,LING.R,Lingual,Right,-15.9943,22.1875,-10.1136,16,0,0,0,0,0,0,1,1,
+163,MTG.R,Middle Temporal Gyrus,Right,-37.6818,-4.25,-8.25,12,0,0,1,0,0,0,0,1,
+164,PoCG.R,Postcentral Gyrus,Right,-27.6538,-4.09615,30.2115,2,0,0,0,0,1,0,0,1,
+165,BS,Brainstem,Right,-3.48485,6.47727,-28.1439,7,0,0,0,0,0,0,0,0,in no network
+166,MCG.R,Middle Cingulate Gyrus,Right,-6.58784,-5.84459,25.4054,1,0,0,0,0,0,0,0,0,in no network
+167,SPG.R,Superior Parietal Gyrus,Right,-22.3897,26.5809,21.8382,15,0,0,0,0,0,0,1,1,
+168,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,-7.07447,-45.3989,15.4521,19,0,0,1,0,0,0,0,1,
+169,PreCG.R,Precentral Gyrus,Right,-34.9561,-19.2763,12.4781,13,0,0,0,0,1,0,0,1,
+170,SMA.R,Supplemental Motor Area,Right,-5.11364,-15.4545,32.3485,3,0,0,0,0,1,0,0,1,
+171,STG.R,Superior Temporal Gyrus,Right,-34.1129,-7.94355,1.22312,12,0,0,1,0,0,1,0,2,in more than one network: DMN/Auditory
+172,CAL.R,Calcerine Cortex,Right,-14.6944,16.7222,0.944447,16,0,0,0,0,0,0,0,0,in no network
+173,PUT.R,Putamen,Right,-14.0714,-15.25,11.2857,0,0,0,0,0,0,0,0,0,"in no network; labelled PUT.R, NetworkNum 0 (same functional cluster as the subcortical parcels) but not in the SubCort list; atlas has no right caudate parcel, so check whether this is caudate"
+174,CUN.R,Cuneus,Right,-5.33333,31.0833,6.71667,16,0,0,0,0,0,0,1,1,FullName says Left Cuneus but the parcel is right hemisphere (CUN.R)
+175,BS,Brainstem,Right,-8.02419,-5.56451,-5.08064,0,0,0,0,0,0,0,0,0,in no network
+176,MTG.R,Middle Temporal Gyrus,Right,-35.9914,18.4052,-1.98276,16,0,0,1,0,0,0,0,1,
+177,SMA.R,Supplemental Motor Area,Right,-4.87069,-24.6121,26.7672,3,0,0,0,0,1,0,0,1,
+178,PCUN.R,Precuneus,Right,-5,18.4286,17.1786,4,0,0,1,0,0,0,0,1,
+179,ITG.R,Inferior Temporal Gyrus,Right,-31,15.5577,-11.2885,16,0,0,0,0,0,0,0,0,in no network
+180,MFG.R,Middle Frontal Gyrus,Right,-24.5109,-43.8587,2.93479,19,0,0,0,0,0,0,0,0,in no network
+181,CUN.R,Cuneus,Right,-12.1575,23.476,10.1541,16,0,0,0,0,0,0,1,1,
+182,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,-14.0942,-8.46014,38.6413,6,0,0,0,0,0,0,0,0,in no network
+183,MFG.R,Middle Frontal Gyrus,Right,-17.7941,-38.1127,22.8186,19,0,0,0,0,0,0,0,0,in no network
+184,PoCG.R,Postcentral Gyrus,Right,-29.2692,5.36539,29.6346,15,0,0,0,0,1,0,0,1,
+185,FFG.R,Fusiform Gyrus,Right,-17.7353,8.39706,-5.13235,16,0,0,0,0,0,1,0,1,
+186,IOG.R,Inferior Occipital Gyrus,Right,-26.7279,28.1985,-9.41176,16,0,0,0,0,0,0,1,1,
+187,PCUN.R,Precuneus,Right,-5.61594,17.0109,28.5326,4,0,0,0,0,0,0,0,0,in no network
+188,ITG.R,Inferior Temporal Gyrus,Right,-31.1719,2.8125,-16.3281,8,0,1,0,0,0,0,0,1,
+189,IPL.R,Inferior Parietal Lobule,Right,-26.5574,16.25,26.8648,15,0,0,0,0,0,0,0,0,in no network
+190,PoCG.R,Postcentral Gyrus,Right,-34.8485,-8.63637,23.5985,15,0,0,0,0,1,0,0,1,
+191,IPL.R,Inferior Parietal Lobule,Right,-35.8333,14.6814,20.5637,15,0,0,0,0,0,0,0,0,in no network
+192,CRB.R,Cerebellum,Right,-11.8667,7.81667,-17.4167,5,1,0,0,0,0,0,0,1,
+193,MFG.R,Middle Frontal Gyrus,Right,-18.5366,-44.9085,13.0183,19,0,0,0,0,0,0,0,0,in no network
+194,CAL.R,Calcerine Cortex,Right,-8.54166,25.6845,-0.624996,16,0,0,0,0,0,0,1,1,
+195,IPL.R,Inferior Parietal Lobule,Right,-31.5094,25.4481,16.1085,15,0,0,0,0,0,0,1,1,
+196,ORBsupb.R,Orbital (Superior),Right,-6.52778,-25.1852,-7.87037,18,0,1,0,0,0,0,0,1,
+197,LING.R,Lingual,Right,-8.14189,33.9865,-7.39864,16,0,0,0,0,0,0,1,1,
+198,ORBsupb.R,Orbital (Superior),Right,-6.98413,-36.0516,-10.5754,18,0,1,0,0,0,0,0,1,
+199,FFG.R,Fusiform Gyrus,Right,-21.1765,11.152,-13.5539,16,0,0,0,0,0,0,0,0,in no network
+200,MTG.R,Middle Temporal Gyrus,Right,-34.4681,-12.0479,-14.4415,12,0,1,0,0,0,0,0,1,
