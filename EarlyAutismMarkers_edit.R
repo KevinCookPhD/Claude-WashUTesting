@@ -1868,7 +1868,9 @@ tier2Figure <- function(palette = networkNodeColors) {
   long <- rbind(data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'Low Risk', Mean = shown$TD.Mean, SE = shown$TD.SE),
                 data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'High Risk', Mean = shown$ASD.Mean, SE = shown$ASD.SE))
   long$Group <- factor(long$Group, levels = c('Low Risk', 'High Risk'))
-  yBreaks <- pretty(c(0, long$Mean - long$SE, long$Mean + long$SE), n = 5)      # includes the lower end of any error bar that dips below zero
+  # connectivity is Fisher z; show it as the correlation r (tanh), with the error bar ends converted the same way
+  long$Lower <- tanh(long$Mean - long$SE); long$Upper <- tanh(long$Mean + long$SE); long$Mean <- tanh(long$Mean)
+  yBreaks <- pretty(c(0, long$Lower, long$Upper), n = 5)      # includes the lower end of any error bar that dips below zero
   bottomY <- min(yBreaks); topY <- max(yBreaks); band <- .13 * (topY - bottomY)
   background <- data.frame(unit = factor(usedNets, levels = usedNets),
                            x = vapply(usedNets, function(u) (sum(shown$unit == u) + 1) / 2, numeric(1)),
@@ -1888,21 +1890,21 @@ tier2Figure <- function(palette = networkNodeColors) {
     geom_text(data = background, aes(x = x, y = topY + band / 2, label = name), color = background$text, inherit.aes = FALSE, size = 5, hjust = .5) +
     geom_hline(yintercept = 0, linewidth = 1) +
     geom_col(position = position_dodge(.85), width = .8, color = '#000000', linewidth = .8) +
-    geom_errorbar(aes(ymin = Mean - SE, ymax = Mean + SE), position = position_dodge(.85), width = .25, linewidth = 1.1) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), position = position_dodge(.85), width = .25, linewidth = 1.1) +
     scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
     scale_x_discrete(labels = xLabels) +
     facet_grid(~unit, scales = 'free_x', space = 'free_x') +
     scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
-    labs(x = NULL, y = 'Connectivity Strength') +
+    labs(x = NULL, y = 'Connectivity (r)') +
     themeRegionalFigure(showXTitle = FALSE) +
     theme(axis.text.x = element_text(size = 10, angle = 70, hjust = 1, vjust = 1), strip.text = element_blank(), strip.background = element_blank(),
           panel.spacing = unit(.35, 'lines'))
 
-  ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.15), labels = c('A', 'B'))
+  ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.5), labels = c('A', 'B'))
 }
 
 tier2_figure <- tier2Figure()
-if (!is.null(tier2_figure)) { showFigure(tier2_figure, 'tier2_figure', width = 13, height = 8.4) }
+if (!is.null(tier2_figure)) { showFigure(tier2_figure, 'tier2_figure', width = 13, height = 9.6) }
 
 
 ## 3e. Tier 3: Exploratory Whole Brain ----
