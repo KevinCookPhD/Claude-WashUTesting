@@ -241,7 +241,6 @@ plot_df <- plot_df %>%
   mutate(participant = factor(participant, levels = unique(plot_order$participant)))
 
 p <- ggplot(plot_df, aes(y = participant, colour = cohort, fill = cohort)) +
-  geom_vline(xintercept = TERM_PMA, linetype = "dashed", colour = "#898781", linewidth = 0.4) +
   geom_segment(aes(x = first_pma, xend = last_pma, yend = participant),
                linewidth = 0.5, alpha = 0.7) +
   geom_point(aes(x = scanPMA), shape = 21, size = 1.8, stroke = 0.4, colour = "#fcfcfb") +
@@ -249,11 +248,10 @@ p <- ggplot(plot_df, aes(y = participant, colour = cohort, fill = cohort)) +
   scale_colour_manual(values = cohort_cols, name = "Study cohort") +
   scale_fill_manual(values = cohort_cols, name = "Study cohort") +
   scale_x_continuous(breaks = seq(24, 80, 4), name = "Postmenstrual age at scan (weeks)") +
-  annotate("text", x = TERM_PMA + 0.3, y = Inf, label = paste0("term (", TERM_PMA, " wk)"),
-           hjust = 0, vjust = 1.5, size = 3, colour = "#52514e") +
   labs(y = "Participants (one row per infant)", title = "Serial MRI scan timing by participant") +
   theme_minimal(base_size = 11) +
   theme(
+    axis.line          = element_line(colour = "#0b0b0b", linewidth = 0.9),   # thicker X and Y axis lines
     axis.text.y        = element_blank(),
     axis.ticks.y       = element_blank(),
     panel.grid.major.y = element_blank(),
@@ -265,6 +263,58 @@ p <- ggplot(plot_df, aes(y = participant, colour = cohort, fill = cohort)) +
   )
 
 print(p)
+
+# ---- 9b. One-page table for the LOI (Word document) ---------------------------------------
+fmt_num  <- function(x, digits = 1) if_else(is.na(x), "n/a", formatC(x, format = "f", digits = digits))
+fmt_date <- function(x) coalesce(format(x, "%b %Y"), "n/a")
+
+loi_tbl <- cohort_summary %>%
+  filter(cohort != "UNASSIGNED") %>%
+  transmute(
+    cohort,
+    `Infants, n`                                   = as.character(`1 N infants`),
+    `MRI scans, n`                                 = as.character(`2 N scans`),
+    `Scans per infant, mean`                       = fmt_num(`3 Mean scans/infant`, 1),
+    `Scans in the preterm period, n`               = as.character(`4 Preterm-period scans`),
+    `Scans at term age, n`                         = as.character(`5 Term-age scans`),
+    `Gestational age at birth, mean (weeks)`       = fmt_num(`6 Mean GA at birth (wk)`, 1),
+    `Earliest date of birth`                       = fmt_date(`7 Earliest DOB`),
+    `Latest date of birth`                         = fmt_date(`8 Latest DOB`),
+    `Current age, range (years)`                   = coalesce(`9 Current age range (yr)`, "n/a"),
+    `Current age, mean (years)`                    = fmt_num(`10 Mean current age (yr)`, 1)
+  ) %>%
+  pivot_longer(-cohort, names_to = "Measure", values_to = "value") %>%
+  pivot_wider(names_from = cohort, values_from = value)
+
+if (requireNamespace("flextable", quietly = TRUE) && requireNamespace("officer", quietly = TRUE)) {
+  library(flextable); library(officer)
+  n_cols <- ncol(loi_tbl)
+
+  ft <- flextable(loi_tbl) %>%
+    set_caption("Table 1. Serial MRI scan data available across study cohorts") %>%
+    theme_booktabs() %>%
+    font(fontname = "Arial", part = "all") %>%
+    fontsize(size = 10, part = "all") %>%
+    bold(part = "header") %>%
+    align(j = 2:n_cols, align = "center", part = "all") %>%
+    width(j = 1, width = 2.9) %>%
+    width(j = 2:n_cols, width = (6.5 - 2.9) / (n_cols - 1)) %>%
+    add_footer_lines(c(
+      paste0("Scans after ", MAX_PMA, " weeks postmenstrual age (PMA) were excluded as likely errors. ",
+             "Preterm period = scans before ", TERM_PMA, " weeks PMA; term age = ", TERM_PMA, " weeks PMA or later."),
+      paste0("Date of birth was derived from scan date and PMA at scan; n/a where scan dates were unavailable. ",
+             "Current age is as of ", format(Sys.Date(), "%B %d, %Y"), ".")
+    )) %>%
+    fontsize(size = 8, part = "footer") %>%
+    font(fontname = "Arial", part = "footer")
+
+  doc <- read_docx() %>% body_add_flextable(ft)
+  print(doc, target = file.path(dir, "LOI_table.docx"))
+  cat("LOI table written to LOI_table.docx\n")
+} else {
+  message("To build the LOI table, run: install.packages(c('flextable', 'officer'))")
+}
+print(loi_tbl, width = Inf)
 
 # ---- 10. Save outputs -------------------------------------------------------------------
 write_csv(scans,          file.path(dir, "combined_scans.csv"))
