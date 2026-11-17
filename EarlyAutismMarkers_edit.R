@@ -2669,7 +2669,7 @@ showFigure(supplemental_atlas, 'supplemental_atlas', width = 13, height = 6.6)
 # The same atlas painted onto the brain surface (the mesh used for the glass brains), so the parcels sit on a smooth, folded brain. Every point of the surface
 # takes the label of the parcel that dominates around it (each parcel is blurred slightly first, so the borders between parcels are smooth).
 # Needs the rgl and png packages and a screen (like the glass brains). Same colors as the slices.
-# Top row: left side, right side, front. Bottom row: the medial face of the left hemisphere and of the right hemisphere, and the underside.
+# Eight views: left and right lateral, left and right medial (one hemisphere each), top, bottom, front and back.
 paintAtlasOnSurface <- function(blurVoxels = 1, minimumScore = .15) {
   mesh <- readMz3(brainMeshFile)
   vertices <- as.matrix(standardCoordinates(mesh$vertices))                                      # the same orientation as the glass brains
@@ -2723,7 +2723,9 @@ atlasRotation <- function() {
   leftSide <- R(pi / 2, 0, 1, 0) %*% R(-pi / 2, 1, 0, 0)
   list(`left` = leftSide, `right` = leftSide %*% R(pi, 0, 0, 1),
        `front` = R(-pi / 2, 1, 0, 0) %*% R(pi, 0, 0, 1),      # seen from the front: the right side of the brain is on the left of the picture
-       `underside` = R(pi, 0, 1, 0))                          # seen from below, front at the top, right on the left
+       `underside` = R(pi, 0, 1, 0),                          # seen from below, front at the top, right on the left
+       `top` = R(0, 1, 0, 0),                                 # seen from above, front at the top, right on the right
+       `back` = R(-pi / 2, 1, 0, 0))                          # seen from behind, right on the right
 }
 
 atlasRender <- function(painted, viewName, colors, hemisphere = NULL, unlabeledColor = '#BDBDBD', pixels = 900) {      # colors: one color per parcel (200)
@@ -2770,12 +2772,13 @@ if (canRender3D) {
   parcelNetworkColors[is.na(parcelNetworkColors)] <- '#C8C8C8'
 
   threeDFigure <- function(colors, unlabeledColor, bottom = NULL) {
-    views <- list(atlasRender(painted, 'left', colors, unlabeledColor = unlabeledColor), atlasRender(painted, 'right', colors, unlabeledColor = unlabeledColor),
-                  atlasRender(painted, 'front', colors, unlabeledColor = unlabeledColor),
-                  atlasRender(painted, 'right', colors, 'left', unlabeledColor),      # left hemisphere only, seen from the right: its medial face
-                  atlasRender(painted, 'left', colors, 'right', unlabeledColor),      # right hemisphere only, seen from the left: its medial face
-                  atlasRender(painted, 'underside', colors, unlabeledColor = unlabeledColor))
-    grid <- ggpubr::ggarrange(plotlist = views, nrow = 2, ncol = 3, labels = c('A', 'B', 'C', 'D', 'E', 'F'), font.label = list(size = 14, face = 'bold'))
+    # Eight views. Top row: left lateral, right lateral, top, front. Bottom row: left medial, right medial, bottom, back.
+    # The medial views draw one hemisphere only (left hemisphere seen from the right, right hemisphere seen from the left).
+    draw <- function(view, hemisphere = NULL) atlasRender(painted, view, colors, hemisphere, unlabeledColor)
+    views <- list(draw('left'), draw('right'), draw('top'), draw('front'),
+                  draw('right', 'left'), draw('left', 'right'), draw('underside'), draw('back'))
+    grid <- ggpubr::ggarrange(plotlist = views, nrow = 2, ncol = 4, font.label = list(size = 14, face = 'bold'),
+                              labels = c('A  Left lateral', 'B  Right lateral', 'C  Top', 'D  Front', 'E  Left medial', 'F  Right medial', 'G  Bottom', 'H  Back'))
     if (!is.null(bottom)) { grid <- ggpubr::ggarrange(grid, bottom, nrow = 2, heights = c(1, .07)) }
     grid + theme(plot.background = element_rect(fill = 'white', color = NA))
   }
@@ -2798,9 +2801,9 @@ if (canRender3D) {
     annotate('point', x = allKeyX, y = .5, shape = 21, size = 6, fill = allKeyColors, colour = '#404040', stroke = .6) +
     annotate('text', x = allKeyX + .02, y = .5, label = allKeyNames, hjust = 0, size = 12 / .pt)
 
-  showFigure(threeDFigure(parcelColors, '#BDBDBD'), 'supplemental_atlas_3d_parcels', width = 13, height = 9)
-  showFigure(threeDFigure(parcelNetworkColors, '#C8C8C8', bottom = networkKey), 'supplemental_atlas_3d_networks', width = 13, height = 9.6)
-  showFigure(threeDFigure(parcelAllColors, '#C8C8C8', bottom = allKey), 'supplemental_atlas_3d_networks_all', width = 13, height = 9.6)
+  showFigure(threeDFigure(parcelColors, '#BDBDBD'), 'supplemental_atlas_3d_parcels', width = 16, height = 8.4)
+  showFigure(threeDFigure(parcelNetworkColors, '#C8C8C8', bottom = networkKey), 'supplemental_atlas_3d_networks', width = 16, height = 9)
+  showFigure(threeDFigure(parcelAllColors, '#C8C8C8', bottom = allKey), 'supplemental_atlas_3d_networks_all', width = 16, height = 9)
 } else {
   message('3D atlas render skipped: the rgl and png packages, the brain mesh file and a screen are needed')
 }
