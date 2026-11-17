@@ -41,7 +41,7 @@ figures <- list()
 
 ## Group Colors ----
 
-# The Low Risk (TD) and High Risk (ASD) colors used in every figure. Lighter tints for bars, points and lines are derived from these.
+# The Low-risk (TD) and High-risk (ASD) colors used in every figure. Lighter tints for bars, points and lines are derived from these.
 groupColors <- c(low = '#2166AC', high = '#B2182B')
 
 # Chord diagram links: opacity as a hex alpha ('aa' = 67%, '55' = 33%) and the width of each link's outline.
@@ -71,7 +71,7 @@ glassPixels <- 1000                       # rgl: size of each view in pixels (sq
 glassMeshColor <- 'grey88'                # rgl: brain surface color
 glassMeshAlpha <- .18                     # rgl: brain surface opacity (0-1)
 glassEdgesOnTop <- TRUE                    # rgl: TRUE draws the edges solid over the brain surface (not veiled by it); FALSE lets the glass veil them
-glassEdgeColors <- c(low = '#6C9BE3', high = '#E57373')     # rgl: edge colors (Low > High Risk, High > Low Risk)
+glassEdgeColors <- c(low = '#6C9BE3', high = '#E57373')     # rgl: edge colors (Low-risk > High-risk, High-risk > Low-risk)
 glassNodeRadius <- c(network = 2.6, whole = 1.4)            # rgl: node radius (mm) for the network and whole-brain figures
 glassLightAmbient <- '#808080'            # rgl: ambient light on the nodes and edges (lights the sides turned away from the light; brighter = lighter-looking)
 glassLightDiffuse <- '#E0E0E0'            # rgl: direct light ('#FFFFFF' is the brightest)
@@ -86,7 +86,7 @@ glassDepthLayers <- 6
 glassBrainOpacity <- .8
 
 # Network colors (Okabe-Ito based; nodes, edges, name bands and the tinted backing behind the bars in the Tier 2 figure), in the order Cerebellar, Limbic,
-# Subcortical, Default Mode. They avoid blue and red/pink, which are the Low and High Risk colors.
+# Subcortical, Default Mode. They avoid blue and red/pink, which are the Low-risk and High-risk colors.
 networkNodeColors <- c(CRB = '#E69F00', Limbic = '#009E73', SubCort = '#7B68C8', DMN = '#A0522D')
 
 # The Tier 2 figure shows the connections with an FDR-adjusted p below this (.05 = significant only)
@@ -104,7 +104,7 @@ networksOfInterest <- c('CRB', 'Limbic', 'SubCort', 'DMN')
 useRevisedNetworks <- TRUE
 
 # Connectivity is analyzed in three tiers. Every model is  connectivity ~ group + scan age  (no interaction) with a random intercept per participant;
-# the group estimate is Low minus High Risk, adjusted for age (positive = Low Risk higher).
+# the group estimate is Low-risk minus High-risk, adjusted for age (positive = Low-risk higher).
 #   Tier 1  network averages, within each network and between each pair of networks. FDR across the networks, and across the pairs (separately).
 #   Tier 2  ROI-to-ROI connections, inside the networks (and pairs) that pass Tier 1. FDR across the connections of each network on its own.
 #   Tier 3  exploratory whole brain: every ROI to every other ROI. FDR across all the connections.
@@ -380,14 +380,14 @@ themeRegionalFigure <- function(showXTitle = TRUE) {
         legend.title=element_blank())
 }
 
-# A boxed legend (Low Risk / High Risk) drawn as its own panel, like the key in the older hand-formatted figure.
+# A boxed legend (Low-risk / High-risk) drawn as its own panel, like the key in the older hand-formatted figure.
 # type = 'group' (filled bars), 'network' (bars with colored outlines) or 'intx' (diamond / circle with a line);
-# textSize = size of the 'Low Risk' / 'High Risk' text
+# textSize = size of the 'Low-risk' / 'High-risk' text
 riskLegendPanel <- function(type, textSize = 12 / .pt) {
   legendPlot <- ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed() + theme_void() +
     annotate('rect', xmin = .08, xmax = .92, ymin = .2, ymax = .8, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('text', x = .40, y = .61, label = 'Low Risk', hjust = 0, size = textSize) +
-    annotate('text', x = .40, y = .39, label = 'High Risk', hjust = 0, size = textSize)
+    annotate('text', x = .40, y = .61, label = 'Low-risk', hjust = 0, size = textSize) +
+    annotate('text', x = .40, y = .39, label = 'High-risk', hjust = 0, size = textSize)
 
   if (type == 'group') {
     legendPlot +
@@ -406,7 +406,7 @@ riskLegendPanel <- function(type, textSize = 12 / .pt) {
   }
 }
 
-# Put the boxed Low Risk / High Risk legend to the right of a single plot
+# Put the boxed Low-risk / High-risk legend to the right of a single plot
 addRiskLegend <- function(plotObj, legendType) {
   ggpubr::ggarrange(plotObj, riskLegendPanel(legendType), ncol = 2, widths = c(5, 1.3), legend = 'none')
 }
@@ -1122,7 +1122,7 @@ saveResultTable(glmRegionalNormedVolTable.Itx, 'regional_normed_intx')
 
 # Figures are built for whichever regions are significant (FDR-adjusted p, from the normalized interaction model table),
 # at two thresholds, for two effects:
-#   Group main effect: estimated marginal means (bars) for Low vs High Risk
+#   Group main effect: estimated marginal means (bars) for Low-risk vs High-risk
 #   Interaction:       normalized volume across gestational age, with a line per risk group
 # Change the thresholds here:
 figureThresholds <- c(.05, .10)
@@ -1174,7 +1174,7 @@ prepRegionalFigureData <- function(roi) {
                      excludeIDs = regionalFigureExclude, dropInf = TRUE)
 }
 
-# Group main effect figure: model-estimated means (+/- SE) for Low vs High Risk
+# Group main effect figure: model-estimated means (+/- SE) for Low-risk vs High-risk
 plotRoiGroup <- function(roi) {
   tempAnalyses <- prepRegionalFigureData(roi)
 
@@ -1183,7 +1183,7 @@ plotRoiGroup <- function(roi) {
 
   meansTablePlot <- summary(meansTable)
   colnames(meansTablePlot)[1] <- 'Autism Risk'
-  meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+  meansTablePlot$`Autism Risk` <- factor(ifelse(meansTablePlot$`Autism Risk`=='Fail','High-risk','Low-risk'), levels = c('Low-risk','High-risk'))
 
   axisInfo <- roiAxis(roi, 'group', max(meansTablePlot$emmean + meansTablePlot$SE))
 
@@ -1199,15 +1199,15 @@ plotRoiGroup <- function(roi) {
 # Interaction figure: normalized volume by gestational age, with a fitted line per risk group
 plotRoiInteraction <- function(roi) {
   tempAnalyses <- prepRegionalFigureData(roi)
-  # Low Risk first so it gets the first (blue) color, matching the group figure
-  tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+  # Low-risk first so it gets the first (blue) color, matching the group figure
+  tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High-risk','Low-risk'), levels = c('Low-risk','High-risk'))
 
   axisInfo <- roiAxis(roi, 'intx', max(tempAnalyses$VolNormed, na.rm=TRUE))
 
   ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
     scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
     scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
-    scale_shape_manual(values=c(23,21)) +   # Low Risk = diamond, High Risk = circle (as before)
+    scale_shape_manual(values=c(23,21)) +   # Low-risk = diamond, High-risk = circle (as before)
     scale_fill_manual(values=c(groupPointFill[['low']], groupPointFill[['high']])) +
     geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4.5, stroke=.75) +
     scale_color_manual(values=c(groupLineColor[['low']], groupLineColor[['high']])) +
@@ -1293,7 +1293,7 @@ shortRegionName <- function(roi) {
 }
 
 plotRoiCombined <- function(roi, tempAnalyses, yLimits) {
-  tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+  tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High-risk','Low-risk'), levels = c('Low-risk','High-risk'))
   yBreaks <- pretty(yLimits, n = 5); yBreaks <- yBreaks[yBreaks >= yLimits[1] & yBreaks <= yLimits[2]]
 
   ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
@@ -1310,16 +1310,16 @@ plotRoiCombined <- function(roi, tempAnalyses, yLimits) {
     theme(axis.title.x = element_text(color = 'black', size = 14), axis.title.y = element_text(color = 'black', size = 14))
 }
 
-# Boxed Low / High Risk key sized to its contents (not stretched to fill its grid cell)
+# Boxed Low-risk / High-risk key sized to its contents (not stretched to fill its grid cell)
 combinedLegendPanel <- function() {
   ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
     annotate('rect', xmin = .12, xmax = .88, ymin = .36, ymax = .64, fill = 'white', colour = 'black', linewidth = 1) +
     annotate('segment', x = .17, xend = .35, y = .55, yend = .55, colour = groupLineColor[['low']], linewidth = 2) +
     annotate('point', x = .26, y = .55, shape = 23, size = 5, fill = groupPointFill[['low']], colour = if (colorPointOutlines) groupLineColor[['low']] else 'black', stroke = if (colorPointOutlines) 1 else .75) +
-    annotate('text', x = .40, y = .55, label = 'Low Risk', hjust = 0, size = 12 / .pt) +
+    annotate('text', x = .40, y = .55, label = 'Low-risk', hjust = 0, size = 12 / .pt) +
     annotate('segment', x = .17, xend = .35, y = .45, yend = .45, colour = groupLineColor[['high']], linewidth = 2) +
     annotate('point', x = .26, y = .45, shape = 21, size = 5, fill = groupPointFill[['high']], colour = if (colorPointOutlines) groupLineColor[['high']] else 'black', stroke = if (colorPointOutlines) 1 else .75) +
-    annotate('text', x = .40, y = .45, label = 'High Risk', hjust = 0, size = 12 / .pt)
+    annotate('text', x = .40, y = .45, label = 'High-risk', hjust = 0, size = 12 / .pt)
 }
 
 combinedTable <- glmRegionalNormedVolTable.Itx
@@ -1710,7 +1710,7 @@ scoreData <- function(mask) {
   d <- rbind(one(tdFC, tdDemoFinal, 'TD'), one(asdFC, asdDemoFinal, 'ASD'))
   d <- d[is.finite(d$FC), ]
   d$shortID <- substr(d$ID, 1, nchar(d$ID) - 3)
-  d$Grp <- factor(d$Grp, levels = c('ASD', 'TD'))        # ASD (High Risk) is the reference, so the estimate is Low minus High Risk
+  d$Grp <- factor(d$Grp, levels = c('ASD', 'TD'))        # ASD (High-risk) is the reference, so the estimate is Low-risk minus High-risk
   attr(d, 'nConnections') <- sum(mask)
   d
 }
@@ -1752,7 +1752,7 @@ tier1Between <- runScores(betweenMasks, betweenIds)
 showColumns <- c('label', 'nConnections', 'nScans', 'LowRisk.Mean', 'HighRisk.Mean', 'Diff.LowMinusHigh', 'Diff.inSD', 'Grp.p', 'Grp.p.adjust', 'GA.p')
 tierWidth <- options(width = 220)
 cat('\n=== TIER 1: network averages (score = ', networkScore, ') ===\n', sep = '')
-cat('Diff.LowMinusHigh: Low minus High Risk, age-adjusted (positive = Low Risk higher); Diff.inSD: in SD of the scores.\n',
+cat('Diff.LowMinusHigh: Low-risk minus High-risk, age-adjusted (positive = Low-risk higher); Diff.inSD: in SD of the scores.\n',
     'p.adj: FDR within the table (', nrow(tier1Within$fits), ' networks; ', nrow(tier1Between$fits), ' network pairs). Gate for Tier 2: p.adj < ', tier1Gate, '\n', sep = '')
 cat('\nWITHIN networks\n'); print(format(tier1Within$fits[, showColumns], digits = 3), row.names = FALSE)
 cat('\nBETWEEN networks\n'); print(format(tier1Between$fits[, showColumns], digits = 3), row.names = FALSE)
@@ -1774,9 +1774,9 @@ tier1BarsFigure <- function(fits) {
   fits$family <- factor(fits$family, levels = c('Within Networks', 'Between Networks'))
   fits$label <- sub(' - ', ' -\n', fits$label, fixed = TRUE)      # pairs of networks on two lines, e.g. "Cerebellar -\nLimbic"
   fits$position <- ave(seq_len(nrow(fits)), fits$family, FUN = seq_along)
-  barData <- rbind(data.frame(family = fits$family, label = fits$label, position = fits$position, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
-                   data.frame(family = fits$family, label = fits$label, position = fits$position, Group = 'High Risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
-  barData$Group <- factor(barData$Group, levels = c('Low Risk', 'High Risk'))
+  barData <- rbind(data.frame(family = fits$family, label = fits$label, position = fits$position, Group = 'Low-risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
+                   data.frame(family = fits$family, label = fits$label, position = fits$position, Group = 'High-risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
+  barData$Group <- factor(barData$Group, levels = c('Low-risk', 'High-risk'))
   barData$Lower <- tanh(barData$Mean - barData$SE); barData$Upper <- tanh(barData$Mean + barData$SE); barData$Mean <- tanh(barData$Mean)
   barData$label <- factor(barData$label, levels = fits$label)
 
@@ -1802,7 +1802,7 @@ tier1BarsFigure <- function(fits) {
     geom_col(position = position_dodge(.85), width = .8, color = '#000000', linewidth = .8) +
     geom_errorbar(aes(ymin = Lower, ymax = Upper), position = position_dodge(.85), width = .25, linewidth = 1.1) +
     geom_text(data = starData, aes(x = position, y = y, label = star), inherit.aes = FALSE, size = 9) +
-    scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
+    scale_fill_manual(values = c('Low-risk' = groupBarFill[['low']], 'High-risk' = groupBarFill[['high']]), name = NULL) +
     scale_x_discrete(expand = c(0, 0)) +
     facet_grid(~family, scales = 'free_x', space = 'free_x') +
     scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
@@ -1822,7 +1822,7 @@ tier1BarsFigure <- function(fits) {
 tier1_bars <- tier1BarsFigure(tier1Combined)
 showFigure(tier1_bars, 'tier1_bars', width = 11, height = 7)
 
-# Low minus High Risk difference for every network (the diagonal, within the network) and every pair of networks (below the diagonal, between the two).
+# Low-risk minus High-risk difference for every network (the diagonal, within the network) and every pair of networks (below the diagonal, between the two).
 # Only the lower triangle is drawn: the matrix is symmetric, so the upper triangle would repeat it.
 cells <- rbind(
   data.frame(across = tier1Within$fits$network, down = tier1Within$fits$network, diff = tier1Within$fits$Diff.LowMinusHigh, star = starFor(tier1Within$fits$Grp.p.adjust), stringsAsFactors = FALSE),
@@ -1845,7 +1845,7 @@ tier1_matrix <- ggplot2::ggplot(cells, ggplot2::aes(x = across, y = down, fill =
   ggplot2::geom_tile(color = 'white', linewidth = 1) + ggplot2::geom_text(ggplot2::aes(label = text), size = 12 / ggplot2::.pt, lineheight = .9) +
   ggplot2::scale_x_discrete(drop = FALSE) + ggplot2::scale_y_discrete(drop = FALSE) +
   ggplot2::scale_fill_gradient2(low = groupColors[['high']], mid = 'white', high = groupColors[['low']], midpoint = 0, limits = c(-limit, limit),
-                                breaks = matrixBreaks, labels = matrixLabels, name = 'Connectivity Difference\n(Low - High Risk)') +
+                                breaks = matrixBreaks, labels = matrixLabels, name = 'Connectivity Difference\n(Low-risk - High-risk)') +
   ggplot2::guides(fill = ggplot2::guide_colorbar(ticks.colour = 'black', ticks.linewidth = .6, frame.colour = 'black', frame.linewidth = .5, title.hjust = .5)) +
   ggplot2::coord_fixed() +      # square cells
   ggplot2::labs(x = NULL, y = NULL) +
@@ -1889,7 +1889,7 @@ if (length(tier2Units) == 0) {
   tier2$Grp.p.adjust <- adjustTier2(tier2$Grp.p)
   tier2$GA.p.adjust <- adjustTier2(tier2$GA.p)
   tier2$label <- gsub('\n', ' ', connectionLabel(tier2$ROI))
-  tier2$direction <- ifelse(tier2$Grp.B > 0, 'Low Risk higher', 'High Risk higher')
+  tier2$direction <- ifelse(tier2$Grp.B > 0, 'Low-risk higher', 'High-risk higher')
   tier2$status <- ifelse(tier2$Grp.p.adjust < .05, 'significant', ifelse(tier2$Grp.p.adjust < .10, 'trending', 'ns'))
 
   summaryTier2 <- do.call(rbind, lapply(split(tier2, tier2$unit), function(d) data.frame(unit = d$unit[1], gated = d$gated[1], tested = nrow(d), sig05 = sum(d$Grp.p.adjust < .05, na.rm = TRUE),
@@ -1913,7 +1913,7 @@ if (length(tier2Units) == 0) {
 ### Tier 2 Figure ----
 
 # One figure. Top: the significant Tier 2 connections of the gated networks drawn on the brain (axial, anterior and lateral views; only the regions
-# that have a connection, each edge in its network's color) and a legend panel. Bottom: one bar pair per connection (Low vs High Risk group means),
+# that have a connection, each edge in its network's color) and a legend panel. Bottom: one bar pair per connection (Low-risk vs High-risk group means),
 # grouped by network on a tinted backing with a colored name band. Which connections are shown is set by tier2FigureThreshold.
 
 loadGlassBrain()
@@ -1940,13 +1940,13 @@ tier2Figure <- function(palette = networkNodeColors) {
   brains <- lapply(c('axial', 'anterior', 'lateral'), function(view) glassView(view, nodes, edges))
 
   # Text sizes in this figure: 14 pt (panel letters, y title, network names), 12 pt (everything else)
-  # (the Low / High Risk key is drawn inside the bar panel)
+  # (the Low-risk / High-risk key is drawn inside the bar panel)
   top <- ggpubr::ggarrange(brains[[1]], brains[[2]], brains[[3]], nrow = 1, ncol = 3)
 
   # Bars: all connections in one row, grouped by network
-  long <- rbind(data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'Low Risk', Mean = shown$TD.Mean, SE = shown$TD.SE),
-                data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'High Risk', Mean = shown$ASD.Mean, SE = shown$ASD.SE))
-  long$Group <- factor(long$Group, levels = c('Low Risk', 'High Risk'))
+  long <- rbind(data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'Low-risk', Mean = shown$TD.Mean, SE = shown$TD.SE),
+                data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'High-risk', Mean = shown$ASD.Mean, SE = shown$ASD.SE))
+  long$Group <- factor(long$Group, levels = c('Low-risk', 'High-risk'))
   # connectivity is Fisher z; show it as the correlation r (tanh), with the error bar ends converted the same way
   long$Lower <- tanh(long$Mean - long$SE); long$Upper <- tanh(long$Mean + long$SE); long$Mean <- tanh(long$Mean)
   yBreaks <- pretty(c(0, long$Lower, long$Upper), n = 5)      # includes the lower end of any error bar that dips below zero
@@ -1970,7 +1970,7 @@ tier2Figure <- function(palette = networkNodeColors) {
     geom_hline(yintercept = 0, linewidth = 1) +
     geom_col(position = position_dodge(.85), width = .8, color = '#000000', linewidth = .8) +
     geom_errorbar(aes(ymin = Lower, ymax = Upper), position = position_dodge(.85), width = .25, linewidth = 1.1) +
-    scale_fill_manual(values = c('Low Risk' = groupBarFill[['low']], 'High Risk' = groupBarFill[['high']]), name = NULL) +
+    scale_fill_manual(values = c('Low-risk' = groupBarFill[['low']], 'High-risk' = groupBarFill[['high']]), name = NULL) +
     scale_x_discrete(labels = xLabels) +
     facet_grid(~unit, scales = 'free_x', space = 'free_x') +
     scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
@@ -1978,7 +1978,7 @@ tier2Figure <- function(palette = networkNodeColors) {
     themeRegionalFigure(showXTitle = FALSE) +
     theme(axis.text.x = element_text(size = 12, angle = 70, hjust = 1, vjust = 1), axis.title.y = element_text(color = 'black', size = 14), strip.text = element_blank(), strip.background = element_blank(),
           panel.spacing = unit(.35, 'lines'),
-          # boxed Low / High Risk key in the top right corner of the last (rightmost) network section, just under its name band
+          # boxed Low-risk / High-risk key in the top right corner of the last (rightmost) network section, just under its name band
           legend.text = element_text(color = 'black', size = 12), legend.key.size = unit(.8, 'cm'),
           legend.background = element_rect(fill = 'white', color = '#000000', linewidth = 1), legend.margin = margin(6, 10, 6, 6),
           legend.key = element_rect(fill = 'white', color = NA))
@@ -2010,10 +2010,10 @@ tier3Fits <- cached('tier3_wholebrain',
 tier3 <- tier3Fits
 tier3$Grp.p.adjust <- p.adjust(tier3$Grp.p, method = 'fdr')
 tier3$GA.p.adjust <- p.adjust(tier3$GA.p, method = 'fdr')
-tier3$direction <- ifelse(tier3$Grp.B > 0, 'Low Risk higher', 'High Risk higher')
+tier3$direction <- ifelse(tier3$Grp.B > 0, 'Low-risk higher', 'High-risk higher')
 cat('Connections tested:', sum(!is.na(tier3$Grp.p)), 'of', nrow(tier3), '\n')
-cat('Group effect, FDR p < .05:', sum(tier3$Grp.p.adjust < .05, na.rm = TRUE), ' (Low Risk higher:', sum(tier3$Grp.p.adjust < .05 & tier3$Grp.B > 0, na.rm = TRUE),
-    ', High Risk higher:', sum(tier3$Grp.p.adjust < .05 & tier3$Grp.B < 0, na.rm = TRUE), ')\n')
+cat('Group effect, FDR p < .05:', sum(tier3$Grp.p.adjust < .05, na.rm = TRUE), ' (Low-risk higher:', sum(tier3$Grp.p.adjust < .05 & tier3$Grp.B > 0, na.rm = TRUE),
+    ', High-risk higher:', sum(tier3$Grp.p.adjust < .05 & tier3$Grp.B < 0, na.rm = TRUE), ')\n')
 cat('Group effect, FDR p < .10:', sum(tier3$Grp.p.adjust < .10, na.rm = TRUE), '\n')
 top <- head(tier3[order(tier3$Grp.p), c('ROI', 'TD.Mean', 'ASD.Mean', 'Grp.B', 'Grp.p', 'Grp.p.adjust')], 15)
 tierWidth <- options(width = 200); cat('\nSmallest p-values:\n'); print(format(top, digits = 3), row.names = FALSE); options(tierWidth)
@@ -2024,8 +2024,8 @@ saveTable(tier3[which(tier3$Grp.p.adjust < .10), ], 'tier3_wholebrain_significan
 ### Tier 3 Figures ----
 
 
-# Tier 3 results: every connection (wholeBrainTable) and the ones that pass FDR p < .05 (wholeBrainTableFDR). Grp.B is the age-adjusted Low minus High
-# Risk difference, so Grp.B > 0 means Low Risk is higher.
+# Tier 3 results: every connection (wholeBrainTable) and the ones that pass FDR p < .05 (wholeBrainTableFDR). Grp.B is the age-adjusted Low-risk minus High-risk
+# difference, so Grp.B > 0 means Low-risk is higher.
 wholeBrainTable <- tier3
 wholeBrainTableFDR <- tier3[which(tier3$Grp.p.adjust < .05), ]
 
@@ -2268,7 +2268,7 @@ chordDiagram.Base <- data.frame(
 
 tableRow <- match(chordDiagram.Base$ConnFull, wholeBrainTable$ROI)
 inTableOnce <- !is.na(tableRow) & !(chordDiagram.Base$ConnFull %in% wholeBrainTable$ROI[duplicated(wholeBrainTable$ROI)])
-chordDiagram.Base$MeanDiff <- ifelse(inTableOnce, wholeBrainTable$Grp.B[tableRow], 0)      # age-adjusted Low minus High Risk difference
+chordDiagram.Base$MeanDiff <- ifelse(inTableOnce, wholeBrainTable$Grp.B[tableRow], 0)      # age-adjusted Low-risk minus High-risk difference
 
 chordDiagram.Base$ASDConn <- as.numeric(chordDiagram.Base$MeanDiff < 0)
 chordDiagram.Base$TDConn <- as.numeric(chordDiagram.Base$MeanDiff > 0)
@@ -2402,7 +2402,7 @@ connParts <- strsplit(wholeBrainTable$ROI, '_', useBytes=T)
 lobeIndex1 <- roiLobeIndex(vapply(connParts, function(x) x[1], character(1)))
 lobeIndex2 <- roiLobeIndex(vapply(connParts, function(x) x[2], character(1)))
 
-# Significant connections (FDR) and whether Low Risk (TD) or High Risk (ASD) is higher (age-adjusted)
+# Significant connections (FDR) and whether Low-risk (TD) or High-risk (ASD) is higher (age-adjusted)
 sigRow <- match(wholeBrainTable$ROI, wholeBrainTableFDR$ROI)
 isSig <- !is.na(sigRow)
 tdHigher <- isSig & ((wholeBrainTableFDR$Grp.B[sigRow] > 0) %in% TRUE)
@@ -2463,7 +2463,7 @@ lobeHeatmapPlot <- function(counts, high, limits = NULL, low = '#ffffff') {
 # Both heatmaps use the same color scale, 0 to 25, so their colors and colorbars can be compared directly
 lobeHeatmapLimits <- c(0, 25)
 
-# Low Risk (TD) is blue and High Risk (ASD) is red, as in the other figures
+# Low-risk (TD) is blue and High-risk (ASD) is red, as in the other figures
 wholebrain_lobeHeatmap_TD <- lobeHeatmapPlot(allConnDescSig.TD, high = groupColors[['low']], limits = lobeHeatmapLimits)
 showFigure(wholebrain_lobeHeatmap_TD, 'wholebrain_lobeHeatmap_TD', width = 7, height = 7, subfolder = componentFolder)
 
@@ -2474,15 +2474,15 @@ showFigure(wholebrain_lobeHeatmap_ASD, 'wholebrain_lobeHeatmap_ASD', width = 7, 
 ### Tier 3 Glass Brains ----
 
 # Significant whole-brain connections (FDR) drawn on a translucent brain: lateral view above, anterior view below.
-# Low Risk (blue) = connections where Low Risk is higher; High Risk (red) = connections where High Risk is higher.
+# Low-risk (blue) = connections where Low-risk is higher; High-risk (red) = connections where High-risk is higher.
 
 loadGlassBrain()
 
 wholeBrainEdges <- connectionRegions(wholeBrainTableFDR$ROI)
 wholeBrainEdges$dir <- ifelse(wholeBrainTableFDR$Grp.B > 0, 'low', 'high')
 allRegionNodes <- data.frame(id = seq_len(nrow(roiCoordinates)), fill = '#505050')
-message('Whole-brain glass brains: ', sum(wholeBrainEdges$dir == 'low', na.rm = TRUE), ' Low > High Risk edges and ',
-        sum(wholeBrainEdges$dir == 'high', na.rm = TRUE), ' High > Low Risk edges')
+message('Whole-brain glass brains: ', sum(wholeBrainEdges$dir == 'low', na.rm = TRUE), ' Low-risk > High-risk edges and ',
+        sum(wholeBrainEdges$dir == 'high', na.rm = TRUE), ' High-risk > Low-risk edges')
 
 wholeBrainGlass <- function(direction) {
   edges <- wholeBrainEdges[which(wholeBrainEdges$dir == direction),]
@@ -2500,7 +2500,7 @@ showFigure(wholebrain_glass_ASD, 'wholebrain_glass_ASD', width = 4.5, height = 9
 
 ### Tier 3 Composite Figure ----
 
-# Low Risk (left half: A, B, C) and High Risk (right half: D, E, F). In each half: glass brains (A / D),
+# Low-risk (left half: A, B, C) and High-risk (right half: D, E, F). In each half: glass brains (A / D),
 # the lobe heatmap (B / E) and the chord diagram (C / F).
 
 # Dashed placeholder box for a glass-brain image. x, y = lower-left corner and width, height as fractions of the figure.
@@ -2516,9 +2516,9 @@ drawWholeBrainComposite <- function() {
   # and erasing what grid (the heatmaps and boxes) has already drawn
   plot.new()
 
-  halves <- list(list(title = 'Low Risk', x0 = 0, heatmap = wholebrain_lobeHeatmap_TD, links = chordTDLinks,
+  halves <- list(list(title = 'Low-risk', x0 = 0, heatmap = wholebrain_lobeHeatmap_TD, links = chordTDLinks,
                       conn = 'TDConn', color = 'TDCol', letters = c('A.', 'B.', 'C.'), glass = wholebrain_glass_TD),
-                 list(title = 'High Risk', x0 = .5, heatmap = wholebrain_lobeHeatmap_ASD, links = chordASDLinks,
+                 list(title = 'High-risk', x0 = .5, heatmap = wholebrain_lobeHeatmap_ASD, links = chordASDLinks,
                       conn = 'ASDConn', color = 'ASDCol', letters = c('D.', 'E.', 'F.'), glass = wholebrain_glass_ASD))
 
   for (half in halves) {
