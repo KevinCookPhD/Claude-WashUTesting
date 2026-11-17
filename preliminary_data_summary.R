@@ -108,7 +108,7 @@ scans <- scans %>%
   mutate(
     id_text = str_to_lower(paste(project, shortID, FullID, sep = " | ")),
     cohort = case_when(
-      str_detect(id_text, "onesize") ~ "OneSize (1z)",
+      str_detect(id_text, "onesi|one_si|1z") ~ "OneSize (1z)",   # CHECK: matches onesize, onesie, 1z
       str_detect(id_text, "protect") ~ "PROTECT",
       str_detect(id_text, "preterm") ~ "Preterm",   # CHECK: add |preemie if needed
       TRUE ~ "UNASSIGNED"
@@ -117,6 +117,8 @@ scans <- scans %>%
 
 cat("\n--- Scans per cohort (nothing should be UNASSIGNED) ---\n")
 print(count(scans, cohort))
+cat("\n--- Which sheet each cohort's scans come from (project label x cohort) ---\n")
+print(count(scans, project, cohort), n = 50)
 if (any(scans$cohort == "UNASSIGNED")) {
   cat("Unassigned IDs:\n")
   print(distinct(filter(scans, cohort == "UNASSIGNED"), project, shortID, FullID))
@@ -135,8 +137,7 @@ scans <- scans %>%
 
 # ---- 7. Participant level -----------------------------------------------------------
 infants <- scans %>%
-  filter(cohort != "UNASSIGNED") %>%
-  group_by(cohort, participant) %>%
+  group_by(cohort, participant) %>%   # UNASSIGNED stays in so unmatched infants are visible, not dropped
   summarize(
     n_scans   = n(),
     n_preterm = sum(period == "preterm", na.rm = TRUE),
