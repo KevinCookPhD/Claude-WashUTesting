@@ -1,0 +1,201 @@
+ROINum,Name_Abrv,Lobe,your_networks,Yeo_regA,purityA,Yeo_regB,purityB
+1,MTG.L,Temporal,,DorsAttn,0.64,DorsAttn,0.62
+2,STG.L,Temporal,Auditory,SomMot,0.63,SomMot,0.71
+3,PreCG.L,Frontal,SomMot,SomMot,0.74,SomMot,0.79
+4,ACG.L,Frontal,DMN,SalVentAttn,0.73,SalVentAttn,0.78
+5,ORBsupb.L,Frontal,Limbic,Limbic,0.97,Limbic,0.82
+6,CRB.L,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+7,SPG.L,Parietal,,DorsAttn,0.6,DorsAttn,0.46
+8,PreCG.L,Frontal,SomMot,SomMot,1.0,SomMot,0.99
+9,TPOmid.L,Temporal,Limbic,Limbic,1.0,Limbic,0.86
+10,FFG.L,Temporal,,Vis,1.0,Vis,0.99
+11,SFGdor.L,Frontal,DMN,Default,0.93,Default,0.94
+12,INS.L,Parietal,Auditory,SomMot,1.0,SomMot,0.97
+13,CRB.L,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+14,PoCG.L,Parietal,SomMot,SomMot,1.0,SomMot,1.0
+15,CAL.L,Occipital,Visual,Vis,1.0,Vis,1.0
+16,ORBmid.L,Frontal,,Cont,0.66,Cont,0.66
+17,CRB.L,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+18,SFGmed.L,Frontal,DMN,Default,1.0,Default,1.0
+19,IOG.L,Occipital,Visual,Vis,0.98,Vis,0.95
+20,REC.L,Frontal,Limbic,Limbic,0.72,Limbic,0.53
+21,IPL.L,Parietal,,Default,0.97,Default,0.94
+22,MTG.L,Temporal,DMN,Default,0.96,Default,1.0
+23,PCUN.L,Parietal,DMN,Default,1.0,Default,1.0
+24,MFG.L,Frontal,,Default,0.75,Default,0.78
+25,CUN.L,Occipital,Visual,Vis,1.0,Vis,1.0
+26,PCUN.L,Parietal,,SomMot,0.42,SomMot,0.48
+27,BS,Brainstem,,not cortical (no Schaefer equivalent),,,
+28,SFGdor.L,Frontal,,Default,0.86,Default,0.8
+29,AMY.L,Subcortical,Limbic,not cortical (no Schaefer equivalent),,,
+30,CUN.L,Occipital,Visual,Vis,1.0,Vis,1.0
+31,CAU.L,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+32,CAU.L,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+33,IPL.L,Parietal,,SomMot,0.41,SomMot,0.4
+34,ACG.L,Frontal,DMN,Default,1.0,Default,1.0
+35,IOG.L,Occipital,Visual,Vis,1.0,Vis,1.0
+36,SFGdor.L,Frontal,,Default,0.59,Default,0.61
+37,MCG.L,Parietal,,SomMot,0.67,SomMot,0.67
+38,INS.L,Parietal,,SalVentAttn,0.44,Cont,0.5
+39,CAU.L,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+40,STG.L,Temporal,DMN,Default,0.56,Default,0.49
+41,PreCG.L,Frontal,SomMot,SomMot,0.86,SomMot,0.88
+42,CUN.L,Occipital,DMN/Visual,Vis,0.57,Default,0.57
+43,PHG.L,Subcortical,Limbic,not cortical (no Schaefer equivalent),,,
+44,SPG.L,Parietal,,DorsAttn,0.67,DorsAttn,0.67
+45,ITG.L,Temporal,,DorsAttn,0.68,DorsAttn,0.64
+46,MFG.L,Frontal,,Default,0.57,Default,0.56
+47,BS,Brainstem,,not cortical (no Schaefer equivalent),,,
+48,STG.L,Temporal,DMN/Auditory,SomMot,0.56,SomMot,0.68
+49,PreCG.L,Frontal,SomMot,SomMot,0.83,SomMot,0.86
+50,ORBmid.L,Frontal,,Limbic,0.54,Limbic,0.46
+51,THA.L,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+52,MOG.L,Occipital,Visual,Vis,1.0,Vis,1.0
+53,ACG.L,Frontal,DMN,Default,0.76,Default,0.69
+54,CRB.L,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+55,MFG.L,Frontal,,Default,0.56,Default,0.58
+56,ITG.L,Temporal,Limbic,Limbic,0.81,Limbic,0.57
+57,MOG.L,Occipital,Visual,Vis,0.67,Vis,0.52
+58,IFGtriang.L,Frontal,,Cont,0.92,Cont,0.96
+59,BS,Brainstem,,not cortical (no Schaefer equivalent),,,
+60,CAL.L,Occipital,Visual,Vis,0.96,Vis,0.9
+61,MTG.L,Temporal,Limbic,Default,0.88,Default,0.95
+62,PoCG.L,Parietal,SomMot,SomMot,0.59,SomMot,0.59
+63,SFGdor.L,Frontal,,Default,0.8,Default,0.84
+64,SPG.L,Parietal,,SomMot,0.83,SomMot,0.91
+65,INS.L,Parietal,,SalVentAttn,0.62,SalVentAttn,0.42
+66,PCUN.L,Parietal,,Default,0.4,Default,0.43
+67,SFGdor.L,Frontal,Limbic,Default,0.74,Default,0.74
+68,ITG.L,Temporal,Limbic,Limbic,0.73,Limbic,0.63
+69,MTG.L,Temporal,,Default,0.47,Default,0.62
+70,MCG.L,Parietal,DMN,Default,0.53,Default,0.5
+71,SFGdor.L,Frontal,,DorsAttn,0.57,DorsAttn,0.68
+72,LING.L,Occipital,Visual,Vis,1.0,Vis,1.0
+73,PoCG.L,Parietal,SomMot,SomMot,0.83,SomMot,0.87
+74,ORBinf.L,Frontal,,Default,0.62,Default,0.67
+75,LING.L,Occipital,Visual,Vis,1.0,Vis,1.0
+76,MCG.L,Parietal,,Cont,0.58,Cont,0.58
+77,ORBinf.L,Frontal,,Cont,0.62,Cont,0.72
+78,SMG.L,Parietal,,SalVentAttn,0.47,SalVentAttn,0.52
+79,BS,Brainstem,,not cortical (no Schaefer equivalent),,,
+80,THA.L,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+81,ORBsupb.L,Frontal,Limbic,Limbic,0.77,Limbic,0.82
+82,MCG.L,Parietal,,SalVentAttn,0.82,SalVentAttn,0.82
+83,SMG.L,Parietal,,SalVentAttn,0.72,SalVentAttn,0.81
+84,MFG.L,Frontal,,Default,0.62,Default,0.58
+85,SFGmed.L,Frontal,DMN,Default,1.0,Default,1.0
+86,PHG.L,Subcortical,Limbic,not cortical (no Schaefer equivalent),,,
+87,MOG.L,Occipital,Visual,Vis,0.87,Vis,0.79
+88,STG.L,Temporal,DMN/Auditory,Default,0.57,Default,0.48
+89,IFGtriang.L,Frontal,,Cont,0.86,Cont,0.84
+90,IPL.L,Parietal,,Cont,0.59,Cont,0.7
+91,SPG.L,Parietal,Visual,Vis,0.45,Vis,0.34
+92,PUT.L,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+93,PreCG.L,Frontal,SomMot,SalVentAttn,0.3,DorsAttn,0.33
+94,INS.L,Parietal,Limbic/Auditory,SalVentAttn,0.72,SalVentAttn,0.74
+95,IFGtriang.L,Frontal,,Cont,0.78,Cont,0.78
+96,MTG.L,Temporal,DMN,Default,0.77,Default,0.88
+97,PAL.L,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+98,SOG.L,Occipital,Visual,Vis,1.0,Vis,1.0
+99,CRB.L,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+100,PCG.L,Parietal,DMN,Default,0.72,Default,0.74
+101,CRB.R,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+102,STG.R,Temporal,DMN,SalVentAttn,0.38,Default,0.4
+103,PreCG.R,Frontal,SomMot,Cont,0.68,Cont,0.72
+104,ORBmed.R,Frontal,DMN,Default,0.98,Default,1.0
+105,SPG.R,Parietal,Visual,Vis,0.56,Vis,0.45
+106,PCUN.R,Parietal,DMN,Default,0.66,Default,0.76
+107,PAL.R,Subcortical,SubCort/Auditory,not cortical (no Schaefer equivalent),,,
+108,TPOmid.R,Temporal,Limbic,Limbic,0.5,Default,0.55
+109,SFGdor.R,Frontal,,Cont,0.73,Cont,0.76
+110,SFGdor.R,Frontal,,Default,0.89,Default,0.83
+111,PUT.R,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+112,INS.R,Parietal,,SalVentAttn,0.68,SalVentAttn,0.62
+113,CRB.R,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+114,SOG.R,Occipital,Visual,Vis,1.0,Vis,1.0
+115,PCL.R,Parietal,,SomMot,0.88,SomMot,0.82
+116,MOG.R,Occipital,Visual,Vis,1.0,Vis,1.0
+117,IFGtriang.R,Frontal,,Cont,0.62,Cont,0.65
+118,BS,Brainstem,,not cortical (no Schaefer equivalent),,,
+119,MCG.R,Parietal,,SalVentAttn,0.48,SalVentAttn,0.54
+120,ITG.R,Temporal,Limbic,Limbic,1.0,Limbic,1.0
+121,ORBmid.R,Frontal,,Cont,0.8,Cont,0.87
+122,PoCG.R,Parietal,SomMot,SomMot,0.95,SomMot,0.99
+123,ACG.R,Frontal,DMN,Default,1.0,Default,0.97
+124,MCG.R,Parietal,DMN,Cont,0.5,Cont,0.52
+125,PHG.R,Subcortical,Limbic,not cortical (no Schaefer equivalent),,,
+126,PoCG.R,Parietal,SomMot,SomMot,0.86,SomMot,0.86
+127,IFGoperc.R,Frontal,,Cont,0.98,Cont,0.98
+128,SFGmed.R,Frontal,DMN,Default,0.8,Default,0.83
+129,CRB.R,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+130,SMG.R,Parietal,,SalVentAttn,0.84,SalVentAttn,0.93
+131,IOG.R,Occipital,Visual,Vis,1.0,Vis,1.0
+132,PreCG.R,Frontal,SomMot,DorsAttn,0.48,DorsAttn,0.48
+133,AMY.R,Subcortical,Limbic,not cortical (no Schaefer equivalent),,,
+134,THA.R,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+135,MOG.R,Occipital,Visual,Vis,0.98,Vis,0.82
+136,IPL.R,Parietal,,SalVentAttn,0.67,SalVentAttn,0.74
+137,SFGmed.R,Frontal,DMN,Default,0.87,Default,0.89
+138,SPG.R,Parietal,,DorsAttn,0.95,DorsAttn,0.95
+139,THA.R,Subcortical,SubCort/Auditory,not cortical (no Schaefer equivalent),,,
+140,IFGtriang.R,Frontal,,Cont,0.81,Cont,0.81
+141,TPOsup.R,Temporal,Limbic,Default,0.44,SalVentAttn,0.36
+142,CRB.R,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+143,ORBsupb.R,Frontal,Limbic,Limbic,0.93,Limbic,0.7
+144,PoCG.R,Parietal,SomMot,SomMot,1.0,SomMot,0.97
+145,PUT.R,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+146,MFG.R,Frontal,,Cont,0.54,Cont,0.5
+147,INS.R,Parietal,,SalVentAttn,0.63,SalVentAttn,0.56
+148,ORBinf.R,Frontal,,Limbic,0.63,Limbic,0.47
+149,MOG.R,Occipital,Visual,Vis,0.94,Vis,0.89
+150,MTG.R,Temporal,DMN,Cont,0.84,Cont,0.69
+151,THA.R,Subcortical,SubCort,not cortical (no Schaefer equivalent),,,
+152,STG.R,Temporal,DMN/Auditory,SomMot,0.64,SomMot,0.76
+153,SOG.R,Occipital,Visual,Vis,1.0,Vis,1.0
+154,PCL.R,Parietal,,SalVentAttn,0.6,SalVentAttn,0.62
+155,ORBsupb.R,Frontal,Limbic,Default,0.56,Default,0.63
+156,ACG.R,Frontal,DMN,Cont,0.42,Cont,0.49
+157,BS,Brainstem,,not cortical (no Schaefer equivalent),,,
+158,SPG.R,Parietal,,DorsAttn,0.76,DorsAttn,0.7
+159,ORBinf.R,Frontal,,Default,0.75,Default,0.62
+160,HIP.R,Subcortical,Limbic,not cortical (no Schaefer equivalent),,,
+161,HES.R,Parietal,,SomMot,0.88,SomMot,0.86
+162,LING.R,Occipital,Visual,Vis,1.0,Vis,1.0
+163,MTG.R,Temporal,DMN,Default,0.67,Default,0.75
+164,PoCG.R,Parietal,SomMot,SomMot,1.0,SomMot,0.97
+165,BS,Brainstem,,not cortical (no Schaefer equivalent),,,
+166,MCG.R,Parietal,,SomMot,0.61,SomMot,0.61
+167,SPG.R,Parietal,Visual,DorsAttn,0.4,DorsAttn,0.41
+168,SFGdor.R,Frontal,DMN,Default,1.0,Default,0.96
+169,PreCG.R,Frontal,SomMot,SalVentAttn,0.33,SomMot,0.3
+170,SMA.R,Frontal,SomMot,SalVentAttn,0.7,SalVentAttn,0.74
+171,STG.R,Temporal,DMN/Auditory,SomMot,0.62,SomMot,0.76
+172,CAL.R,Occipital,,Vis,1.0,Vis,0.98
+173,PUT.R,Subcortical,,not cortical (no Schaefer equivalent),,,
+174,CUN.R,Occipital,Visual,Vis,1.0,Vis,1.0
+175,BS,Brainstem,,not cortical (no Schaefer equivalent),,,
+176,MTG.R,Temporal,DMN,DorsAttn,0.45,DorsAttn,0.43
+177,SMA.R,Frontal,SomMot,SalVentAttn,0.52,Cont,0.55
+178,PCUN.R,Parietal,DMN,Default,0.94,Default,0.99
+179,ITG.R,Temporal,,DorsAttn,0.73,DorsAttn,0.72
+180,MFG.R,Frontal,,Cont,1.0,Cont,1.0
+181,CUN.R,Occipital,Visual,Vis,0.9,Vis,0.73
+182,SFGdor.R,Frontal,,SomMot,0.7,SomMot,0.65
+183,MFG.R,Frontal,,Default,0.37,Default,0.37
+184,PoCG.R,Parietal,SomMot,DorsAttn,0.49,DorsAttn,0.42
+185,FFG.R,Temporal,Auditory,Vis,0.99,Vis,1.0
+186,IOG.R,Occipital,Visual,Vis,0.95,Vis,0.93
+187,PCUN.R,Parietal,,DorsAttn,0.36,Default,0.39
+188,ITG.R,Temporal,Limbic,Limbic,0.9,Limbic,0.83
+189,IPL.R,Parietal,,Cont,0.69,Cont,0.7
+190,PoCG.R,Parietal,SomMot,SomMot,0.91,SomMot,0.89
+191,IPL.R,Parietal,,Cont,0.43,Default,0.39
+192,CRB.R,Cerebellum,CRB,not cortical (no Schaefer equivalent),,,
+193,MFG.R,Frontal,,Cont,0.71,Cont,0.68
+194,CAL.R,Occipital,Visual,Vis,1.0,Vis,1.0
+195,IPL.R,Parietal,Visual,Default,0.53,Default,0.6
+196,ORBsupb.R,Frontal,Limbic,Limbic,0.81,Limbic,0.7
+197,LING.R,Occipital,Visual,Vis,1.0,Vis,1.0
+198,ORBsupb.R,Frontal,Limbic,Limbic,0.89,Limbic,0.81
+199,FFG.R,Temporal,,Vis,0.96,Vis,0.96
+200,MTG.R,Temporal,Limbic,Default,0.7,Default,0.87
