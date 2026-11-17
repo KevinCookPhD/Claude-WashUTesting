@@ -994,7 +994,9 @@ tissueData <- subset(tissueData, select = -c(longID))
 
 
 # Analyze trajectories across tissue ROI
-tissueExclude <- c('rescue_0175_01', 'fetus_02178_01','rescue_0184_01')
+# Two scans are excluded for failed segmentation (visual quality control): rescue_0175_01 and rescue_0184_01.
+# fetus_02178_01 was reviewed and has a valid segmentation, so it is included.
+tissueExclude <- c('rescue_0175_01', 'rescue_0184_01')
 
 # The fits are cached: recomputed only if the data, the exclusions or the model code change (or rerun is TRUE)
 tissueModels <- cached('structural_tissue_models',
@@ -1080,7 +1082,7 @@ if(IncludeCerebellarParcellation){
 
 
 # Analyze trajectories across regional ROI
-# NOTE: this analysis excludes two participants; the tissue analysis excludes three (fetus_02178_01 is kept here)
+# Excluded for failed segmentation (visual quality control), the same scans as the tissue analysis above
 regionalExclude <- c('rescue_0175_01', 'rescue_0184_01')
 
 regionalModels <- cached('structural_regional_models',
