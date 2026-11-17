@@ -1688,7 +1688,7 @@ tier1Columns <- c('label', 'LowRisk.Mean', 'LowRisk.SE', 'HighRisk.Mean', 'HighR
 tier1Combined <- rbind(data.frame(family = 'Within Networks', tier1Within$fits[, tier1Columns], stringsAsFactors = FALSE),
                        data.frame(family = 'Between Networks', tier1Between$fits[, tier1Columns], stringsAsFactors = FALSE))
 tier1Combined$family <- factor(tier1Combined$family, levels = c('Within Networks', 'Between Networks'))
-# Same look as the Tier 2 figure: each bar pair sits on a tinted column (the network's color; gray for the pairs of networks) with white dividers, under a
+# Same look as the Tier 2 figure: each bar pair sits on a light gray column with white dividers, under a
 # solid band naming the panel. Connectivity is Fisher z in the models, shown here as r (tanh). Text sizes: 14 pt (titles, bands), 12 pt (everything else).
 tier1BarsFigure <- function(fits) {
   fits$family <- factor(fits$family, levels = c('Within Networks', 'Between Networks'))
@@ -1705,11 +1705,7 @@ tier1BarsFigure <- function(fits) {
   bottomY <- min(yBreaks); topY <- max(yBreaks); band <- .09 * (topY - bottomY)
   starData$y <- starData$y + .02 * (topY - bottomY)
 
-  # column color: the network's own color within networks, light gray for the pairs of networks
-  networkOfLabel <- setNames(names(networkNodeLabels), networkNodeLabels)
-  fits$solid <- ifelse(fits$family == 'Within Networks', unname(networkNodeColors[networkOfLabel[fits$label]]), '#7F7F7F')
-  fits$tint <- vapply(fits$solid, tintColor, character(1), amount = .72)
-  fits$tint[fits$family != 'Within Networks'] <- '#EDEDED'
+  fits$tint <- '#EDEDED'      # light gray columns in both panels
   columns <- data.frame(family = fits$family, position = fits$position, tint = fits$tint, stringsAsFactors = FALSE)
   dividers <- columns[columns$position > 1, ]; dividers$x <- dividers$position - .5
   bands <- data.frame(family = factor(levels(fits$family), levels = levels(fits$family)), x = vapply(levels(fits$family), function(f) (sum(fits$family == f) + 1) / 2, numeric(1)),
