@@ -121,6 +121,14 @@ if (nrow(disagree) > 0) {   # the QA value is the one used; this shows how big t
   print(summary(abs(disagree$scanPMA_qa - disagree$scanPMA_omni)))
 }
 
+# Drop scans after 52 weeks PMA (likely data errors). Scans with a missing PMA are kept.
+MAX_PMA <- 52
+n_before <- nrow(scans)
+dropped  <- filter(scans, scanPMA > MAX_PMA)
+scans    <- filter(scans, is.na(scanPMA) | scanPMA <= MAX_PMA)
+cat("\n--- Scans dropped for PMA >", MAX_PMA, "weeks:", n_before - nrow(scans), "---\n")
+if (nrow(dropped) > 0) print(select(dropped, participant, scanNo, scanPMA, any_of("scanDate")), n = 50)
+
 # ---- 5. Assign study cohorts -------------------------------------------------------
 # Looks for the study name in project, shortID, or FullID, ignoring case.
 # Onesie is tested first in case its IDs also contain "preterm".
