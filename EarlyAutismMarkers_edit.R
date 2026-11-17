@@ -122,6 +122,9 @@ useRevisedNetworks <- TRUE
 # A Tier 1 result opens Tier 2 for that network (or pair) when its FDR-adjusted p is below this
 tier1Gate <- .05
 
+# Tier 3 (exploratory whole brain, 19,900 connections) is off by default: almost nothing survives FDR. Set TRUE to run it and make its figures.
+runTier3 <- FALSE
+
 # Also look at the connections BETWEEN two networks in Tier 2 when that pair passes Tier 1
 tier2IncludeBetween <- TRUE
 
@@ -1915,6 +1918,8 @@ for (paletteName in tier2PaletteOptions) {
 
 ## 3e. Tier 3: Exploratory Whole Brain ----
 
+if (runTier3) {
+
 cat('\n=== TIER 3: exploratory whole-brain connectivity ===\n')
 tier3Fits <- cached('tier3_wholebrain',
                     inputs = list(tdFC, asdFC, tdDemoFinal, asdDemoFinal, deparse(fitMainChunk), deparse(fitConnections)),
@@ -2461,6 +2466,9 @@ drawWholeBrainComposite <- function() {
 }
 
 showBaseFigure('wholebrain_composite', width = 16, height = 13, drawFun = drawWholeBrainComposite)
+
+
+} # end Tier 3 (runTier3)
 
 
 # 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----
