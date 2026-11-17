@@ -2719,7 +2719,7 @@ atlasRotation <- function() {
        `underside` = R(pi, 0, 1, 0))                          # seen from below, front at the top, right on the left
 }
 
-atlasRender <- function(painted, viewName, hemisphere = NULL, pixels = 900) {
+atlasRender <- function(painted, viewName, colors, hemisphere = NULL, unlabeledColor = '#BDBDBD', pixels = 900) {      # colors: one color per parcel (200)
   rgl::open3d(useNULL = FALSE, windowRect = c(0, 0, pixels, pixels))
   on.exit(rgl::close3d())
   rgl::bg3d('white'); rgl::clear3d('lights')
@@ -2727,7 +2727,7 @@ atlasRender <- function(painted, viewName, hemisphere = NULL, pixels = 900) {
   keep <- rep(TRUE, nrow(painted$faces))
   if (!is.null(hemisphere)) { keep <- if (hemisphere == 'left') painted$centerX < painted$midline else painted$centerX > painted$midline }      # half of the brain, to see its medial face
   index <- as.vector(t(painted$faces[keep, ]))
-  faceColor <- ifelse(painted$faceParcel[keep] > 0, parcelColor[pmax(painted$faceParcel[keep], 1)], '#BDBDBD')
+  faceColor <- ifelse(painted$faceParcel[keep] > 0, colors[pmax(painted$faceParcel[keep], 1)], unlabeledColor)
   rgl::triangles3d(painted$vertices[index, ], normals = painted$normals[index, ], color = rep(faceColor, each = 3), specular = 'black', lit = TRUE, front = 'filled', back = 'filled')
   rgl::par3d(userMatrix = atlasRotation()[[viewName]], zoom = .75)
   file <- tempfile(fileext = '.png'); rgl::snapshot3d(file, webshot = FALSE)
@@ -2742,13 +2742,46 @@ canRender3D <- file.exists(brainMeshFile) && requireNamespace('rgl', quietly = T
   tryCatch({ rgl::open3d(useNULL = FALSE); ok <- !rgl::rgl.useNULL(); rgl::close3d(); ok }, error = function(e) FALSE)
 if (canRender3D) {
   painted <- paintAtlasOnSurface()
-  atlas3D <- list(atlasRender(painted, 'left'), atlasRender(painted, 'right'), atlasRender(painted, 'front'),
-                  atlasRender(painted, 'right', 'left'),      # left hemisphere only, seen from the right: its medial face
-                  atlasRender(painted, 'left', 'right'),      # right hemisphere only, seen from the left: its medial face
-                  atlasRender(painted, 'underside'))
-  supplemental_atlas_3d <- ggpubr::ggarrange(plotlist = atlas3D, nrow = 2, ncol = 3, labels = c('A', 'B', 'C', 'D', 'E', 'F'), font.label = list(size = 14, face = 'bold')) +
-    theme(plot.background = element_rect(fill = 'white', color = NA))
-  showFigure(supplemental_atlas_3d, 'supplemental_atlas_3d', width = 13, height = 9)
+
+  # (1) Every parcel its own color: 200 distinct colors, handed out so that parcels that touch get colors that are far apart
+  hueStep <- 137.508      # the golden angle spreads the hues evenly however many colors are used
+  distinctColors <- hcl((seq_len(200) * hueStep) %% 360, c = rep(c(70, 50, 60, 40), 50), l = rep(c(45, 62, 78, 88), each = 1, length.out = 200) + rep(c(0, 4, -4, 2), 50), fixup = TRUE)
+  colorLab <- convertColor(t(col2rgb(distinctColors)) / 255, from = 'sRGB', to = 'Lab')
+  colorDistance <- as.matrix(dist(colorLab))
+  distinctColorOfParcel <- rep(NA_integer_, 200)
+  for (parcel in order(-lengths(neighbours))) {
+    free <- setdiff(seq_len(200), distinctColorOfParcel)
+    around <- distinctColorOfParcel[neighbours[[parcel]]]; around <- around[!is.na(around)]
+    distinctColorOfParcel[parcel] <- if (length(around) == 0) free[1] else free[which.max(apply(colorDistance[free, around, drop = FALSE], 1, min))]
+  }
+  parcelColors <- distinctColors[distinctColorOfParcel]
+
+  # (2) Parcels colored by network (the revised membership); parcels in none of the four networks are light gray
+  networkOfParcel <- atlasParcels$Network[match(1:200, atlasParcels$Parcel)]
+  networkColors <- c(setNames(unname(networkNodeColors[names(networkNodeLabels)]), unname(networkNodeLabels)), None = '#C8C8C8')
+  parcelNetworkColors <- unname(networkColors[networkOfParcel])
+  parcelNetworkColors[is.na(parcelNetworkColors)] <- '#C8C8C8'
+
+  threeDFigure <- function(colors, unlabeledColor, bottom = NULL) {
+    views <- list(atlasRender(painted, 'left', colors, unlabeledColor = unlabeledColor), atlasRender(painted, 'right', colors, unlabeledColor = unlabeledColor),
+                  atlasRender(painted, 'front', colors, unlabeledColor = unlabeledColor),
+                  atlasRender(painted, 'right', colors, 'left', unlabeledColor),      # left hemisphere only, seen from the right: its medial face
+                  atlasRender(painted, 'left', colors, 'right', unlabeledColor),      # right hemisphere only, seen from the left: its medial face
+                  atlasRender(painted, 'underside', colors, unlabeledColor = unlabeledColor))
+    grid <- ggpubr::ggarrange(plotlist = views, nrow = 2, ncol = 3, labels = c('A', 'B', 'C', 'D', 'E', 'F'), font.label = list(size = 14, face = 'bold'))
+    if (!is.null(bottom)) { grid <- ggpubr::ggarrange(grid, bottom, nrow = 2, heights = c(1, .07)) }
+    grid + theme(plot.background = element_rect(fill = 'white', color = NA))
+  }
+  networkKeyNames <- c(unname(networkNodeLabels), 'Unassigned')
+  networkKeyColors <- unname(networkColors[c(unname(networkNodeLabels), 'None')])
+  networkKeyX <- c(.07, .26, .44, .65, .84)
+  networkKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+    annotate('rect', xmin = .02, xmax = .98, ymin = .1, ymax = .9, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('point', x = networkKeyX, y = .5, shape = 21, size = 6, fill = networkKeyColors, colour = '#404040', stroke = .6) +
+    annotate('text', x = networkKeyX + .025, y = .5, label = networkKeyNames, hjust = 0, size = 12 / .pt)
+
+  showFigure(threeDFigure(parcelColors, '#BDBDBD'), 'supplemental_atlas_3d_parcels', width = 13, height = 9)
+  showFigure(threeDFigure(parcelNetworkColors, '#C8C8C8', bottom = networkKey), 'supplemental_atlas_3d_networks', width = 13, height = 9.6)
 } else {
   message('3D atlas render skipped: the rgl and png packages, the brain mesh file and a screen are needed')
 }
