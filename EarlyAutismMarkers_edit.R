@@ -1851,16 +1851,8 @@ tier2Figure <- function(palette = networkNodeColors) {
   brains <- lapply(c('axial', 'posterior', 'lateral'), function(view) glassView(view, nodes, edges))
 
   # Text sizes in this figure: 14 pt (panel letters, y title, network names), 12 pt (everything else)
-  # Legend panel: just the Low / High Risk bar colors (the networks are named by the bands above the bars), centered vertically
-  step <- .13; half <- .05
-  yLow <- .5 + step / 2; yHigh <- .5 - step / 2
-  legendPanel <- ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed(ratio = 1.1) + theme_void() +
-    annotate('rect', xmin = .02, xmax = .98, ymin = yHigh - step / 2 - .02, ymax = yLow + step / 2 + .02, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('rect', xmin = .10, xmax = .24, ymin = yLow - half, ymax = yLow + half, fill = groupBarFill[['low']], colour = '#000000', linewidth = .8) +
-    annotate('text', x = .30, y = yLow, label = 'Low Risk', hjust = 0, size = 12 / .pt) +
-    annotate('rect', xmin = .10, xmax = .24, ymin = yHigh - half, ymax = yHigh + half, fill = groupBarFill[['high']], colour = '#000000', linewidth = .8) +
-    annotate('text', x = .30, y = yHigh, label = 'High Risk', hjust = 0, size = 12 / .pt)
-  top <- ggpubr::ggarrange(brains[[1]], brains[[2]], brains[[3]], legendPanel, nrow = 1, ncol = 4, widths = c(1, 1, 1, .45))
+  # (the Low / High Risk key is drawn inside the bar panel)
+  top <- ggpubr::ggarrange(brains[[1]], brains[[2]], brains[[3]], nrow = 1, ncol = 3)
 
   # Bars: all connections in one row, grouped by network
   long <- rbind(data.frame(unit = shown$unit, ROI = shown$ROI, Group = 'Low Risk', Mean = shown$TD.Mean, SE = shown$TD.SE),
@@ -1896,8 +1888,18 @@ tier2Figure <- function(palette = networkNodeColors) {
     labs(x = NULL, y = 'Connectivity (r)') +
     themeRegionalFigure(showXTitle = FALSE) +
     theme(axis.text.x = element_text(size = 12, angle = 70, hjust = 1, vjust = 1), axis.title.y = element_text(color = 'black', size = 14), strip.text = element_blank(), strip.background = element_blank(),
-          panel.spacing = unit(.35, 'lines'))
+          panel.spacing = unit(.35, 'lines'),
+          # boxed Low / High Risk key in the top right corner of the last (rightmost) network section, just under its name band
+          legend.text = element_text(color = 'black', size = 12), legend.key.size = unit(.8, 'cm'),
+          legend.background = element_rect(fill = 'white', color = '#000000', linewidth = 1), legend.margin = margin(6, 10, 6, 6),
+          legend.key = element_rect(fill = 'white', color = NA))
 
+  legendXY <- c(.995, (topY - bottomY) / (topY + band - bottomY) - .015)
+  bars <- bars + if (utils::packageVersion('ggplot2') >= '3.5.0') {
+    theme(legend.position = 'inside', legend.position.inside = legendXY, legend.justification = c(1, 1))
+  } else {
+    theme(legend.position = legendXY, legend.justification = c(1, 1))
+  }
   ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.5), labels = c('A', 'B'), font.label = list(size = 14, face = 'bold'))
 }
 
