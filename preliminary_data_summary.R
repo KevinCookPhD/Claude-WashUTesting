@@ -55,13 +55,13 @@ omni2 <- omni %>%
          scanner = scanner, sex = sex, birthPMA = birthga,
          kidokoro = kidokoro, vol = nvol, FullID = fullid) %>%
   mutate(across(c(project, shortID), ~ str_to_lower(str_trim(as.character(.x)))),
-         scanNo = as.integer(scanNo))
+         scanNo = as.integer(parse_number(as.character(scanNo))))
 
 qa2 <- qa %>%
   rename(shortID = shortid, scanNo = scanno, scanPMA = scanpma, vol = finalvol,
          scanDate = scandate, birthPMA = birthpma) %>%
   mutate(across(c(project, shortID), ~ str_to_lower(str_trim(as.character(.x)))),
-         scanNo = as.integer(scanNo))
+         scanNo = as.integer(parse_number(as.character(scanNo))))
 
 # ---- 3. Diagnose the redundancy between sheets --------------------------------
 keys <- c("project", "shortID", "scanNo")
@@ -69,6 +69,8 @@ keys <- c("project", "shortID", "scanNo")
 cat("\n--- Redundancy check ---\n")
 cat("Duplicate scan keys within omnibus:", nrow(filter(count(omni2, across(all_of(keys))), n > 1)), "\n")
 cat("Duplicate scan keys within QA:     ", nrow(filter(count(qa2,   across(all_of(keys))), n > 1)), "\n")
+dup_qa <- qa2 %>% count(across(all_of(keys))) %>% filter(n > 1)
+if (nrow(dup_qa) > 0) { cat("QA scans listed more than once:\n"); print(dup_qa) }   # CHECK: true duplicates?
 cat("Scans in both sheets:", nrow(inner_join(omni2, qa2, by = keys)), "\n")
 cat("Omnibus only:        ", nrow(anti_join(omni2, qa2, by = keys)), "\n")
 cat("QA only:             ", nrow(anti_join(qa2, omni2, by = keys)), "\n")
