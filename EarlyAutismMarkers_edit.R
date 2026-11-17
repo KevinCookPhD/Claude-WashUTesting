@@ -1267,6 +1267,58 @@ for (k in seq_along(figureThresholds)) {
 }
 
 
+## Combined regional figure: group effect OR interaction
+
+# One figure with every region whose group effect or group x age interaction is significant or trending (FDR p < combinedFigureThreshold, from the
+# normalized interaction model). Each panel is the interaction view: normalized volume across gestational age with a line per risk group. Styled like the
+# Tier 1 and Tier 2 figures: a solid band with the region name above a light gray panel, 14 pt titles and 12 pt everything else.
+combinedFigureThreshold <- .10
+
+formatAdjustedP <- function(p) ifelse(p < .001, '< .001', sub('^0', '', sprintf('%.3f', p)))
+significanceMark <- function(p) ifelse(p < .05, '*', ifelse(p < .10, '\u2020', ''))      # * = p < .05, dagger = p < .10
+
+plotRoiCombined <- function(roi, groupP, intxP) {
+  tempAnalyses <- prepRegionalFigureData(roi)
+  tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
+
+  axisInfo <- roiAxis(roi, 'intx', max(tempAnalyses$VolNormed, na.rm=TRUE))
+  topY <- axisInfo$limits[2]; band <- .12 * topY
+  spec <- regionalFigureROIs[regionalFigureROIs$roi == roi,]
+  roiName <- sub(' Volume$', '', if (nrow(spec) == 1) spec$label else paste(gsub('_', ' ', roi), 'Volume'))
+  pText <- paste0('Group: p.adj = ', formatAdjustedP(groupP), significanceMark(groupP), '\nInteraction: p.adj = ', formatAdjustedP(intxP), significanceMark(intxP))
+
+  ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
+    annotate('rect', xmin = -Inf, xmax = Inf, ymin = topY, ymax = topY + band, fill = '#595959') +
+    annotate('text', x = 30, y = topY + band / 2, label = roiName, color = 'white', size = 14 / .pt) +
+    annotate('text', x = 20, y = topY * .98, label = pText, hjust = 0, vjust = 1, size = 12 / .pt, lineheight = .95) +
+    scale_y_continuous(limits=c(0, topY + band), breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
+    scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
+    scale_shape_manual(values=c(23,21)) +
+    scale_fill_manual(values=c(groupPointFill[['low']], groupPointFill[['high']])) +
+    geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4, stroke=.75) +
+    scale_color_manual(values=c(groupLineColor[['low']], groupLineColor[['high']])) +
+    geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
+    ylab('Normalized Volume') + xlab('Gestational Age (Weeks)') +
+    themeRegionalFigure(showXTitle = TRUE) +
+    theme(axis.title.x = element_text(color = 'black', size = 14), axis.title.y = element_text(color = 'black', size = 14),
+          panel.background = element_rect(fill = '#EDEDED'), panel.grid.major.y = element_line(color = 'white', linewidth = 1.4))
+}
+
+combinedTable <- glmRegionalNormedVolTable.Itx
+combinedTable$bestP <- pmin(combinedTable$Grp.p.Adj, combinedTable$Itx.p.Adj, na.rm = TRUE)
+combinedTable <- combinedTable[which(combinedTable$bestP < combinedFigureThreshold), ]
+combinedTable <- combinedTable[order(combinedTable$bestP), ]
+message('Combined regional figure: ', nrow(combinedTable), ' region(s) with a group or interaction effect at FDR p < ', combinedFigureThreshold)
+if (nrow(combinedTable) > 0) {
+  combinedPlots <- lapply(seq_len(nrow(combinedTable)), function(i) plotRoiCombined(combinedTable$ROI[i], combinedTable$Grp.p.Adj[i], combinedTable$Itx.p.Adj[i]))
+  nCols <- min(4, length(combinedPlots) + 1); nRows <- ceiling((length(combinedPlots) + 1) / nCols)
+  combinedSlots <- c(combinedPlots, rep(list(ggplot() + theme_void()), nCols * nRows - length(combinedPlots) - 1), list(riskLegendPanel('intx', textSize = 12 / .pt)))
+  regional_combined <- ggpubr::ggarrange(plotlist = combinedSlots, nrow = nRows, ncol = nCols, legend = 'none')
+  combinedSize <- regionalFigureSize(nrow(combinedTable))
+  showFigure(regional_combined, 'regional_combined', width = combinedSize$width, height = combinedSize$height)
+}
+
+
 ## 2d. Cortical Thickness ----
 
 
