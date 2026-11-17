@@ -1300,7 +1300,7 @@ plotRoiCombined <- function(roi) {
     geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4, stroke=.75) +
     scale_color_manual(values=c(groupLineColor[['low']], groupLineColor[['high']])) +
     geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-    ylab(wrapAxisLabel(shortRegionName(roi), width = 20)) + xlab('Gestational Age (Weeks)') +
+    ylab(wrapAxisLabel(shortRegionName(roi), width = 24)) + xlab('Gestational Age (Weeks)') +
     themeRegionalFigure(showXTitle = TRUE) +
     theme(axis.title.x = element_text(color = 'black', size = 14), axis.title.y = element_text(color = 'black', size = 14))
 }
@@ -1327,11 +1327,10 @@ message('Combined regional figure: ', nrow(combinedTable), ' region(s) with a gr
 if (nrow(combinedTable) > 0) {
   saveTable(combinedTable[, c('ROI', 'Grp.p.Adj', 'Itx.p.Adj')], 'regional_combined_regions')
   combinedPlots <- lapply(combinedTable$ROI, plotRoiCombined)
-  nCols <- min(4, length(combinedPlots) + 1); nRows <- ceiling((length(combinedPlots) + 1) / nCols)
+  nRows <- 2; nCols <- ceiling((length(combinedPlots) + 1) / nRows)      # two rows, with the legend in the last cell
   combinedSlots <- c(combinedPlots, rep(list(ggplot() + theme_void()), nCols * nRows - length(combinedPlots) - 1), list(combinedLegendPanel()))
   regional_combined <- ggpubr::ggarrange(plotlist = combinedSlots, nrow = nRows, ncol = nCols, legend = 'none')
-  combinedSize <- regionalFigureSize(nrow(combinedTable))
-  showFigure(regional_combined, 'regional_combined', width = combinedSize$width, height = combinedSize$height)
+  showFigure(regional_combined, 'regional_combined', width = 3.4 * nCols, height = 3.5 * nRows)
 }
 
 ## 2d. Cortical Thickness ----
