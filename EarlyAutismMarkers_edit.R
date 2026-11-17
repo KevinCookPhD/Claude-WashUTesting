@@ -2551,10 +2551,9 @@ showBaseFigure('wholebrain_composite', width = 16, height = 13, drawFun = drawWh
 } # end Tier 3 (runTier3)
 
 
-## 3f. Supplemental: The Atlas on a Glass Brain, and the Parcel Table ----
+## 3f. Supplemental: The Atlas and the Parcel Table ----
 
-# Every parcel of the functional atlas drawn as a node on the glass brain, colored by network (parcels in none of the four networks are gray, 'Unassigned'), plus a table of
-# every parcel with its center of mass and network membership.
+# The functional atlas itself, drawn parcel by parcel on slices, plus a table of every parcel with its center of mass and network membership.
 loadGlassBrain()
 
 atlasParcels <- data.frame(ROI = unique(c(connROIs$ROI1, connROIs$ROI2)), stringsAsFactors = FALSE)
@@ -2589,23 +2588,75 @@ rownames(atlasParcels) <- NULL
 cat('\nAtlas parcels:', nrow(atlasParcels), '\n'); print(table(atlasParcels$Network))
 saveTable(atlasParcels, 'supplemental_atlas_parcels')
 
-# The figure: three views (radiological convention) and a one-line key
-atlasNodeColors <- c(networkNodeColors, None = '#A6A6A6')
-atlasNodes <- data.frame(id = atlasParcels$Parcel,
-                         fill = unname(atlasNodeColors[ifelse(atlasParcels$Network %in% networkNodeLabels, names(networkNodeLabels)[match(atlasParcels$Network, networkNodeLabels)], 'None')]),
-                         stringsAsFactors = FALSE)
-atlasBrains <- lapply(c('axial', 'anterior', 'lateral'), function(view) glassView(view, atlasNodes, NULL, 'whole'))
+# The figure: the atlas itself, slice by slice. Each parcel is a different color, chosen so that parcels that touch never share a color. Rows are axial,
+# coronal and sagittal slices, in the radiological convention (the right side of the brain on the left of the picture; sagittal slices have the front on the left).
+atlasFile <- file.path(baseDir, 'functional', 'atlasParcellattion', 'tcorr_cluster_100ROIs_per_hemi.nii')      # fetal atlas, labels 1-200
+atlasPalette <- c('#E69F00', '#56B4E9', '#009E73', '#F0E442', '#0072B2', '#D55E00', '#CC79A7', '#7B68C8', '#A0522D', '#00A6A6', '#8DA000', '#E8A0A0')
 
-atlasKeyNames <- c(unname(networkNodeLabels), 'Unassigned')
-atlasKeyColors <- unname(atlasNodeColors[c(names(networkNodeLabels), 'None')])
-atlasKeyX <- c(.06, .26, .43, .64, .86)[seq_along(atlasKeyNames)]
-atlasKey <- ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
-  annotate('rect', xmin = .01, xmax = .99, ymin = .15, ymax = .85, fill = 'white', colour = 'black', linewidth = 1) +
-  annotate('point', x = atlasKeyX, y = .5, shape = 21, size = 6, fill = atlasKeyColors, colour = '#404040', stroke = .6) +
-  annotate('text', x = atlasKeyX + .025, y = .5, label = atlasKeyNames, hjust = 0, size = 12 / .pt)
-supplemental_atlas <- ggpubr::ggarrange(ggpubr::ggarrange(atlasBrains[[1]], atlasBrains[[2]], atlasBrains[[3]], nrow = 1, ncol = 3), atlasKey,
-                                        nrow = 2, heights = c(1, .13))
-showFigure(supplemental_atlas, 'supplemental_atlas_glass', width = 13, height = 5.6)
+# Read an uncompressed or gzipped NIfTI-1 file in base R. Returns the voxel array and the voxel-to-world matrix.
+readNifti <- function(path) {
+  raw <- if (grepl('\\.gz$', path)) { con <- gzfile(path, 'rb'); on.exit(close(con)); readBin(con, 'raw', n = 5e8) } else readBin(path, 'raw', n = file.size(path))
+  endian <- if (readBin(raw[1:4], 'integer', 1, size = 4, endian = 'little') == 348) 'little' else 'big'
+  dims <- readBin(raw[41:56], 'integer', 8, size = 2, endian = endian)
+  datatype <- readBin(raw[71:72], 'integer', 1, size = 2, endian = endian)
+  voxOffset <- readBin(raw[109:112], 'numeric', 1, size = 4, endian = endian)
+  srow <- matrix(readBin(raw[281:328], 'numeric', 12, size = 4, endian = endian), 3, 4, byrow = TRUE)
+  n <- prod(dims[2:4])
+  body <- raw[(voxOffset + 1):length(raw)]
+  values <- switch(as.character(datatype),
+                   '2' = as.integer(body[1:n]), '4' = readBin(body, 'integer', n, size = 2, endian = endian),
+                   '8' = readBin(body, 'integer', n, size = 4, endian = endian), '16' = readBin(body, 'numeric', n, size = 4, endian = endian),
+                   '64' = readBin(body, 'numeric', n, size = 8, endian = endian), stop('Unsupported NIfTI data type ', datatype))
+  list(data = array(values, dim = dims[2:4]), affine = rbind(srow, c(0, 0, 0, 1)))
+}
+
+atlasVolume <- readNifti(atlasFile)
+atlasLabels <- atlasVolume$data
+atlasLabels[!(atlasLabels %in% 1:200)] <- 0
+atlasAffine <- atlasVolume$affine
+
+# Which parcels touch (share a voxel face), then a greedy coloring so that touching parcels get different colors
+touching <- list()
+for (axis in 1:3) {
+  a <- switch(axis, atlasLabels[-dim(atlasLabels)[1], , ], atlasLabels[, -dim(atlasLabels)[2], ], atlasLabels[, , -dim(atlasLabels)[3]])
+  b <- switch(axis, atlasLabels[-1, , ], atlasLabels[, -1, ], atlasLabels[, , -1])
+  keep <- a > 0 & b > 0 & a != b
+  touching[[axis]] <- unique(cbind(pmin(a[keep], b[keep]), pmax(a[keep], b[keep])))
+}
+touching <- unique(do.call(rbind, touching))
+neighbours <- lapply(1:200, function(p) c(touching[touching[, 1] == p, 2], touching[touching[, 2] == p, 1]))
+parcelColorIndex <- integer(200)
+for (p in order(-lengths(neighbours))) {
+  used <- parcelColorIndex[neighbours[[p]]]
+  parcelColorIndex[p] <- min(setdiff(seq_len(length(atlasPalette) + 1), used))
+}
+if (max(parcelColorIndex) > length(atlasPalette)) { message('The atlas palette has too few colors; ', max(parcelColorIndex), ' are needed. Some touching parcels will share a color.') }
+parcelColor <- atlasPalette[(parcelColorIndex - 1) %% length(atlasPalette) + 1]
+message('Atlas figure: ', sum(lengths(neighbours)) / 2, ' pairs of touching parcels, colored with ', max(parcelColorIndex), ' colors')
+
+# One slice: view is 'axial', 'coronal' or 'sagittal'; fraction is how far through the brain (0-1)
+atlasSlice <- function(view, fraction) {
+  axis <- c(axial = 3, coronal = 2, sagittal = 1)[[view]]
+  occupied <- which(atlasLabels > 0, arr.ind = TRUE)
+  range <- range(occupied[, axis])
+  index <- round(range[1] + fraction * (range[2] - range[1]))
+  plane <- switch(view, axial = atlasLabels[, , index], coronal = atlasLabels[, index, ], sagittal = atlasLabels[index, , ])
+  axes <- switch(view, axial = c(1, 2), coronal = c(1, 3), sagittal = c(2, 3))
+  inPlane <- which(plane > 0, arr.ind = TRUE)
+  voxel <- matrix(index, nrow(inPlane), 3); voxel[, axes[1]] <- inPlane[, 1]; voxel[, axes[2]] <- inPlane[, 2]
+  world <- (cbind(voxel - 1, 1) %*% t(atlasAffine))[, 1:3, drop = FALSE]
+  data.frame(h = world[, axes[1]], v = world[, axes[2]], parcel = plane[inPlane], size = abs(diag(atlasAffine[1:3, 1:3])[axes[1]]))
+}
+
+atlasPanel <- function(view, fraction) {
+  d <- atlasSlice(view, fraction); d$color <- parcelColor[d$parcel]
+  ggplot(d, aes(x = h, y = v, fill = color)) + geom_tile(width = d$size[1], height = d$size[1]) + scale_fill_identity() +
+    scale_x_reverse() + coord_fixed() + theme_void()      # high x (right) and high y (front) on the left of the picture
+}
+atlasFractions <- c(.2, .32, .44, .56, .68, .8)
+atlasRows <- lapply(c('axial', 'coronal', 'sagittal'), function(view) ggpubr::ggarrange(plotlist = lapply(atlasFractions, function(f) atlasPanel(view, f)), nrow = 1, ncol = length(atlasFractions)))
+supplemental_atlas <- ggpubr::ggarrange(plotlist = atlasRows, nrow = 3, ncol = 1, labels = c('A', 'B', 'C'), font.label = list(size = 14, face = 'bold'))
+showFigure(supplemental_atlas, 'supplemental_atlas', width = 13, height = 6.6)
 
 
 # 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----
