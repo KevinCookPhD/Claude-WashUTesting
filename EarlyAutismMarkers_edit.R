@@ -1714,7 +1714,8 @@ barsFor <- function(fits, xAngle = 0, legendTop = NULL) {      # legendTop = y v
     ggplot2::labs(x = NULL, y = paste0('Average connectivity (r)', ifelse(networkScore == 'absmean', ', absolute values', ''))) +
     themeRegionalFigure(showXTitle = FALSE) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(color = 'black', size = 12, angle = xAngle, hjust = ifelse(xAngle == 0, .5, 1), vjust = 1),
-                   legend.text = ggplot2::element_text(color = 'black', size = 16), legend.key.size = grid::unit(1.2, 'cm'),
+                   legend.text = ggplot2::element_text(color = 'black', size = 12), legend.key.size = grid::unit(1, 'cm'),
+                   axis.title.y = ggplot2::element_text(color = 'black', size = 14),      # text sizes: 14 pt titles, 12 pt everything else
                    legend.background = ggplot2::element_rect(fill = 'white', color = '#000000', linewidth = 1),
                    legend.margin = ggplot2::margin(8, 14, 8, 8), legend.key = ggplot2::element_rect(fill = 'white', color = NA)) +
     legendInside
@@ -1729,7 +1730,7 @@ tier1Combined <- rbind(data.frame(family = 'Within Networks', tier1Within$fits[,
 tier1Combined$family <- factor(tier1Combined$family, levels = c('Within Networks', 'Between Networks'))
 tier1_bars <- barsFor(tier1Combined, xAngle = 40, legendTop = tanh(.65)) +      # legend box top lines up with the same height as before (z = 0.65)
   ggplot2::facet_grid(~family, scales = 'free_x', space = 'free_x') +
-  ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(color = 'black', size = 18))
+  ggplot2::theme(strip.background = ggplot2::element_blank(), strip.text = ggplot2::element_text(color = 'black', size = 14))
 showFigure(tier1_bars, 'tier1_bars', width = 11, height = 6)
 
 # Low minus High Risk difference for every network (the diagonal, within the network) and every pair of networks (below the diagonal, between the two).
@@ -1752,7 +1753,7 @@ limit <- max(.05, ceiling(max(abs(cells$diff)) / .05 - 1e-9) * .05)
 matrixBreaks <- seq(-limit, limit, by = .05)
 matrixLabels <- function(x) ifelse(abs(x * 10 - round(x * 10)) < 1e-8, formatC(x, format = 'f', digits = 1), '')
 tier1_matrix <- ggplot2::ggplot(cells, ggplot2::aes(x = across, y = down, fill = diff)) +
-  ggplot2::geom_tile(color = 'white', linewidth = 1) + ggplot2::geom_text(ggplot2::aes(label = text), size = 4.5, lineheight = .9) +
+  ggplot2::geom_tile(color = 'white', linewidth = 1) + ggplot2::geom_text(ggplot2::aes(label = text), size = 12 / ggplot2::.pt, lineheight = .9) +
   ggplot2::scale_x_discrete(drop = FALSE) + ggplot2::scale_y_discrete(drop = FALSE) +
   ggplot2::scale_fill_gradient2(low = groupColors[['high']], mid = 'white', high = groupColors[['low']], midpoint = 0, limits = c(-limit, limit),
                                 breaks = matrixBreaks, labels = matrixLabels, name = 'Connectivity Difference\n(Low - High Risk)') +
@@ -1760,7 +1761,9 @@ tier1_matrix <- ggplot2::ggplot(cells, ggplot2::aes(x = across, y = down, fill =
   ggplot2::coord_fixed() +      # square cells
   ggplot2::labs(x = NULL, y = NULL) +
   ggplot2::theme_minimal(base_size = 14) +
-  ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text = ggplot2::element_text(color = 'black'), legend.title = ggplot2::element_text(hjust = .5),
+  ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.text = ggplot2::element_text(color = 'black', size = 12), legend.text = ggplot2::element_text(size = 12),
+                 legend.title = ggplot2::element_text(size = 14, hjust = .5),      # text sizes: 14 pt titles, 12 pt everything else
+                
                  legend.key.height = grid::unit(1.3, 'cm'), legend.key.width = grid::unit(.7, 'cm'))      # the color bar is 5 key heights tall
 showFigure(tier1_matrix, 'tier1_matrix', width = 8, height = 6)
 
