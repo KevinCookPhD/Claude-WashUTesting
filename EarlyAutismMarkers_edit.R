@@ -1847,6 +1847,7 @@ tier2Figure <- function(palette = networkNodeColors) {
                         data.frame(id = edges$b, fill = edges$color, stringsAsFactors = FALSE)))
   brains <- lapply(c('axial', 'posterior', 'lateral'), function(view) glassView(view, nodes, edges))
 
+  # Text sizes in this figure: 14 pt (panel letters, y title, network names), 12 pt (everything else)
   # Legend panel: the networks shown, the Low / High Risk bar colors and what is plotted
   step <- .09; half <- .035                                              # row spacing and half-height of each swatch
   nRows <- length(usedNets) + 2                                           # network rows, then Low and High Risk
@@ -1858,12 +1859,12 @@ tier2Figure <- function(palette = networkNodeColors) {
     annotate('rect', xmin = .02, xmax = .98, ymin = yHigh - step / 2 - .01, ymax = yTop + .02, fill = 'white', colour = 'black', linewidth = 1) +
     annotate('rect', xmin = .16, xmax = .92, ymin = yNet - half, ymax = yNet + half, fill = vapply(unname(palette[usedNets]), tintColor, character(1), amount = .55), colour = '#000000', linewidth = .4) +
     annotate('rect', xmin = .07, xmax = .16, ymin = yNet - half, ymax = yNet + half, fill = unname(palette[usedNets]), colour = '#000000', linewidth = .4) +
-    annotate('text', x = .20, y = yNet, label = paste(networkNodeLabels[usedNets], 'Network'), hjust = 0, size = 4.2) +
+    annotate('text', x = .20, y = yNet, label = paste(networkNodeLabels[usedNets], 'Network'), hjust = 0, size = 12 / .pt) +
     annotate('segment', x = .05, xend = .95, y = yLow + step / 2 + .005, yend = yLow + step / 2 + .005, linewidth = .5) +
     annotate('rect', xmin = .07, xmax = .16, ymin = yLow - half, ymax = yLow + half, fill = groupBarFill[['low']], colour = '#000000', linewidth = .8) +
-    annotate('text', x = .20, y = yLow, label = 'Low Risk', hjust = 0, size = 4.2) +
+    annotate('text', x = .20, y = yLow, label = 'Low Risk', hjust = 0, size = 12 / .pt) +
     annotate('rect', xmin = .07, xmax = .16, ymin = yHigh - half, ymax = yHigh + half, fill = groupBarFill[['high']], colour = '#000000', linewidth = .8) +
-    annotate('text', x = .20, y = yHigh, label = 'High Risk', hjust = 0, size = 4.2)
+    annotate('text', x = .20, y = yHigh, label = 'High Risk', hjust = 0, size = 12 / .pt)
   top <- ggpubr::ggarrange(brains[[1]], brains[[2]], brains[[3]], legendPanel, nrow = 1, ncol = 4, widths = c(1, 1, 1, .85))
 
   # Bars: all connections in one row, grouped by network
@@ -1889,7 +1890,7 @@ tier2Figure <- function(palette = networkNodeColors) {
     geom_rect(data = background, xmin = -Inf, xmax = Inf, ymin = bottomY, ymax = topY + band, fill = background$tint, inherit.aes = FALSE) +
     geom_vline(data = dividers, aes(xintercept = x), color = 'white', linewidth = 1.4) +
     geom_rect(data = background, xmin = -Inf, xmax = Inf, ymin = topY, ymax = topY + band, fill = background$solid, inherit.aes = FALSE) +
-    geom_text(data = background, aes(x = x, y = topY + band / 2, label = name), color = background$text, inherit.aes = FALSE, size = 5, hjust = .5) +
+    geom_text(data = background, aes(x = x, y = topY + band / 2, label = name), color = background$text, inherit.aes = FALSE, size = 14 / .pt, hjust = .5) +
     geom_hline(yintercept = 0, linewidth = 1) +
     geom_col(position = position_dodge(.85), width = .8, color = '#000000', linewidth = .8) +
     geom_errorbar(aes(ymin = Lower, ymax = Upper), position = position_dodge(.85), width = .25, linewidth = 1.1) +
@@ -1899,10 +1900,10 @@ tier2Figure <- function(palette = networkNodeColors) {
     scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
     labs(x = NULL, y = 'Connectivity (r)') +
     themeRegionalFigure(showXTitle = FALSE) +
-    theme(axis.text.x = element_text(size = 10, angle = 70, hjust = 1, vjust = 1), strip.text = element_blank(), strip.background = element_blank(),
+    theme(axis.text.x = element_text(size = 12, angle = 70, hjust = 1, vjust = 1), axis.title.y = element_text(color = 'black', size = 14), strip.text = element_blank(), strip.background = element_blank(),
           panel.spacing = unit(.35, 'lines'))
 
-  ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.5), labels = c('A', 'B'))
+  ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.5), labels = c('A', 'B'), font.label = list(size = 14, face = 'bold'))
 }
 
 tier2_figure <- tier2Figure()
