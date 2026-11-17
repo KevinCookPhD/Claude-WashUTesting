@@ -1,66 +1,66 @@
 ROINum,Name_Abrv,ROIName,Hemisphere,original_network,revised_network,changed
 1,MTG.L,Middle Temporal Gyrus,Left,none,none,
-2,STG.L,Superior Temporal Gyrus,Left,Auditory,none,yes
-3,PreCG.L,Precentral Gyrus,Left,SomMot,none,yes
+2,STG.L,Superior Temporal Gyrus,Left,none,none,
+3,PreCG.L,Precentral Gyrus,Left,none,none,
 4,ACG.L,Anterior Cingulate Gyrus,Left,DMN,none,yes
 5,ORBsupb.L,Orbital (Superior),Left,Limbic,Limbic,
 6,CRB.L,Cerebellum,Left,CRB,CRB,
 7,SPG.L,Superior Parietal Gyrus,Left,none,none,
-8,PreCG.L,Precentral Gyrus,Left,SomMot,none,yes
+8,PreCG.L,Precentral Gyrus,Left,none,none,
 9,TPOmid.L,Temporal Pole (Middle),Left,Limbic,Limbic,
 10,FFG.L,Fusiform Gyrus,Left,none,none,
 11,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,DMN,DMN,
-12,INS.L,Insula,Left,Auditory,none,yes
+12,INS.L,Insula,Left,none,none,
 13,CRB.L,Cerebellum,Left,CRB,CRB,
-14,PoCG.L,Postcentral Gyrus,Left,SomMot,none,yes
-15,CAL.L,Calcerine Cortex,Left,Visual,none,yes
+14,PoCG.L,Postcentral Gyrus,Left,none,none,
+15,CAL.L,Calcerine Cortex,Left,none,none,
 16,ORBmid.L,Orbital (Middle),Left,none,none,
 17,CRB.L,Cerebellum,Left,CRB,CRB,
 18,SFGmed.L,Superior Frontal Gyrus (Medial),Left,DMN,DMN,
-19,IOG.L,Inferior Occipital Gyrus,Left,Visual,none,yes
+19,IOG.L,Inferior Occipital Gyrus,Left,none,none,
 20,REC.L,Rectus,Left,Limbic,Limbic,
 21,IPL.L,Inferior Parietal Lobule,Left,none,DMN,yes
 22,MTG.L,Middle Temporal Gyrus,Left,DMN,DMN,
 23,PCUN.L,Precuneus,Left,DMN,DMN,
 24,MFG.L,Middle Frontal Gyrus,Left,none,DMN,yes
-25,CUN.L,Cuneus,Left,Visual,none,yes
+25,CUN.L,Cuneus,Left,none,none,
 26,PCUN.L,Precuneus,Left,none,none,
 27,BS,Brainstem,Left,none,none,
 28,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,none,DMN,yes
 29,AMY.L,Amygdala,Left,Limbic,Limbic,
-30,CUN.L,Cuneus,Left,Visual,none,yes
+30,CUN.L,Cuneus,Left,none,none,
 31,CAU.L,Caudate,Left,SubCort,SubCort,
 32,CAU.L,Caudate,Left,SubCort,SubCort,
 33,IPL.L,Inferior Parietal Lobule,Left,none,none,
 34,ACG.L,Anterior Cingulate Gyrus,Left,DMN,DMN,
-35,IOG.L,Inferior Occipital Gyrus,Left,Visual,none,yes
+35,IOG.L,Inferior Occipital Gyrus,Left,none,none,
 36,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,none,DMN,yes
 37,MCG.L,Middle Cingulate Gyrus,Left,none,none,
 38,INS.L,Insula,Left,none,none,
 39,CAU.L,Caudate,Left,SubCort,SubCort,
 40,STG.L,Superior Temporal Gyrus,Left,DMN,DMN,
-41,PreCG.L,Precentral Gyrus,Left,SomMot,none,yes
-42,CUN.L,Cuneus,Left,DMN/Visual,none,yes
+41,PreCG.L,Precentral Gyrus,Left,none,none,
+42,CUN.L,Cuneus,Left,DMN,none,yes
 43,PHG.L,Parahippocampal Gyrus,Left,Limbic,Limbic,
 44,SPG.L,Superior Parietal Gyrus,Left,none,none,
 45,ITG.L,Inferior Temporal Gyrus,Left,none,none,
 46,MFG.L,Middle Frontal Gyrus,Left,none,DMN,yes
 47,BS,Brainstem,Left,none,none,
-48,STG.L,Superior Temporal Gyrus,Left,DMN/Auditory,DMN,yes
-49,PreCG.L,Precentral Gyrus,Left,SomMot,none,yes
+48,STG.L,Superior Temporal Gyrus,Left,DMN,DMN,
+49,PreCG.L,Precentral Gyrus,Left,none,none,
 50,ORBmid.L,Orbital (Middle),Left,none,Limbic,yes
 51,THA.L,Thalamus,Left,SubCort,SubCort,
-52,MOG.L,Middle Occipital Gyrus,Left,Visual,none,yes
+52,MOG.L,Middle Occipital Gyrus,Left,none,none,
 53,ACG.L,Anterior Cingulate Gyrus,Left,DMN,DMN,
 54,CRB.L,Cerebellum,Left,CRB,CRB,
 55,MFG.L,Middle Frontal Gyrus,Left,none,DMN,yes
 56,ITG.L,Inferior Temporal Gyrus,Left,Limbic,Limbic,
-57,MOG.L,Middle Occipital Gyrus,Left,Visual,none,yes
+57,MOG.L,Middle Occipital Gyrus,Left,none,none,
 58,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,none,none,
 59,BS,Brainstem,Left,none,none,
-60,CAL.L,Calcerine Cortex,Left,Visual,none,yes
+60,CAL.L,Calcerine Cortex,Left,none,none,
 61,MTG.L,Middle Temporal Gyrus,Left,Limbic,DMN,yes
-62,PoCG.L,Postcentral Gyrus,Left,SomMot,none,yes
+62,PoCG.L,Postcentral Gyrus,Left,none,none,
 63,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,none,DMN,yes
 64,SPG.L,Superior Parietal Gyrus,Left,none,none,
 65,INS.L,Insula,Left,none,none,
@@ -70,10 +70,10 @@ ROINum,Name_Abrv,ROIName,Hemisphere,original_network,revised_network,changed
 69,MTG.L,Middle Temporal Gyrus,Left,none,DMN,yes
 70,MCG.L,Middle Cingulate Gyrus,Left,DMN,DMN,
 71,SFGdor.L,Superior Frontal Gyrus (Dorsal),Left,none,none,
-72,LING.L,Lingual,Left,Visual,none,yes
-73,PoCG.L,Postcentral Gyrus,Left,SomMot,none,yes
+72,LING.L,Lingual,Left,none,none,
+73,PoCG.L,Postcentral Gyrus,Left,none,none,
 74,ORBinf.L,Orbital (Inferior),Left,none,DMN,yes
-75,LING.L,Lingual,Left,Visual,none,yes
+75,LING.L,Lingual,Left,none,none,
 76,MCG.L,Middle Cingulate Gyrus,Left,none,none,
 77,ORBinf.L,Orbital (Inferior),Left,none,none,
 78,SMG.L,Supramarginal Gyrus,Left,none,none,
@@ -85,73 +85,73 @@ ROINum,Name_Abrv,ROIName,Hemisphere,original_network,revised_network,changed
 84,MFG.L,Middle Frontal Gyrus,Left,none,DMN,yes
 85,SFGmed.L,Superior Frontal Gyrus (Medial),Left,DMN,DMN,
 86,PHG.L,Parahippocampal Gyrus,Left,Limbic,Limbic,
-87,MOG.L,Middle Occipital Gyrus,Left,Visual,none,yes
-88,STG.L,Superior Temporal Gyrus,Left,DMN/Auditory,DMN,yes
+87,MOG.L,Middle Occipital Gyrus,Left,none,none,
+88,STG.L,Superior Temporal Gyrus,Left,DMN,DMN,
 89,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,none,none,
 90,IPL.L,Inferior Parietal Lobule,Left,none,none,
-91,SPG.L,Superior Parietal Gyrus,Left,Visual,none,yes
+91,SPG.L,Superior Parietal Gyrus,Left,none,none,
 92,PUT.L,Putamen,Left,SubCort,SubCort,
-93,PreCG.L,Precentral Gyrus,Left,SomMot,none,yes
-94,INS.L,Insula,Left,Limbic/Auditory,none,yes
+93,PreCG.L,Precentral Gyrus,Left,none,none,
+94,INS.L,Insula,Left,Limbic,none,yes
 95,IFGtriang.L,Inferior Frontal Gryus (Triangularis),Left,none,none,
 96,MTG.L,Middle Temporal Gyrus,Left,DMN,DMN,
 97,PAL.L,Pallidum,Left,SubCort,SubCort,
-98,SOG.L,Superior Occipital Gyrus,Left,Visual,none,yes
+98,SOG.L,Superior Occipital Gyrus,Left,none,none,
 99,CRB.L,Cerebellum,Left,CRB,CRB,
 100,PCG.L,Paracentral Lobule,Left,DMN,DMN,
 101,CRB.R,Cerebellum,Right,CRB,CRB,
 102,STG.R,Superior Temporal Gyrus,Right,DMN,none,yes
-103,PreCG.R,Precentral Gyrus,Right,SomMot,none,yes
+103,PreCG.R,Precentral Gyrus,Right,none,none,
 104,ORBmed.R,Orbital (Medial),Right,DMN,DMN,
-105,SPG.R,Superior Parietal Gyrus,Right,Visual,none,yes
+105,SPG.R,Superior Parietal Gyrus,Right,none,none,
 106,PCUN.R,Precuneus,Right,DMN,DMN,
-107,PAL.R,Pallidum,Right,SubCort/Auditory,SubCort,yes
+107,PAL.R,Pallidum,Right,SubCort,SubCort,
 108,TPOmid.R,Temporal Pole (Middle),Right,Limbic,Limbic,
 109,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,none,none,
 110,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,none,DMN,yes
 111,PUT.R,Putamen,Right,SubCort,SubCort,
 112,INS.R,Insula,Right,none,none,
 113,CRB.R,Cerebellum,Right,CRB,CRB,
-114,SOG.R,Superior Occipital Gyrus,Right,Visual,none,yes
+114,SOG.R,Superior Occipital Gyrus,Right,none,none,
 115,PCL.R,Paracentral Lobule,Right,none,none,
-116,MOG.R,Middle Occipital Gyrus,Right,Visual,none,yes
+116,MOG.R,Middle Occipital Gyrus,Right,none,none,
 117,IFGtriang.R,Inferior Frontal Gryus (Triangularis),Right,none,none,
 118,BS,Brainstem,Right,none,none,
 119,MCG.R,Middle Cingulate Gyrus,Right,none,none,
 120,ITG.R,Inferior Temporal Gyrus,Right,Limbic,Limbic,
 121,ORBmid.R,Orbital (Middle),Right,none,none,
-122,PoCG.R,Postcentral Gyrus,Right,SomMot,none,yes
+122,PoCG.R,Postcentral Gyrus,Right,none,none,
 123,ACG.R,Anterior Cingulate Gyrus,Right,DMN,DMN,
 124,MCG.R,Middle Cingulate Gyrus,Right,DMN,DMN,
 125,PHG.R,Parahippocampal Gyrus,Right,Limbic,Limbic,
-126,PoCG.R,Postcentral Gyrus,Right,SomMot,none,yes
+126,PoCG.R,Postcentral Gyrus,Right,none,none,
 127,IFGoperc.R,Inferior Frontal Gryus (Opercularis),Right,none,none,
 128,SFGmed.R,Superior Frontal Gyrus (Medial),Right,DMN,DMN,
 129,CRB.R,Cerebellum,Right,CRB,CRB,
 130,SMG.R,Supramarginal Gyrus,Right,none,none,
-131,IOG.R,Inferior Occipital Gyrus,Right,Visual,none,yes
-132,PreCG.R,Precentral Gyrus,Right,SomMot,none,yes
+131,IOG.R,Inferior Occipital Gyrus,Right,none,none,
+132,PreCG.R,Precentral Gyrus,Right,none,none,
 133,AMY.R,Amygdala,Right,Limbic,Limbic,
 134,THA.R,Thalamus,Right,SubCort,SubCort,
-135,MOG.R,Middle Occipital Gyrus,Right,Visual,none,yes
+135,MOG.R,Middle Occipital Gyrus,Right,none,none,
 136,IPL.R,Inferior Parietal Lobule,Right,none,none,
 137,SFGmed.R,Superior Frontal Gyrus (Medial),Right,DMN,DMN,
 138,SPG.R,Superior Parietal Gyrus,Right,none,none,
-139,THA.R,Thalamus,Right,SubCort/Auditory,SubCort,yes
+139,THA.R,Thalamus,Right,SubCort,SubCort,
 140,IFGtriang.R,Inferior Frontal Gryus (Triangularis),Right,none,none,
 141,TPOsup.R,Temporal Pole (Superior),Right,Limbic,Limbic,
 142,CRB.R,Cerebellum,Right,CRB,CRB,
 143,ORBsupb.R,Orbital (Superior),Right,Limbic,Limbic,
-144,PoCG.R,Postcentral Gyrus,Right,SomMot,none,yes
+144,PoCG.R,Postcentral Gyrus,Right,none,none,
 145,PUT.R,Putamen,Right,SubCort,SubCort,
 146,MFG.R,Middle Frontal Gyrus,Right,none,none,
 147,INS.R,Insula,Right,none,none,
 148,ORBinf.R,Orbital (Inferior),Right,none,Limbic,yes
-149,MOG.R,Middle Occipital Gyrus,Right,Visual,none,yes
+149,MOG.R,Middle Occipital Gyrus,Right,none,none,
 150,MTG.R,Middle Temporal Gyrus,Right,DMN,none,yes
 151,THA.R,Thalamus,Right,SubCort,SubCort,
-152,STG.R,Superior Temporal Gyrus,Right,DMN/Auditory,none,yes
-153,SOG.R,Superior Occipital Gyrus,Right,Visual,none,yes
+152,STG.R,Superior Temporal Gyrus,Right,DMN,none,yes
+153,SOG.R,Superior Occipital Gyrus,Right,none,none,
 154,PCL.R,Paracentral Lobule,Right,none,none,
 155,ORBsupb.R,Orbital (Superior),Right,Limbic,Limbic,
 156,ACG.R,Anterior Cingulate Gyrus,Right,DMN,none,yes
@@ -160,42 +160,42 @@ ROINum,Name_Abrv,ROIName,Hemisphere,original_network,revised_network,changed
 159,ORBinf.R,Orbital (Inferior),Right,none,DMN,yes
 160,HIP.R,Hippocampus,Right,Limbic,Limbic,
 161,HES.R,Fusiform Gyrus,Right,none,none,
-162,LING.R,Lingual,Right,Visual,none,yes
+162,LING.R,Lingual,Right,none,none,
 163,MTG.R,Middle Temporal Gyrus,Right,DMN,DMN,
-164,PoCG.R,Postcentral Gyrus,Right,SomMot,none,yes
+164,PoCG.R,Postcentral Gyrus,Right,none,none,
 165,BS,Brainstem,Right,none,none,
 166,MCG.R,Middle Cingulate Gyrus,Right,none,none,
-167,SPG.R,Superior Parietal Gyrus,Right,Visual,none,yes
+167,SPG.R,Superior Parietal Gyrus,Right,none,none,
 168,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,DMN,DMN,
-169,PreCG.R,Precentral Gyrus,Right,SomMot,none,yes
-170,SMA.R,Supplemental Motor Area,Right,SomMot,none,yes
-171,STG.R,Superior Temporal Gyrus,Right,DMN/Auditory,none,yes
+169,PreCG.R,Precentral Gyrus,Right,none,none,
+170,SMA.R,Supplemental Motor Area,Right,none,none,
+171,STG.R,Superior Temporal Gyrus,Right,DMN,none,yes
 172,CAL.R,Calcerine Cortex,Right,none,none,
 173,PUT.R,Putamen,Right,none,SubCort,yes
-174,CUN.R,Cuneus,Right,Visual,none,yes
+174,CUN.R,Cuneus,Right,none,none,
 175,BS,Brainstem,Right,none,none,
 176,MTG.R,Middle Temporal Gyrus,Right,DMN,none,yes
-177,SMA.R,Supplemental Motor Area,Right,SomMot,none,yes
+177,SMA.R,Supplemental Motor Area,Right,none,none,
 178,PCUN.R,Precuneus,Right,DMN,DMN,
 179,ITG.R,Inferior Temporal Gyrus,Right,none,none,
 180,MFG.R,Middle Frontal Gyrus,Right,none,none,
-181,CUN.R,Cuneus,Right,Visual,none,yes
+181,CUN.R,Cuneus,Right,none,none,
 182,SFGdor.R,Superior Frontal Gyrus (Dorsal),Right,none,none,
 183,MFG.R,Middle Frontal Gyrus,Right,none,DMN,yes
-184,PoCG.R,Postcentral Gyrus,Right,SomMot,none,yes
-185,FFG.R,Fusiform Gyrus,Right,Auditory,none,yes
-186,IOG.R,Inferior Occipital Gyrus,Right,Visual,none,yes
+184,PoCG.R,Postcentral Gyrus,Right,none,none,
+185,FFG.R,Fusiform Gyrus,Right,none,none,
+186,IOG.R,Inferior Occipital Gyrus,Right,none,none,
 187,PCUN.R,Precuneus,Right,none,none,
 188,ITG.R,Inferior Temporal Gyrus,Right,Limbic,Limbic,
 189,IPL.R,Inferior Parietal Lobule,Right,none,none,
-190,PoCG.R,Postcentral Gyrus,Right,SomMot,none,yes
+190,PoCG.R,Postcentral Gyrus,Right,none,none,
 191,IPL.R,Inferior Parietal Lobule,Right,none,none,
 192,CRB.R,Cerebellum,Right,CRB,CRB,
 193,MFG.R,Middle Frontal Gyrus,Right,none,none,
-194,CAL.R,Calcerine Cortex,Right,Visual,none,yes
-195,IPL.R,Inferior Parietal Lobule,Right,Visual,DMN,yes
+194,CAL.R,Calcerine Cortex,Right,none,none,
+195,IPL.R,Inferior Parietal Lobule,Right,none,DMN,yes
 196,ORBsupb.R,Orbital (Superior),Right,Limbic,Limbic,
-197,LING.R,Lingual,Right,Visual,none,yes
+197,LING.R,Lingual,Right,none,none,
 198,ORBsupb.R,Orbital (Superior),Right,Limbic,Limbic,
 199,FFG.R,Fusiform Gyrus,Right,none,none,
 200,MTG.R,Middle Temporal Gyrus,Right,Limbic,DMN,yes
