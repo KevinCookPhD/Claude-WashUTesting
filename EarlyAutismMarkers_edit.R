@@ -2658,6 +2658,71 @@ atlasRows <- lapply(c('axial', 'coronal', 'sagittal'), function(view) ggpubr::gg
 supplemental_atlas <- ggpubr::ggarrange(plotlist = atlasRows, nrow = 3, ncol = 1, labels = c('A', 'B', 'C'), font.label = list(size = 14, face = 'bold'))
 showFigure(supplemental_atlas, 'supplemental_atlas', width = 13, height = 6.6)
 
+# The same atlas as a 3D render: the parcels as blocks (one per voxel), seen from six directions. Needs the rgl and png packages and a screen (like the glass brains).
+# Top row: left side, right side, front. Bottom row: the medial face of the left hemisphere and of the right hemisphere (these show the deep regions), and
+# the underside. Same colors as the slices.
+atlasSurface <- function(parcelVolume, affine) {
+  d <- dim(parcelVolume)
+  padded <- array(0L, dim = d + 2); padded[2:(d[1] + 1), 2:(d[2] + 1), 2:(d[3] + 1)] <- parcelVolume
+  idx <- which(parcelVolume > 0, arr.ind = TRUE); id <- parcelVolume[idx]
+  corners <- list(c(-.5, -.5), c(.5, -.5), c(.5, .5), c(-.5, .5))
+  toWorld <- function(m) (cbind(m, 1) %*% t(affine))[, 1:3, drop = FALSE]
+  cross <- function(a, b) c(a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3], a[1] * b[2] - a[2] * b[1])
+  quads <- list(); ids <- list(); normals <- list()
+  for (axis in 1:3) for (side in c(-1, 1)) {
+    neighbor <- idx; neighbor[, axis] <- neighbor[, axis] + side
+    exposed <- padded[neighbor + 1] == 0                       # a face is drawn where the next voxel is empty
+    if (!any(exposed)) next
+    base <- idx[exposed, , drop = FALSE] - 1; others <- setdiff(1:3, axis)
+    cornerWorld <- lapply(corners, function(cc) { m <- base; m[, axis] <- m[, axis] + side * .5; m[, others[1]] <- m[, others[1]] + cc[1]; m[, others[2]] <- m[, others[2]] + cc[2]; toWorld(m) })
+    outward <- affine[1:3, axis] * side
+    if (sum(cross(cornerWorld[[2]][1, ] - cornerWorld[[1]][1, ], cornerWorld[[3]][1, ] - cornerWorld[[1]][1, ]) * outward) < 0) { cornerWorld <- cornerWorld[c(1, 4, 3, 2)] }
+    n <- nrow(base)
+    quads[[length(quads) + 1]] <- do.call(rbind, cornerWorld)[order(rep(seq_len(n), 4)), , drop = FALSE]
+    ids[[length(ids) + 1]] <- id[exposed]
+    normals[[length(normals) + 1]] <- matrix(outward / sqrt(sum(outward^2)), n, 3, byrow = TRUE)
+  }
+  list(vertices = do.call(rbind, quads), id = unlist(ids), normals = do.call(rbind, normals))
+}
+
+atlasRotation <- function() {
+  R <- rgl::rotationMatrix
+  leftSide <- R(pi / 2, 0, 1, 0) %*% R(-pi / 2, 1, 0, 0)
+  list(`left` = leftSide, `right` = leftSide %*% R(pi, 0, 0, 1),
+       `front` = R(-pi / 2, 1, 0, 0) %*% R(pi, 0, 0, 1),      # seen from the front: the right side of the brain is on the left of the picture
+       `underside` = R(pi, 0, 1, 0))                          # seen from below, front at the top, right on the left
+}
+
+atlasRender <- function(parcels, viewName, pixels = 900) {
+  volume <- atlasLabels; volume[!(volume %in% parcels)] <- 0L
+  surface <- atlasSurface(volume, atlasAffine)
+  rgl::open3d(useNULL = FALSE, windowRect = c(0, 0, pixels, pixels))
+  on.exit(rgl::close3d())
+  rgl::bg3d('white'); rgl::clear3d('lights')
+  rgl::light3d(theta = 0, phi = 0, viewpoint.rel = TRUE, ambient = '#808080', diffuse = '#E0E0E0', specular = '#000000')
+  rgl::quads3d(surface$vertices, color = rep(parcelColor[surface$id], each = 4), normals = surface$normals[rep(seq_len(nrow(surface$normals)), each = 4), ], specular = 'black', lit = TRUE)
+  rgl::par3d(userMatrix = atlasRotation()[[viewName]], zoom = .75)
+  file <- tempfile(fileext = '.png'); rgl::snapshot3d(file, webshot = FALSE)
+  img <- png::readPNG(file)[, , 1:3, drop = FALSE]; unlink(file)
+  used <- which(apply(img < .98, c(1, 2), any), arr.ind = TRUE); pad <- 10
+  img <- img[max(1, min(used[, 1]) - pad):min(dim(img)[1], max(used[, 1]) + pad), max(1, min(used[, 2]) - pad):min(dim(img)[2], max(used[, 2]) + pad), , drop = FALSE]
+  ggplot() + annotation_raster(as.raster(img), xmin = 0, xmax = ncol(img), ymin = 0, ymax = nrow(img), interpolate = TRUE) +
+    xlim(0, ncol(img)) + ylim(0, nrow(img)) + coord_fixed(expand = FALSE) + theme_void()
+}
+
+canRender3D <- requireNamespace('rgl', quietly = TRUE) && requireNamespace('png', quietly = TRUE) &&
+  tryCatch({ rgl::open3d(useNULL = FALSE); ok <- !rgl::rgl.useNULL(); rgl::close3d(); ok }, error = function(e) FALSE)
+if (canRender3D) {
+  atlas3D <- list(atlasRender(1:200, 'left'), atlasRender(1:200, 'right'), atlasRender(1:200, 'front'),
+                  atlasRender(1:100, 'right'),      # left hemisphere only, seen from the right: its medial face
+                  atlasRender(101:200, 'left'),     # right hemisphere only, seen from the left: its medial face
+                  atlasRender(1:200, 'underside'))
+  supplemental_atlas_3d <- ggpubr::ggarrange(plotlist = atlas3D, nrow = 2, ncol = 3, labels = c('A', 'B', 'C', 'D', 'E', 'F'), font.label = list(size = 14, face = 'bold'))
+  showFigure(supplemental_atlas_3d, 'supplemental_atlas_3d', width = 13, height = 9)
+} else {
+  message('3D atlas render skipped: the rgl and png packages and a screen are needed')
+}
+
 
 # 4. Anatomical-Functional Overlap (optional; needs both 2a and 3a) ----
 
