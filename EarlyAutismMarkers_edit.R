@@ -1692,6 +1692,7 @@ tier1Combined$family <- factor(tier1Combined$family, levels = c('Within Networks
 # solid band naming the panel. Connectivity is Fisher z in the models, shown here as r (tanh). Text sizes: 14 pt (titles, bands), 12 pt (everything else).
 tier1BarsFigure <- function(fits) {
   fits$family <- factor(fits$family, levels = c('Within Networks', 'Between Networks'))
+  fits$label <- sub(' - ', ' -\n', fits$label, fixed = TRUE)      # pairs of networks on two lines, e.g. "Cerebellar -\nLimbic"
   fits$position <- ave(seq_len(nrow(fits)), fits$family, FUN = seq_along)
   barData <- rbind(data.frame(family = fits$family, label = fits$label, position = fits$position, Group = 'Low Risk', Mean = fits$LowRisk.Mean, SE = fits$LowRisk.SE),
                    data.frame(family = fits$family, label = fits$label, position = fits$position, Group = 'High Risk', Mean = fits$HighRisk.Mean, SE = fits$HighRisk.SE))
