@@ -86,22 +86,12 @@ glassDepthLayers <- 6
 # How opaque the glass is where the most surface overlaps (0 = invisible, 1 = solid). Lower it for a lighter brain.
 glassBrainOpacity <- .8
 
-# Network colors (nodes, edges, name bands and the tinted backing behind the bars in the Tier 2 figure). One entry per palette, in the order Cerebellar, Limbic,
-# Subcortical, Default Mode; networkPaletteName picks the one used everywhere. The palettes avoid blue and red/pink, which are the Low and High Risk colors.
-networkPalettes <- list(
-  dark2   = c(CRB = '#D95F02', Limbic = '#1B9E77', SubCort = '#7570B3', DMN = '#A6761D'),
-  okabe   = c(CRB = '#E69F00', Limbic = '#009E73', SubCort = '#7B68C8', DMN = '#A0522D'),
-  tableau = c(CRB = '#F28E2B', Limbic = '#59A14F', SubCort = '#B07AA1', DMN = '#9C755F'),
-  earth   = c(CRB = '#C9A227', Limbic = '#4C8C4A', SubCort = '#8C5A9E', DMN = '#8B5A2B'),
-  current = c(CRB = '#F2B134', Limbic = '#14C28D', SubCort = '#1A8BB5', DMN = '#E8305E'))
-networkPaletteName <- 'okabe'
-networkNodeColors <- networkPalettes[[networkPaletteName]]
+# Network colors (Okabe-Ito based; nodes, edges, name bands and the tinted backing behind the bars in the Tier 2 figure), in the order Cerebellar, Limbic,
+# Subcortical, Default Mode. They avoid blue and red/pink, which are the Low and High Risk colors.
+networkNodeColors <- c(CRB = '#E69F00', Limbic = '#009E73', SubCort = '#7B68C8', DMN = '#A0522D')
 
 # The Tier 2 figure shows the connections with an FDR-adjusted p below this (.05 = significant only)
 tier2FigureThreshold <- .05
-
-# Also save the Tier 2 figure in each of these palettes (names from networkPalettes), to compare colors; character(0) for none
-tier2PaletteOptions <- character(0)
 
 networkNodeLabels <- c(CRB = 'Cerebellar', Limbic = 'Limbic', SubCort = 'Subcortical', DMN = 'Default Mode')
 
@@ -1899,7 +1889,7 @@ tier2Figure <- function(palette = networkNodeColors) {
     scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
     labs(x = NULL, y = 'Connectivity Strength') +
     themeRegionalFigure(showXTitle = FALSE) +
-    theme(axis.text.x = element_text(size = 10, angle = 30, hjust = 1, vjust = 1), strip.text = element_blank(), strip.background = element_blank(),
+    theme(axis.text.x = element_text(size = 10, angle = 60, hjust = 1, vjust = 1), strip.text = element_blank(), strip.background = element_blank(),
           panel.spacing = unit(.35, 'lines'))
 
   ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.15), labels = c('A', 'B'))
@@ -1907,12 +1897,6 @@ tier2Figure <- function(palette = networkNodeColors) {
 
 tier2_figure <- tier2Figure()
 if (!is.null(tier2_figure)) { showFigure(tier2_figure, 'tier2_figure', width = 13, height = 8.4) }
-
-# The same figure in each palette listed in tier2PaletteOptions, to compare colors (saved in the components folder)
-for (paletteName in tier2PaletteOptions) {
-  paletteFigure <- tier2Figure(networkPalettes[[paletteName]])
-  if (!is.null(paletteFigure)) { showFigure(paletteFigure, paste0('tier2_figure_', paletteName), width = 13, height = 8.4, subfolder = componentFolder) }
-}
 
 
 ## 3e. Tier 3: Exploratory Whole Brain ----
