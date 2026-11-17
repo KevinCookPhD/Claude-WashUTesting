@@ -1846,16 +1846,22 @@ tier2Figure <- function(palette = networkNodeColors) {
   brains <- lapply(c('axial', 'posterior', 'lateral'), function(view) glassView(view, nodes, edges))
 
   # Legend panel: the networks shown, the Low / High Risk bar colors and what is plotted
-  yNet <- seq(.86, by = -.115, length.out = length(usedNets))
+  step <- .09; half <- .035                                              # row spacing and half-height of each swatch
+  nRows <- length(usedNets) + 2                                           # network rows, then Low and High Risk
+  yTop <- .5 + (nRows * step + .04) / 2                                   # the legend block is centered vertically
+  yNet <- yTop - step / 2 - step * (seq_along(usedNets) - 1)
+  yLow <- yTop - step / 2 - step * length(usedNets) - .03
+  yHigh <- yLow - step
   legendPanel <- ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed(ratio = 1.1) + theme_void() +
-    annotate('rect', xmin = .02, xmax = .98, ymin = .03, ymax = .97, fill = 'white', colour = 'black', linewidth = 1) +
-    annotate('rect', xmin = .08, xmax = .19, ymin = yNet - .042, ymax = yNet + .042, fill = unname(palette[usedNets]), colour = '#444444', linewidth = .4) +
-    annotate('text', x = .24, y = yNet, label = paste(networkNodeLabels[usedNets], 'Network'), hjust = 0, size = 4.2) +
-    annotate('segment', x = .05, xend = .95, y = .45, yend = .45, linewidth = .5) +
-    annotate('rect', xmin = .08, xmax = .19, ymin = .31 - .042, ymax = .31 + .042, fill = groupBarFill[['low']], colour = '#000000', linewidth = .8) +
-    annotate('text', x = .24, y = .31, label = 'Low Risk', hjust = 0, size = 4.2) +
-    annotate('rect', xmin = .08, xmax = .19, ymin = .20 - .042, ymax = .20 + .042, fill = groupBarFill[['high']], colour = '#000000', linewidth = .8) +
-    annotate('text', x = .24, y = .20, label = 'High Risk', hjust = 0, size = 4.2)
+    annotate('rect', xmin = .02, xmax = .98, ymin = yHigh - step / 2 - .01, ymax = yTop + .02, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('rect', xmin = .16, xmax = .92, ymin = yNet - half, ymax = yNet + half, fill = vapply(unname(palette[usedNets]), tintColor, character(1), amount = .55), colour = '#000000', linewidth = .4) +
+    annotate('rect', xmin = .07, xmax = .16, ymin = yNet - half, ymax = yNet + half, fill = unname(palette[usedNets]), colour = '#000000', linewidth = .4) +
+    annotate('text', x = .20, y = yNet, label = paste(networkNodeLabels[usedNets], 'Network'), hjust = 0, size = 4.2) +
+    annotate('segment', x = .05, xend = .95, y = yLow + step / 2 + .005, yend = yLow + step / 2 + .005, linewidth = .5) +
+    annotate('rect', xmin = .07, xmax = .16, ymin = yLow - half, ymax = yLow + half, fill = groupBarFill[['low']], colour = '#000000', linewidth = .8) +
+    annotate('text', x = .20, y = yLow, label = 'Low Risk', hjust = 0, size = 4.2) +
+    annotate('rect', xmin = .07, xmax = .16, ymin = yHigh - half, ymax = yHigh + half, fill = groupBarFill[['high']], colour = '#000000', linewidth = .8) +
+    annotate('text', x = .20, y = yHigh, label = 'High Risk', hjust = 0, size = 4.2)
   top <- ggpubr::ggarrange(brains[[1]], brains[[2]], brains[[3]], legendPanel, nrow = 1, ncol = 4, widths = c(1, 1, 1, .85))
 
   # Bars: all connections in one row, grouped by network
@@ -1889,7 +1895,7 @@ tier2Figure <- function(palette = networkNodeColors) {
     scale_y_continuous(limits = c(bottomY, topY + band), breaks = yBreaks, labels = fixedDecimalLabels, expand = c(0, 0)) +
     labs(x = NULL, y = 'Connectivity Strength') +
     themeRegionalFigure(showXTitle = FALSE) +
-    theme(axis.text.x = element_text(size = 10, angle = 60, hjust = 1, vjust = 1), strip.text = element_blank(), strip.background = element_blank(),
+    theme(axis.text.x = element_text(size = 10, angle = 70, hjust = 1, vjust = 1), strip.text = element_blank(), strip.background = element_blank(),
           panel.spacing = unit(.35, 'lines'))
 
   ggpubr::ggarrange(top, bars, nrow = 2, heights = c(1, 1.15), labels = c('A', 'B'))
