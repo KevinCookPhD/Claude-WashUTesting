@@ -1270,38 +1270,45 @@ for (k in seq_along(figureThresholds)) {
 ## Combined regional figure: group effect OR interaction
 
 # One figure with every region whose group effect or group x age interaction is significant or trending (FDR p < combinedFigureThreshold, from the
-# normalized interaction model). Each panel is the interaction view: normalized volume across gestational age with a line per risk group. Styled like the
-# Tier 1 and Tier 2 figures: a solid band with the region name above a light gray panel, 14 pt titles and 12 pt everything else.
+# normalized interaction model). Each panel is the interaction view: normalized volume across gestational age with a line per risk group, with the region
+# name as the y-axis title. The adjusted p-values are saved in the regional_combined_regions table. Text sizes: 14 pt titles, 12 pt everything else.
 combinedFigureThreshold <- .10
 
-formatAdjustedP <- function(p) ifelse(p < .001, '< .001', sub('^0', '', sprintf('%.3f', p)))
-significanceMark <- function(p) ifelse(p < .05, '*', ifelse(p < .10, '\u2020', ''))      # * = p < .05, dagger = p < .10
+# Short region name for a y-axis title, e.g. 'Hippocampus (L)': drops 'Volume' and abbreviates the side
+shortRegionName <- function(roi) {
+  spec <- regionalFigureROIs[regionalFigureROIs$roi == roi,]
+  name <- if (nrow(spec) == 1) sub(' Volume$', '', spec$label) else sub('^(.*) ([LR])$', '\\1 (\\2)', gsub('_', ' ', roi))
+  name <- sub('\\(Left\\)', '(L)', name); sub('\\(Right\\)', '(R)', name)
+}
 
-plotRoiCombined <- function(roi, groupP, intxP) {
+plotRoiCombined <- function(roi) {
   tempAnalyses <- prepRegionalFigureData(roi)
   tempAnalyses$`Autism Risk` <- factor(ifelse(tempAnalyses$mchat_result=='Fail','High Risk','Low Risk'), levels = c('Low Risk','High Risk'))
-
   axisInfo <- roiAxis(roi, 'intx', max(tempAnalyses$VolNormed, na.rm=TRUE))
-  topY <- axisInfo$limits[2]; band <- .12 * topY
-  spec <- regionalFigureROIs[regionalFigureROIs$roi == roi,]
-  roiName <- sub(' Volume$', '', if (nrow(spec) == 1) spec$label else paste(gsub('_', ' ', roi), 'Volume'))
-  pText <- paste0('Group: p.adj = ', formatAdjustedP(groupP), significanceMark(groupP), '\nInteraction: p.adj = ', formatAdjustedP(intxP), significanceMark(intxP))
 
   ggplot(data=tempAnalyses, aes(x=scanAge, y=VolNormed)) +
-    annotate('rect', xmin = -Inf, xmax = Inf, ymin = topY, ymax = topY + band, fill = '#595959') +
-    annotate('text', x = 30, y = topY + band / 2, label = roiName, color = 'white', size = 14 / .pt) +
-    annotate('text', x = 20, y = topY * .98, label = pText, hjust = 0, vjust = 1, size = 12 / .pt, lineheight = .95) +
-    scale_y_continuous(limits=c(0, topY + band), breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
+    scale_y_continuous(limits=axisInfo$limits, breaks=axisInfo$breaks, labels=fixedDecimalLabels, expand=c(0,0)) +
     scale_x_continuous(limits=c(19.5,40.5), breaks=seq(20,40,5), expand=c(0,0)) +
     scale_shape_manual(values=c(23,21)) +
     scale_fill_manual(values=c(groupPointFill[['low']], groupPointFill[['high']])) +
     geom_point(aes(fill=`Autism Risk`, shape=`Autism Risk`), color='#000000', size=4, stroke=.75) +
     scale_color_manual(values=c(groupLineColor[['low']], groupLineColor[['high']])) +
     geom_smooth(method='lm', formula='y~x', aes(color=`Autism Risk`), se=F, linewidth=2) +
-    ylab('Normalized Volume') + xlab('Gestational Age (Weeks)') +
+    ylab(wrapAxisLabel(shortRegionName(roi), width = 20)) + xlab('Gestational Age (Weeks)') +
     themeRegionalFigure(showXTitle = TRUE) +
-    theme(axis.title.x = element_text(color = 'black', size = 14), axis.title.y = element_text(color = 'black', size = 14),
-          panel.background = element_rect(fill = '#EDEDED'), panel.grid.major.y = element_line(color = 'white', linewidth = 1.4))
+    theme(axis.title.x = element_text(color = 'black', size = 14), axis.title.y = element_text(color = 'black', size = 14))
+}
+
+# Boxed Low / High Risk key sized to its contents (not stretched to fill its grid cell)
+combinedLegendPanel <- function() {
+  ggplot() + xlim(0, 1) + ylim(0, 1) + theme_void() +
+    annotate('rect', xmin = .12, xmax = .88, ymin = .36, ymax = .64, fill = 'white', colour = 'black', linewidth = 1) +
+    annotate('segment', x = .17, xend = .35, y = .55, yend = .55, colour = groupLineColor[['low']], linewidth = 2) +
+    annotate('point', x = .26, y = .55, shape = 23, size = 5, fill = groupPointFill[['low']], colour = 'black', stroke = .75) +
+    annotate('text', x = .40, y = .55, label = 'Low Risk', hjust = 0, size = 12 / .pt) +
+    annotate('segment', x = .17, xend = .35, y = .45, yend = .45, colour = groupLineColor[['high']], linewidth = 2) +
+    annotate('point', x = .26, y = .45, shape = 21, size = 5, fill = groupPointFill[['high']], colour = 'black', stroke = .75) +
+    annotate('text', x = .40, y = .45, label = 'High Risk', hjust = 0, size = 12 / .pt)
 }
 
 combinedTable <- glmRegionalNormedVolTable.Itx
@@ -1310,14 +1317,14 @@ combinedTable <- combinedTable[which(combinedTable$bestP < combinedFigureThresho
 combinedTable <- combinedTable[order(combinedTable$bestP), ]
 message('Combined regional figure: ', nrow(combinedTable), ' region(s) with a group or interaction effect at FDR p < ', combinedFigureThreshold)
 if (nrow(combinedTable) > 0) {
-  combinedPlots <- lapply(seq_len(nrow(combinedTable)), function(i) plotRoiCombined(combinedTable$ROI[i], combinedTable$Grp.p.Adj[i], combinedTable$Itx.p.Adj[i]))
+  saveTable(combinedTable[, c('ROI', 'Grp.p.Adj', 'Itx.p.Adj')], 'regional_combined_regions')
+  combinedPlots <- lapply(combinedTable$ROI, plotRoiCombined)
   nCols <- min(4, length(combinedPlots) + 1); nRows <- ceiling((length(combinedPlots) + 1) / nCols)
-  combinedSlots <- c(combinedPlots, rep(list(ggplot() + theme_void()), nCols * nRows - length(combinedPlots) - 1), list(riskLegendPanel('intx', textSize = 12 / .pt)))
+  combinedSlots <- c(combinedPlots, rep(list(ggplot() + theme_void()), nCols * nRows - length(combinedPlots) - 1), list(combinedLegendPanel()))
   regional_combined <- ggpubr::ggarrange(plotlist = combinedSlots, nrow = nRows, ncol = nCols, legend = 'none')
   combinedSize <- regionalFigureSize(nrow(combinedTable))
   showFigure(regional_combined, 'regional_combined', width = combinedSize$width, height = combinedSize$height)
 }
-
 
 ## 2d. Cortical Thickness ----
 
