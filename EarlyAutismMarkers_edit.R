@@ -361,12 +361,12 @@ fixedDecimalLabels <- function(breaks) {
   formatC(breaks, format = 'f', digits = digits)
 }
 
-# Shared figure theme. The group (bar) figures have no x-axis title.
+# Shared figure theme (14 pt axis titles, 12 pt everything else). The group (bar) figures have no x-axis title.
 themeRegionalFigure <- function(showXTitle = TRUE) {
-  theme(axis.title.x = if (showXTitle) element_text(color = 'black', size = 16) else element_blank(),
+  theme(axis.title.x = if (showXTitle) element_text(color = 'black', size = 14) else element_blank(),
         axis.text.x = element_text(color = 'black', size = 12),
         axis.ticks.x = element_blank(),
-        axis.title.y = element_text(color = 'black', size = 16),
+        axis.title.y = element_text(color = 'black', size = 14),
         axis.text.y = element_text(color = 'black', size = 12),
         axis.ticks.y = element_blank(),
         axis.line.x = element_line(color='black', linewidth = 1),
@@ -383,7 +383,7 @@ themeRegionalFigure <- function(showXTitle = TRUE) {
 # A boxed legend (Low Risk / High Risk) drawn as its own panel, like the key in the older hand-formatted figure.
 # type = 'group' (filled bars), 'network' (bars with colored outlines) or 'intx' (diamond / circle with a line);
 # textSize = size of the 'Low Risk' / 'High Risk' text
-riskLegendPanel <- function(type, textSize = 7.5) {
+riskLegendPanel <- function(type, textSize = 12 / .pt) {
   legendPlot <- ggplot() + xlim(0, 1) + ylim(0, 1) + coord_fixed() + theme_void() +
     annotate('rect', xmin = .08, xmax = .92, ymin = .2, ymax = .8, fill = 'white', colour = 'black', linewidth = 1) +
     annotate('text', x = .40, y = .61, label = 'Low Risk', hjust = 0, size = textSize) +
@@ -408,7 +408,7 @@ riskLegendPanel <- function(type, textSize = 7.5) {
 
 # Put the boxed Low Risk / High Risk legend to the right of a single plot
 addRiskLegend <- function(plotObj, legendType) {
-  ggpubr::ggarrange(plotObj, riskLegendPanel(legendType, textSize = 5), ncol = 2, widths = c(5, 1.3), legend = 'none')
+  ggpubr::ggarrange(plotObj, riskLegendPanel(legendType), ncol = 2, widths = c(5, 1.3), legend = 'none')
 }
 
 # Full region names (used on the chord diagram and the connection charts), keyed by the abbreviation without its hemisphere
@@ -1613,10 +1613,10 @@ plotNetworkBars <- function(fcGLM, spec) {
   barPlot <- barPlot +
     geom_bar(stat='identity', position='dodge', aes(color=Group,fill=Group)) +
     ylab('Connectivity Strength') + xlab(spec$xLabel) +
-    theme(axis.title.x = element_text(color = 'black', size = 16),
+    theme(axis.title.x = element_text(color = 'black', size = 14),
           axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
-          axis.title.y = element_text(color = 'black', size = 16),
+          axis.title.y = element_text(color = 'black', size = 14),
           axis.text.y = element_text(color = 'black', size = 12),
           axis.ticks.y = element_blank(),
           axis.line.x = element_line(color='black', linewidth = 1),
