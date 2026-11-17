@@ -41,6 +41,12 @@ sliceFractions <- c(axial = .45, sagittal = .28, coronal = .55)
 outlineDisagreements <- TRUE
 outlineLowConfidence <- FALSE
 
+# Parcel numbers: write the fetal parcel number (ROINum, the same number as in the tables) on each fetal parcel in the figures, so a decision can be
+# referred to by number ("parcel 27 ...").
+labelParcels <- TRUE
+labelSize2D <- 2.3             # text size in the slice figure
+labelSize3D <- 0.9             # text size in the 3D figure
+
 # 3D rendering (needs the rgl package and a display; set FALSE to skip). Drawn as the left hemisphere, blocky parcels (voxels), lateral and medial views.
 make3D <- TRUE
 yeo3DStep <- 2                 # the Yeo atlas is 1 mm; 2 draws every second voxel (faster, still smooth enough)
@@ -250,7 +256,9 @@ outlineSegments <- function(df, ids) {
   if (length(segs) == 0) NULL else do.call(rbind, segs)
 }
 
-panelPlot <- function(df, title, view, tile, outlines = list()) {
+textColorFor <- function(hex) { rgbValues <- grDevices::col2rgb(hex) / 255; ifelse(.299 * rgbValues[1, ] + .587 * rgbValues[2, ] + .114 * rgbValues[3, ] < .5, 'white', 'black') }
+
+panelPlot <- function(df, title, view, tile, outlines = list(), label = FALSE) {
   p <- ggplot2::ggplot(df, ggplot2::aes(x = h, y = v, fill = network)) +
     ggplot2::geom_tile(width = tile, height = tile) +
     ggplot2::scale_fill_manual(values = networkColors, limits = names(networkColors), drop = FALSE, name = NULL) +
@@ -259,6 +267,13 @@ panelPlot <- function(df, title, view, tile, outlines = list()) {
   for (g in outlines) {
     seg <- outlineSegments(df, g$ids)
     if (!is.null(seg)) p <- p + ggplot2::geom_segment(data = seg, ggplot2::aes(x = x, xend = xend, y = y, yend = yend), inherit.aes = FALSE, color = g$color, linewidth = .7, lineend = 'square')
+  }
+  if (label && any(!is.na(df$parcel))) {
+    centres <- do.call(rbind, lapply(split(df[!is.na(df$parcel), ], df$parcel[!is.na(df$parcel)]), function(d)
+      data.frame(h = mean(d$h), v = mean(d$v), parcel = d$parcel[1], network = d$network[1], n = nrow(d))))
+    centres$textColor <- textColorFor(networkColors[centres$network])
+    p <- p + ggplot2::geom_text(data = centres, ggplot2::aes(x = h, y = v, label = parcel, color = textColor), inherit.aes = FALSE, size = labelSize2D) +
+      ggplot2::scale_color_identity()
   }
   if (view == 'sagittal') p <- p + ggplot2::scale_x_reverse()      # front on the left
   p
@@ -271,15 +286,15 @@ for (view in c('axial', 'sagittal', 'coronal')) {
   yeoSlice <- sliceOf(yeoNetworkArray, schaefer$affine, view, sliceCoordM[[view]])
   plots[[length(plots) + 1]] <- panelPlot(yeoSlice, if (view == 'axial') columns[1] else '', view, yeoSlice$step[1])
   fs <- sliceOf(fetalProposed, fetal$affine, view, sliceCoordF[[view]], fetal$data)
-  plots[[length(plots) + 1]] <- panelPlot(fs, if (view == 'axial') columns[2] else '', view, fs$step[1], outlineGroups)
+  plots[[length(plots) + 1]] <- panelPlot(fs, if (view == 'axial') columns[2] else '', view, fs$step[1], outlineGroups, labelParcels)
   if (haveCurrent) {
     fc <- sliceOf(fetalCurrent, fetal$affine, view, sliceCoordF[[view]], fetal$data)
-    plots[[length(plots) + 1]] <- panelPlot(fc, if (view == 'axial') columns[3] else '', view, fc$step[1], outlineGroups)
+    plots[[length(plots) + 1]] <- panelPlot(fc, if (view == 'axial') columns[3] else '', view, fc$step[1], outlineGroups, labelParcels)
   }
 }
 networkMembership_slices <- ggpubr::ggarrange(plotlist = plots, ncol = length(columns), nrow = 3, common.legend = TRUE, legend = 'bottom')
 networkMembership_slices <- ggpubr::annotate_figure(networkMembership_slices,
-  bottom = ggpubr::text_grob(paste0('Rows: axial, sagittal (front on the left), coronal slices; the fetal slices are at the same relative positions as the Yeo slices (approximate registration).', if (length(outlineGroups) > 0) ' Outlined = parcels in dispute.' else ''), size = 8, color = '#444444'))
+  bottom = ggpubr::text_grob(paste0('Rows: axial, sagittal (front on the left), coronal slices; the fetal slices are at the same relative positions as the Yeo slices (approximate registration).', if (length(outlineGroups) > 0) ' Outlined = parcels in dispute.' else '', if (labelParcels) ' Numbers = fetal parcel numbers (ROINum).' else ''), size = 8, color = '#444444'))
 
 if (exists('showFigure') && exists('saveFigure')) {
   oldSave <- saveFigures; oldTypes <- figureFileTypes
@@ -369,7 +384,7 @@ borderEdges <- function(surface, ids) {
 }
 liftFraction <- 0.25
 
-render3D <- function(parcelVol, affine, step, colorOfParcel, view, outlines = list(), pixels = 900) {
+render3D <- function(parcelVol, affine, step, colorOfParcel, view, outlines = list(), pixels = 900, labelIds = NULL) {
   surface <- voxelSurface(parcelVol, affine, step)
   rgl::open3d(useNULL = FALSE, windowRect = c(0, 0, pixels, pixels))
   on.exit(rgl::close3d())
@@ -381,6 +396,22 @@ render3D <- function(parcelVol, affine, step, colorOfParcel, view, outlines = li
     border <- borderEdges(surface, g$ids)
     if (!is.null(border)) rgl::segments3d(rbind(as.matrix(border[, c('x1', 'y1', 'z1')]), as.matrix(border[, c('x2', 'y2', 'z2')]))[order(rep(seq_len(nrow(border)), 2)), ],
                                           color = g$color, lwd = 4, lit = FALSE)
+  }
+  if (!is.null(labelIds)) {
+    # a number on each parcel that can be seen from this view: the faces that point at the camera and have nothing in front of them
+    facing <- if (view == 'lateral') surface$normals[, 1] < -.5 else surface$normals[, 1] > .5
+    nQuad <- nrow(surface$vertices) / 4
+    centres <- rowsum(surface$vertices, rep(seq_len(nQuad), each = 4)) / 4
+    key <- paste(round(centres[, 2] / surface$size), round(centres[, 3] / surface$size))
+    depth <- if (view == 'lateral') centres[, 1] else -centres[, 1]
+    front <- ave(depth, key, FUN = function(v) v == min(v))
+    visible <- facing & front == 1 & surface$id %in% labelIds
+    if (any(visible)) {
+      pos <- do.call(rbind, lapply(split(which(visible), surface$id[visible]), function(i) colMeans(centres[i, , drop = FALSE])))
+      pos[, 1] <- pos[, 1] + (if (view == 'lateral') -1 else 1) * surface$size * .6
+      ids <- as.integer(rownames(pos))
+      rgl::text3d(pos, texts = as.character(ids), color = textColorFor(colorOfParcel[ids]), cex = labelSize3D, font = 2, adj = c(.5, .5))
+    }
   }
   R <- rgl::rotationMatrix
   rgl::par3d(userMatrix = switch(view, lateral = R(pi / 2, 0, 1, 0) %*% R(-pi / 2, 1, 0, 0), medial = R(-pi / 2, 0, 1, 0) %*% R(-pi / 2, 1, 0, 0)), zoom = .75)
@@ -408,15 +439,16 @@ if (canDraw3D) {
   panels3D <- list()
   for (view in c('lateral', 'medial')) {
     panels3D[[length(panels3D) + 1]] <- render3D(yeoLeft, schaefer$affine, yeo3DStep, colorYeo, view)
-    panels3D[[length(panels3D) + 1]] <- render3D(fetalLeft, fetal$affine, 1, colorFetalProposed, view, outlineGroups)
-    if (haveCurrent) panels3D[[length(panels3D) + 1]] <- render3D(fetalLeft, fetal$affine, 1, colorFetalCurrent, view, outlineGroups)
+    leftIds <- if (labelParcels) membership$ROINum[membership$Hemisphere == 'Left'] else NULL
+    panels3D[[length(panels3D) + 1]] <- render3D(fetalLeft, fetal$affine, 1, colorFetalProposed, view, outlineGroups, labelIds = leftIds)
+    if (haveCurrent) panels3D[[length(panels3D) + 1]] <- render3D(fetalLeft, fetal$affine, 1, colorFetalCurrent, view, outlineGroups, labelIds = leftIds)
   }
   legendPlot <- ggplot2::ggplot(data.frame(network = factor(names(networkColors), levels = names(networkColors)), x = 1, y = 1), ggplot2::aes(x, y, fill = network)) +
     ggplot2::geom_tile() + ggplot2::scale_fill_manual(values = networkColors, name = NULL) + ggplot2::theme(legend.position = 'bottom')
   headers <- lapply(columns, function(txt) ggplot2::ggplot() + ggplot2::annotate('text', x = 0, y = 0, label = txt, size = 4) + ggplot2::theme_void())
   grid3D <- ggpubr::ggarrange(plotlist = c(headers, panels3D), ncol = length(columns), nrow = 3, heights = c(.08, 1, 1), legend.grob = ggpubr::get_legend(legendPlot), legend = 'bottom')
   networkMembership_3d <- ggpubr::annotate_figure(grid3D, bottom = ggpubr::text_grob(
-    paste0('Left hemisphere as voxel blocks: lateral view (top) and medial view (bottom). ', if (length(outlineGroups) > 0) 'Outlined = parcels in dispute.' else ''), size = 8, color = '#444444'))
+    paste0('Left hemisphere as voxel blocks: lateral view (top) and medial view (bottom). ', if (length(outlineGroups) > 0) 'Outlined = parcels in dispute. ' else '', if (labelParcels) 'Numbers = fetal parcel numbers (ROINum).' else ''), size = 8, color = '#444444'))
   if (exists('showFigure') && exists('saveFigure')) {
     oldSave <- saveFigures; oldTypes <- figureFileTypes
     saveFigures <- TRUE; figureFileTypes <- figureTypes
