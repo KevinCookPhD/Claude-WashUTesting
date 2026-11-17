@@ -15,7 +15,7 @@ dir <- "C:/Users/Kevin/OneDrive - Childrens National Hospital/ComputerSyncing/03
 
 omni_file <- "omnibussheet_01252023.csv"          # CHECK extension
 qa_file   <- "preemieScanQAUpdate_07022025.csv"   # CHECK extension
-delim     <- "\t"        # your pasted headers looked tab-delimited; use "," if they are commas
+delim     <- NULL        # NULL = auto-detect (tab, comma or semicolon); or set "\t" / ","
 
 TERM_PMA  <- 37          # weeks: scans before this = preterm period, at/after = term age
 
@@ -23,20 +23,43 @@ TERM_PMA  <- 37          # weeks: scans before this = preterm period, at/after =
 cohort_cols <- c("Preterm" = "#2a78d6", "OneSize (1z)" = "#eb6834", "PROTECT" = "#1baf7a")
 
 # ---- 1. Read both sheets -----------------------------------------------------
-omni <- read_delim(file.path(dir, omni_file), delim = delim, show_col_types = FALSE)
-qa   <- read_delim(file.path(dir, qa_file),   delim = delim, show_col_types = FALSE)
+# Detect the delimiter from the header line (tab, comma, semicolon) unless set above
+detect_delim <- function(path) {
+  header <- readLines(path, n = 1, warn = FALSE)
+  counts <- c("\t" = str_count(header, "\t"), "," = str_count(header, ","), ";" = str_count(header, ";"))
+  names(which.max(counts))
+}
+# Lowercase and trim names and strip any byte-order mark, so "Project" / "project" / " Project" all match
+clean_names_simple <- function(df) {
+  names(df) <- names(df) %>% str_remove("^﻿") %>% str_remove("^\\W+") %>% str_trim() %>% str_to_lower()
+  df
+}
+
+if (is.null(delim)) {
+  omni <- read_delim(file.path(dir, omni_file), delim = detect_delim(file.path(dir, omni_file)), show_col_types = FALSE)
+  qa   <- read_delim(file.path(dir, qa_file),   delim = detect_delim(file.path(dir, qa_file)),   show_col_types = FALSE)
+} else {
+  omni <- read_delim(file.path(dir, omni_file), delim = delim, show_col_types = FALSE)
+  qa   <- read_delim(file.path(dir, qa_file),   delim = delim, show_col_types = FALSE)
+}
+omni <- clean_names_simple(omni)
+qa   <- clean_names_simple(qa)
+
+cat("Omnibus columns:", paste(names(omni), collapse = ", "), "\n")
+cat("QA columns:     ", paste(names(qa),   collapse = ", "), "\n")
 
 # ---- 2. Harmonize names and key formats ---------------------------------------
 # Trim/lowercase the key columns so "P01 " and "p01" match across sheets.
 omni2 <- omni %>%
-  rename(project = Project, shortID = ID, scanNo = Scan, scanPMA = ScanPMA,
-         scanner = Scanner, sex = Sex, birthPMA = BirthGA,
-         kidokoro = Kidokoro, vol = NVol) %>%
+  rename(project = project, shortID = id, scanNo = scan, scanPMA = scanpma,
+         scanner = scanner, sex = sex, birthPMA = birthga,
+         kidokoro = kidokoro, vol = nvol, FullID = fullid) %>%
   mutate(across(c(project, shortID), ~ str_to_lower(str_trim(as.character(.x)))),
          scanNo = as.integer(scanNo))
 
 qa2 <- qa %>%
-  rename(vol = finalVol) %>%
+  rename(shortID = shortid, scanNo = scanno, scanPMA = scanpma, vol = finalvol,
+         scanDate = scandate, birthPMA = birthpma) %>%
   mutate(across(c(project, shortID), ~ str_to_lower(str_trim(as.character(.x)))),
          scanNo = as.integer(scanNo))
 
