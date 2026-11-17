@@ -2651,38 +2651,64 @@ atlasSlice <- function(view, fraction) {
 atlasPanel <- function(view, fraction) {
   d <- atlasSlice(view, fraction); d$color <- parcelColor[d$parcel]
   ggplot(d, aes(x = h, y = v, fill = color)) + geom_tile(width = d$size[1], height = d$size[1]) + scale_fill_identity() +
-    scale_x_reverse() + coord_fixed() + theme_void()      # high x (right) and high y (front) on the left of the picture
+    scale_x_reverse() + coord_fixed() + theme_void() + theme(plot.background = element_rect(fill = 'white', color = NA))      # high x (right) and high y (front) on the left of the picture
 }
 atlasFractions <- c(.2, .32, .44, .56, .68, .8)
 atlasRows <- lapply(c('axial', 'coronal', 'sagittal'), function(view) ggpubr::ggarrange(plotlist = lapply(atlasFractions, function(f) atlasPanel(view, f)), nrow = 1, ncol = length(atlasFractions)))
-supplemental_atlas <- ggpubr::ggarrange(plotlist = atlasRows, nrow = 3, ncol = 1, labels = c('A', 'B', 'C'), font.label = list(size = 14, face = 'bold'))
+supplemental_atlas <- ggpubr::ggarrange(plotlist = atlasRows, nrow = 3, ncol = 1, labels = c('A', 'B', 'C'), font.label = list(size = 14, face = 'bold')) +
+  theme(plot.background = element_rect(fill = 'white', color = NA))
 showFigure(supplemental_atlas, 'supplemental_atlas', width = 13, height = 6.6)
 
-# The same atlas as a 3D render: the parcels as blocks (one per voxel), seen from six directions. Needs the rgl and png packages and a screen (like the glass brains).
-# Top row: left side, right side, front. Bottom row: the medial face of the left hemisphere and of the right hemisphere (these show the deep regions), and
-# the underside. Same colors as the slices.
-atlasSurface <- function(parcelVolume, affine) {
-  d <- dim(parcelVolume)
-  padded <- array(0L, dim = d + 2); padded[2:(d[1] + 1), 2:(d[2] + 1), 2:(d[3] + 1)] <- parcelVolume
-  idx <- which(parcelVolume > 0, arr.ind = TRUE); id <- parcelVolume[idx]
-  corners <- list(c(-.5, -.5), c(.5, -.5), c(.5, .5), c(-.5, .5))
-  toWorld <- function(m) (cbind(m, 1) %*% t(affine))[, 1:3, drop = FALSE]
-  cross <- function(a, b) c(a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3], a[1] * b[2] - a[2] * b[1])
-  quads <- list(); ids <- list(); normals <- list()
-  for (axis in 1:3) for (side in c(-1, 1)) {
-    neighbor <- idx; neighbor[, axis] <- neighbor[, axis] + side
-    exposed <- padded[neighbor + 1] == 0                       # a face is drawn where the next voxel is empty
-    if (!any(exposed)) next
-    base <- idx[exposed, , drop = FALSE] - 1; others <- setdiff(1:3, axis)
-    cornerWorld <- lapply(corners, function(cc) { m <- base; m[, axis] <- m[, axis] + side * .5; m[, others[1]] <- m[, others[1]] + cc[1]; m[, others[2]] <- m[, others[2]] + cc[2]; toWorld(m) })
-    outward <- affine[1:3, axis] * side
-    if (sum(cross(cornerWorld[[2]][1, ] - cornerWorld[[1]][1, ], cornerWorld[[3]][1, ] - cornerWorld[[1]][1, ]) * outward) < 0) { cornerWorld <- cornerWorld[c(1, 4, 3, 2)] }
-    n <- nrow(base)
-    quads[[length(quads) + 1]] <- do.call(rbind, cornerWorld)[order(rep(seq_len(n), 4)), , drop = FALSE]
-    ids[[length(ids) + 1]] <- id[exposed]
-    normals[[length(normals) + 1]] <- matrix(outward / sqrt(sum(outward^2)), n, 3, byrow = TRUE)
+# The same atlas painted onto the brain surface (the mesh used for the glass brains), so the parcels sit on a smooth, folded brain. Every point of the surface
+# takes the label of the parcel that dominates around it (each parcel is blurred slightly first, so the borders between parcels are smooth).
+# Needs the rgl and png packages and a screen (like the glass brains). Same colors as the slices.
+# Top row: left side, right side, front. Bottom row: the medial face of the left hemisphere and of the right hemisphere, and the underside.
+paintAtlasOnSurface <- function(blurVoxels = 1, minimumScore = .15) {
+  mesh <- readMz3(brainMeshFile)
+  vertices <- as.matrix(standardCoordinates(mesh$vertices))                                      # the same orientation as the glass brains
+  position <- (cbind(vertices, 1) %*% t(solve(atlasAffine)))[, 1:3] + 1                          # position of every surface point in voxel units
+  d <- dim(atlasLabels); lower <- floor(position); fraction <- position - lower
+  clamp <- function(m, k) pmin(pmax(m, 1), d[k])
+  corner <- function(dx, dy, dz) (clamp(lower[, 3] + dz, 3) - 1) * d[1] * d[2] + (clamp(lower[, 2] + dy, 2) - 1) * d[1] + clamp(lower[, 1] + dx, 1)
+  cornerIndex <- cbind(corner(0, 0, 0), corner(1, 0, 0), corner(0, 1, 0), corner(1, 1, 0), corner(0, 0, 1), corner(1, 0, 1), corner(0, 1, 1), corner(1, 1, 1))
+  fx <- fraction[, 1]; fy <- fraction[, 2]; fz <- fraction[, 3]
+  weight <- cbind((1 - fx) * (1 - fy) * (1 - fz), fx * (1 - fy) * (1 - fz), (1 - fx) * fy * (1 - fz), fx * fy * (1 - fz),
+                  (1 - fx) * (1 - fy) * fz, fx * (1 - fy) * fz, (1 - fx) * fy * fz, fx * fy * fz)
+  kernel <- dnorm(-3:3, sd = blurVoxels); kernel <- kernel / sum(kernel)
+  blur <- function(volume) {      # gaussian blur along each axis in turn
+    for (axis in 1:3) {
+      blurred <- array(0, d)
+      for (shift in -3:3) {
+        moved <- array(0, d); source <- max(1, 1 + shift):min(d[axis], d[axis] + shift); target <- source - shift
+        switch(axis, moved[target, , ] <- volume[source, , ], moved[, target, ] <- volume[, source, ], moved[, , target] <- volume[, , source])
+        blurred <- blurred + kernel[shift + 4] * moved
+      }
+      volume <- blurred
+    }
+    volume
   }
-  list(vertices = do.call(rbind, quads), id = unlist(ids), normals = do.call(rbind, normals))
+  bestScore <- rep(0, nrow(vertices)); vertexParcel <- integer(nrow(vertices))
+  for (parcel in 1:200) {
+    mask <- (atlasLabels == parcel) * 1
+    if (!any(mask > 0)) next
+    score <- rowSums(matrix(blur(mask)[cornerIndex], ncol = 8) * weight)
+    better <- score > bestScore; bestScore[better] <- score[better]; vertexParcel[better] <- parcel
+  }
+  vertexParcel[bestScore < minimumScore] <- 0L      # surface points far from every parcel stay gray
+
+  faces <- mesh$faces
+  faceParcels <- cbind(vertexParcel[faces[, 1]], vertexParcel[faces[, 2]], vertexParcel[faces[, 3]])
+  faceParcel <- ifelse(faceParcels[, 1] == faceParcels[, 2] | faceParcels[, 1] == faceParcels[, 3], faceParcels[, 1], ifelse(faceParcels[, 2] == faceParcels[, 3], faceParcels[, 2], faceParcels[, 1]))
+  corners <- lapply(1:3, function(k) vertices[faces[, k], ])
+  faceNormal <- cbind(
+    (corners[[2]][, 2] - corners[[1]][, 2]) * (corners[[3]][, 3] - corners[[1]][, 3]) - (corners[[2]][, 3] - corners[[1]][, 3]) * (corners[[3]][, 2] - corners[[1]][, 2]),
+    (corners[[2]][, 3] - corners[[1]][, 3]) * (corners[[3]][, 1] - corners[[1]][, 1]) - (corners[[2]][, 1] - corners[[1]][, 1]) * (corners[[3]][, 3] - corners[[1]][, 3]),
+    (corners[[2]][, 1] - corners[[1]][, 1]) * (corners[[3]][, 2] - corners[[1]][, 2]) - (corners[[2]][, 2] - corners[[1]][, 2]) * (corners[[3]][, 1] - corners[[1]][, 1]))
+  vertexNormal <- matrix(0, nrow(vertices), 3)      # smooth shading: each point's normal is the average of the faces around it
+  for (k in 1:3) for (axis in 1:3) vertexNormal[, axis] <- vertexNormal[, axis] + tapply(faceNormal[, axis], factor(faces[, k], levels = seq_len(nrow(vertices))), sum, default = 0)
+  vertexNormal <- vertexNormal / pmax(sqrt(rowSums(vertexNormal^2)), 1e-9)
+  list(vertices = vertices, faces = faces, normals = vertexNormal, faceParcel = faceParcel, centerX = (corners[[1]][, 1] + corners[[2]][, 1] + corners[[3]][, 1]) / 3,
+       midline = mean(range(vertices[, 1])))
 }
 
 atlasRotation <- function() {
@@ -2693,34 +2719,38 @@ atlasRotation <- function() {
        `underside` = R(pi, 0, 1, 0))                          # seen from below, front at the top, right on the left
 }
 
-atlasRender <- function(parcels, viewName, pixels = 900) {
-  volume <- atlasLabels; volume[!(volume %in% parcels)] <- 0L
-  surface <- atlasSurface(volume, atlasAffine)
+atlasRender <- function(painted, viewName, hemisphere = NULL, pixels = 900) {
   rgl::open3d(useNULL = FALSE, windowRect = c(0, 0, pixels, pixels))
   on.exit(rgl::close3d())
   rgl::bg3d('white'); rgl::clear3d('lights')
   rgl::light3d(theta = 0, phi = 0, viewpoint.rel = TRUE, ambient = '#808080', diffuse = '#E0E0E0', specular = '#000000')
-  rgl::quads3d(surface$vertices, color = rep(parcelColor[surface$id], each = 4), normals = surface$normals[rep(seq_len(nrow(surface$normals)), each = 4), ], specular = 'black', lit = TRUE)
+  keep <- rep(TRUE, nrow(painted$faces))
+  if (!is.null(hemisphere)) { keep <- if (hemisphere == 'left') painted$centerX < painted$midline else painted$centerX > painted$midline }      # half of the brain, to see its medial face
+  index <- as.vector(t(painted$faces[keep, ]))
+  faceColor <- ifelse(painted$faceParcel[keep] > 0, parcelColor[pmax(painted$faceParcel[keep], 1)], '#BDBDBD')
+  rgl::triangles3d(painted$vertices[index, ], normals = painted$normals[index, ], color = rep(faceColor, each = 3), specular = 'black', lit = TRUE, front = 'filled', back = 'filled')
   rgl::par3d(userMatrix = atlasRotation()[[viewName]], zoom = .75)
   file <- tempfile(fileext = '.png'); rgl::snapshot3d(file, webshot = FALSE)
   img <- png::readPNG(file)[, , 1:3, drop = FALSE]; unlink(file)
   used <- which(apply(img < .98, c(1, 2), any), arr.ind = TRUE); pad <- 10
   img <- img[max(1, min(used[, 1]) - pad):min(dim(img)[1], max(used[, 1]) + pad), max(1, min(used[, 2]) - pad):min(dim(img)[2], max(used[, 2]) + pad), , drop = FALSE]
   ggplot() + annotation_raster(as.raster(img), xmin = 0, xmax = ncol(img), ymin = 0, ymax = nrow(img), interpolate = TRUE) +
-    xlim(0, ncol(img)) + ylim(0, nrow(img)) + coord_fixed(expand = FALSE) + theme_void()
+    xlim(0, ncol(img)) + ylim(0, nrow(img)) + coord_fixed(expand = FALSE) + theme_void() + theme(plot.background = element_rect(fill = 'white', color = NA))
 }
 
-canRender3D <- requireNamespace('rgl', quietly = TRUE) && requireNamespace('png', quietly = TRUE) &&
+canRender3D <- file.exists(brainMeshFile) && requireNamespace('rgl', quietly = TRUE) && requireNamespace('png', quietly = TRUE) &&
   tryCatch({ rgl::open3d(useNULL = FALSE); ok <- !rgl::rgl.useNULL(); rgl::close3d(); ok }, error = function(e) FALSE)
 if (canRender3D) {
-  atlas3D <- list(atlasRender(1:200, 'left'), atlasRender(1:200, 'right'), atlasRender(1:200, 'front'),
-                  atlasRender(1:100, 'right'),      # left hemisphere only, seen from the right: its medial face
-                  atlasRender(101:200, 'left'),     # right hemisphere only, seen from the left: its medial face
-                  atlasRender(1:200, 'underside'))
-  supplemental_atlas_3d <- ggpubr::ggarrange(plotlist = atlas3D, nrow = 2, ncol = 3, labels = c('A', 'B', 'C', 'D', 'E', 'F'), font.label = list(size = 14, face = 'bold'))
+  painted <- paintAtlasOnSurface()
+  atlas3D <- list(atlasRender(painted, 'left'), atlasRender(painted, 'right'), atlasRender(painted, 'front'),
+                  atlasRender(painted, 'right', 'left'),      # left hemisphere only, seen from the right: its medial face
+                  atlasRender(painted, 'left', 'right'),      # right hemisphere only, seen from the left: its medial face
+                  atlasRender(painted, 'underside'))
+  supplemental_atlas_3d <- ggpubr::ggarrange(plotlist = atlas3D, nrow = 2, ncol = 3, labels = c('A', 'B', 'C', 'D', 'E', 'F'), font.label = list(size = 14, face = 'bold')) +
+    theme(plot.background = element_rect(fill = 'white', color = NA))
   showFigure(supplemental_atlas_3d, 'supplemental_atlas_3d', width = 13, height = 9)
 } else {
-  message('3D atlas render skipped: the rgl and png packages and a screen are needed')
+  message('3D atlas render skipped: the rgl and png packages, the brain mesh file and a screen are needed')
 }
 
 
