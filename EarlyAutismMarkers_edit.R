@@ -1884,9 +1884,9 @@ tier2Figure <- function(palette = networkNodeColors) {
   xLabels <- setNames(connectionLabel(as.character(shown$ROI)), as.character(shown$ROI))
 
   bars <- ggplot(long, aes(x = ROI, y = Mean, fill = Group)) +
-    geom_rect(data = background, aes(xmin = -Inf, xmax = Inf, ymin = bottomY, ymax = topY + band), fill = background$tint, inherit.aes = FALSE) +
+    geom_rect(data = background, xmin = -Inf, xmax = Inf, ymin = bottomY, ymax = topY + band, fill = background$tint, inherit.aes = FALSE) +
     geom_vline(data = dividers, aes(xintercept = x), color = 'white', linewidth = 1.4) +
-    geom_rect(data = background, aes(xmin = -Inf, xmax = Inf, ymin = topY, ymax = topY + band), fill = background$solid, inherit.aes = FALSE) +
+    geom_rect(data = background, xmin = -Inf, xmax = Inf, ymin = topY, ymax = topY + band, fill = background$solid, inherit.aes = FALSE) +
     geom_text(data = background, aes(x = x, y = topY + band / 2, label = name), color = background$text, inherit.aes = FALSE, size = 5, hjust = .5) +
     geom_hline(yintercept = 0, linewidth = 1) +
     geom_col(position = position_dodge(.85), width = .8, color = '#000000', linewidth = .8) +
