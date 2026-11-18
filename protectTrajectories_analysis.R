@@ -225,8 +225,10 @@ lobe_pal_cue <- c(Frontal = "#f4849e", Temporal = "#ffdf95", Parietal = "#05a97e
 # deep blue; the amber and bluish green are from the Okabe-Ito color-blind-safe palette), and a line pattern each: EPT fine dots, VPT dashes with short gaps,
 # MPT solid. The gaps are small, so every line still reads as running the full span of that group's data.
 cols_pt_cue  <- c(EPT = "#e69f00", VPT = "#009e73", MPT = "#1b2a8a")
-cue_ltys     <- c(EPT = "11", VPT = "62", MPT = "solid")
-cue_line_w   <- 1.1
+cue_ltys     <- c(EPT = "22", VPT = "62", MPT = "solid")
+cue_line_w   <- 0.7         # line width in the cue version (the standard figure uses line_w, 0.9)
+cue_halo_w   <- 0.15        # white halo around each line
+cue_pt_alpha <- 0.28        # point opacity in the cue version (the standard figure uses pt_alpha, 0.45)
 cue_lines    <- FALSE        # TRUE only while the cue version of Fig. 4 B and C is being built (read by edge_plot and pt_legend_plot)
 make_gray_tiff <- function(from, to) {
   # 1. the magick package (install.packages("magick"); it bundles ImageMagick on Windows and macOS), 2. Python with Pillow, else a message.
@@ -1651,10 +1653,10 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
     ylim <- median(dp$val) + c(-1, 1) * y_span / 2
     p <- ggplot() +
       geom_point(data = dp, aes(ScanPMA, val, fill = BirthCat), shape = 21, size = pt_size,
-                 color = "transparent", stroke = 0, alpha = pt_alpha)
+                 color = "transparent", stroke = 0, alpha = if (cue_lines) cue_pt_alpha else pt_alpha)
     if (show_ci) p <- p + geom_ribbon(data = dl, aes(ScanPMA, ymin = lo, ymax = hi, fill = BirthCat), alpha = .15)
     p +
-      geom_line(data = dl, aes(ScanPMA, val, group = BirthCat), color = "#ffffff", linewidth = (if (cue_lines) cue_line_w else line_w) + halo_w) +
+      geom_line(data = dl, aes(ScanPMA, val, group = BirthCat), color = "#ffffff", linewidth = (if (cue_lines) cue_line_w + cue_halo_w else line_w + halo_w)) +
       (if (cue_lines) geom_line(data = dl, aes(ScanPMA, val, color = BirthCat, linetype = BirthCat), linewidth = cue_line_w)
        else           geom_line(data = dl, aes(ScanPMA, val, color = BirthCat), linewidth = line_w)) +
       scale_color_manual(values = if (cue_lines) cols_pt_cue else cols_pt, labels = grp_labels) +
@@ -1689,7 +1691,7 @@ pt_legend_plot <- function() {
     (if (cue_lines) geom_line(aes(linetype = g), linewidth = cue_line_w) else geom_line(linewidth = line_w)) + geom_point(size = 2.2) +   # key = line with a dot (dots are scans, lines are model fits)   # key = line with a dot (dots are scans, lines are model fits)
     scale_color_manual(values = if (cue_lines) cols_pt_cue else cols_pt, labels = grp_labels, name = NULL) +
     (if (cue_lines) scale_linetype_manual(values = cue_ltys, labels = grp_labels, name = NULL) else NULL) +
-    guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4, size = 2.2))) +
+    guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = if (cue_lines) cue_line_w + 0.3 else 1.4, size = 2.2))) +
     theme_void() + theme(legend.position = "left", legend.text = element_text(size = legend_text_size, color = "#000000"),
                          legend.key.width = unit(if (cue_lines) 0.8 else 0.45, "in"), legend.key.height = unit(0.24, "in"),
                          legend.background = element_rect(color = "#000000", fill = "#ffffff", linewidth = 0.3),   # box around the legend
