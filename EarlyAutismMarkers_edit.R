@@ -2729,7 +2729,7 @@ atlasSlice <- function(view, fraction) {
 atlasPanel <- function(view, fraction, colors) {
   d <- atlasSlice(view, fraction); d$color <- colors[d$parcel]
   ggplot(d, aes(x = h, y = v, fill = color)) + geom_tile(width = d$size[1], height = d$size[1]) + scale_fill_identity() +
-    scale_x_reverse() + coord_fixed() + theme_void() + theme(plot.background = element_rect(fill = 'white', color = NA))      # high x (right) and high y (front) on the left of the picture
+    scale_x_reverse() + coord_fixed() + theme_void() + theme(plot.background = element_rect(fill = 'white', color = NA), plot.margin = margin(t = 22, r = 2, b = 2, l = 2))      # high x (right) and high y (front) on the left of the picture; room above for the row label
 }
 atlasFractions <- c(.2, .32, .44, .56, .68, .8)
 atlasSliceFigure <- function(colors, bottom = NULL, bottomHeight = .16) {
@@ -2803,6 +2803,9 @@ atlasRotation <- function() {
        `back` = R(-pi / 2, 1, 0, 0))                          # seen from behind, right on the right
 }
 
+# Stack two images (arrays of rows x columns x 3) one above the other
+abind3 <- function(top, bottom) { out <- array(1, c(nrow(top) + nrow(bottom), ncol(top), 3)); out[seq_len(nrow(top)), , ] <- top; out[nrow(top) + seq_len(nrow(bottom)), , ] <- bottom; out }
+
 atlasRender <- function(painted, viewName, colors, hemisphere = NULL, unlabeledColor = '#BDBDBD', pixels = 900) {      # colors: one color per parcel (200)
   rgl::open3d(useNULL = FALSE, windowRect = c(0, 0, pixels, pixels))
   on.exit(rgl::close3d())
@@ -2818,6 +2821,8 @@ atlasRender <- function(painted, viewName, colors, hemisphere = NULL, unlabeledC
   img <- png::readPNG(file)[, , 1:3, drop = FALSE]; unlink(file)
   used <- which(apply(img < .98, c(1, 2), any), arr.ind = TRUE); pad <- 10
   img <- img[max(1, min(used[, 1]) - pad):min(dim(img)[1], max(used[, 1]) + pad), max(1, min(used[, 2]) - pad):min(dim(img)[2], max(used[, 2]) + pad), , drop = FALSE]
+  labelBand <- round(.12 * nrow(img))      # blank space above the brain, so the panel label does not run into it
+  img <- abind3(array(1, c(labelBand, ncol(img), 3)), img)
   ggplot() + annotation_raster(as.raster(img), xmin = 0, xmax = ncol(img), ymin = 0, ymax = nrow(img), interpolate = TRUE) +
     xlim(0, ncol(img)) + ylim(0, nrow(img)) + coord_fixed(expand = FALSE) + theme_void() + theme(plot.background = element_rect(fill = 'white', color = NA))
 }
