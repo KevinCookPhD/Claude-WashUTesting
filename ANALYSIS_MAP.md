@@ -107,6 +107,7 @@ Slow steps (the interaction, spline and motion models, and the three permutation
 - Birth-group rule: `birth_cat()` in section 0 (EPT <= 28, VPT > 28 to <= 32, MPT > 32).
 - Inclusion rule (4 minutes of data: 120 volumes at TR 2 s, 80 at TR 3 s): section 1 (`good4Min`, preterm scans) and the fetal controls in section 2; the flowchart script (`QA_REASON_*`) states it.
 - Clinical data for Table 1: `clin_file` in section 3d (workbook `2026-08-03_KC_fetal_preterm.xlsx`).
+- Grayscale print copies of the figures (color stays for the online version): run `python3 make_print_gray.py <figure folder>` after the figures are rendered. It writes `<name>_print_gray.tif[f]` next to each color TIFF (8-bit grayscale, 600 dpi, LZW) and never overwrites the color files.
 - Figure layout settings: Fig. 2 in 4f (`fig2_*`), Fig. 4 in sections 6 and 7b (`bn_*`, `panelB_*`), frames `fig2_boxes` and `fig4_boxes`.
 
 ## Open items
