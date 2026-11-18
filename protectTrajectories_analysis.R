@@ -997,6 +997,7 @@ chord_df <- data.frame(From = columnMembershipCortOnly$ROI1, To = columnMembersh
 b_dir    <- fetalRes$scanTypeb[match(allConn, fetalRes$Connection)] > 0
 chord_col_fetal   <- ifelse(b_dir, "#00000000", col_fetal)       # fetal-greater edges only
 chord_col_preterm <- ifelse(b_dir, col_preterm, "#00000000")     # preterm-greater edges only
+chord_col_fetal_cue <- ifelse(b_dir, "#00000000", "#d83b48")   # cue version (GRAYSCALE_VERSIONS): the fetal chord color matched in brightness to the preterm blue (luma 42%)
 
 # Chord layout settings (tune here)
 chord_canvas    <- 1.65   # half-width of the drawing canvas; raise it if labels are still cut off (the circle gets smaller)
@@ -1198,12 +1199,13 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
   }
   show_fig("Fig2_FetalVsPreterm", W2, H2, draw_fig2, save = TRUE)   # always written to file: drawing this many large pictures in the RStudio plot pane times out
   if (GRAYSCALE_VERSIONS) {                      # same figure with the panel C bars separated in brightness; A and B are unchanged. draw_fig2 reads hm, homo_w, right_w and W2 when it runs
-    hm_std <- hm; mx_std <- mx
+    hm_std <- hm; mx_std <- mx; ch_std <- ch
     hm     <- trim_white(render_piece(function() print(p_homo_cue), 6.2, 10))
     mx     <- trim_white(list(render_piece(function() print(p_tri_preterm), 6, 6), render_piece(function() print(p_tri_fetal_cue), 6, 6)))   # fetal matrix on the brightness-matched ramp
+    ch     <- trim_white(list(render_piece(function() draw_chord(chord_col_preterm), 9, 9), render_piece(function() draw_chord(chord_col_fetal_cue), 9, 9)))   # fetal chords matched in brightness
     homo_w <- homo_h * asp(hm); right_w <- homo_w + 2 * fig2_pad_in; W2c <- left_w + fig2_gap_in + right_w + 0.1
     show_fig_cues("Fig2_FetalVsPreterm", W2c, H2, draw_fig2)
-    hm <- hm_std; mx <- mx_std; homo_w <- homo_h * asp(hm); right_w <- homo_w + 2 * fig2_pad_in          # restore the standard values
+    hm <- hm_std; mx <- mx_std; ch <- ch_std; homo_w <- homo_h * asp(hm); right_w <- homo_w + 2 * fig2_pad_in          # restore the standard values
   }
 }
 
