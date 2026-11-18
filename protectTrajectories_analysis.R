@@ -216,6 +216,11 @@ show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS, dir = figure
 # copy of the TIFF, <name>_grayscale.tiff (8-bit grayscale, ITU-R 601 luma, 600 dpi tag, LZW). Nothing outside that folder is written or replaced.
 # cue_col: fetal and preterm colors for the bars of Fig. 2C, separated in brightness (about 24% vs. 57% luma) so they stay apart in grayscale.
 cue_col <- c(fetal = "#a3101f", preterm = "#5a9be8")
+# Fig. 4 cues: line styles for the preterm groups (EPT dotted, VPT dashed, MPT solid; the colors stay) and lobe colors separated in brightness
+# (luma about 23 / 88 / 64 / 42% for frontal / temporal / parietal / occipital) for the nodes and the lobe key of panel A.
+cue_ltys     <- c(EPT = "dotted", VPT = "dashed", MPT = "solid")
+lobe_pal_cue <- c(Frontal = "#9e0b35", Temporal = "#ffe08a", Parietal = "#2fdcaa", Occipital = "#118ab2")
+cue_lines    <- FALSE        # TRUE only while the cue version of Fig. 4 B and C is being built (read by edge_plot and pt_legend_plot)
 make_gray_tiff <- function(from, to) {
   # 1. the magick package (install.packages("magick"); it bundles ImageMagick on Windows and macOS), 2. Python with Pillow, else a message.
   # Both write 8-bit grayscale (ITU-R 601 luma), LZW, and keep the 600 dpi tag.
@@ -1529,9 +1534,11 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
     if (show_ci) p <- p + geom_ribbon(data = dl, aes(ScanPMA, ymin = lo, ymax = hi, fill = BirthCat), alpha = .15)
     p +
       geom_line(data = dl, aes(ScanPMA, val, group = BirthCat), color = "#ffffff", linewidth = line_w + halo_w) +
-      geom_line(data = dl, aes(ScanPMA, val, color = BirthCat), linewidth = line_w) +
+      (if (cue_lines) geom_line(data = dl, aes(ScanPMA, val, color = BirthCat, linetype = BirthCat), linewidth = line_w)
+       else           geom_line(data = dl, aes(ScanPMA, val, color = BirthCat), linewidth = line_w)) +
       scale_color_manual(values = cols_pt, labels = grp_labels) +
       scale_fill_manual(values = cols_pt, labels = grp_labels) +
+      (if (cue_lines) scale_linetype_manual(values = cue_ltys, labels = grp_labels) else NULL) +
       scale_x_continuous(breaks = xbreaks) +
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
       coord_cartesian(xlim = xlim, ylim = ylim) +
@@ -1557,8 +1564,10 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
 # Legend-only plot for the empty cells beside Panel C
 pt_legend_plot <- function() {
   d <- data.frame(g = factor(rep(names(cols_pt), each = 2), levels = names(cols_pt)), x = rep(1:2, 3), y = 1)
-  p <- ggplot(d, aes(x, y, color = g, group = g)) + geom_line(linewidth = line_w) + geom_point(size = 2.2) +   # key = line with a dot (dots are scans, lines are model fits)
+  p <- ggplot(d, aes(x, y, color = g, group = g)) +
+    (if (cue_lines) geom_line(aes(linetype = g), linewidth = line_w) else geom_line(linewidth = line_w)) + geom_point(size = 2.2) +   # key = line with a dot (dots are scans, lines are model fits)
     scale_color_manual(values = cols_pt, labels = grp_labels, name = NULL) +
+    (if (cue_lines) scale_linetype_manual(values = cue_ltys, labels = grp_labels, name = NULL) else NULL) +
     guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4, size = 2.2))) +
     theme_void() + theme(legend.position = "left", legend.text = element_text(size = legend_text_size, color = "#000000"),
                          legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"),
@@ -1851,6 +1860,20 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
       }
     }
     show_fig("Fig4_PmaByPrematurity", fig4_w, fig4_h, draw_fig4)
+    if (GRAYSCALE_VERSIONS) {
+      # Cue version (flag GRAYSCALE_VERSIONS): B and C with line styles (EPT dotted, VPT dashed, MPT solid), and A with lobe colors separated in brightness on
+      # the nodes and in the lobe key. The brain is rendered again in the open rgl window; everything is restored afterwards.
+      std <- list(panelB = panelB, panelC = panelC, ims = ims, wid = wid, lobe_pal = lobe_pal)
+      cue_lines <- TRUE; panelB <- make_panel_b(edgesB); panelC <- make_panel_b(panelC_edges)
+      lobe_pal <- lobe_pal_cue
+      for (v in bn_panels) snap(v, f_png(v), bn_zoom[[v]], box = bn_inset && v == bn_inset_view)
+      if (bn_inset) snap(bn_inset_view, f_png("inset"), inset_zoom, center_on = to_rgl(matrix(box_ctr, 1))[1, ])
+      ims <- setNames(lapply(bn_panels, function(v) trim_white(rd(f_png(v)))), bn_panels)
+      if (bn_inset) ims$inset <- centre_rect(rd(f_png("inset")), round(2 * hx * px_mm_t), round(2 * hy * px_mm_t))
+      wid <- sapply(names(ims), function(nm) hgt[[nm]] * dim(ims[[nm]])[2] / dim(ims[[nm]])[1])
+      show_fig_cues("Fig4_PmaByPrematurity", fig4_w, fig4_h, draw_fig4)
+      cue_lines <- FALSE; panelB <- std$panelB; panelC <- std$panelC; ims <- std$ims; wid <- std$wid; lobe_pal <- std$lobe_pal   # restore
+    }
   }
   rgl::close3d()                                                                  # all snapshots are saved: close the rgl window
 }
