@@ -2862,3 +2862,153 @@ asdDemoFinal$ID[!c(asdDemoFinal$ID %in% fetalMatched$longID)]
 
 subset(fetalMatched, mchat_result=='Fail')$longID[!c(subset(fetalMatched, mchat_result=='Fail')$longID %in% asdDemoFinal$ID)]
 
+
+
+# 5. MANUSCRIPT TABLES (run after the volume analyses 2b-2c, the connectivity tiers 3c-3d and the atlas section 3f) ----
+
+# Tables built from the results and formatted like the manuscript (Table 2, Tables S1-S5). Each is stored in manuscriptTables[[name]] and printed; with saveTables
+# TRUE it is also written to tableDir/manuscript as <name>.csv (UTF-8) with its footnotes in <name>_footnotes.txt. Table 1 (demographics) is not included.
+#
+# Low-risk is the REFERENCE group in every table: beta = High-risk minus Low-risk.
+#   - Volume tables: the models are refit with Low-risk as the reference (same data and exclusions as 2b-2c). The group and interaction p-values are unchanged,
+#     but the sign of those betas flips and the GA at Scan beta becomes the slope in the Low-risk group (its p-value changes too).
+#   - Connectivity tables: the main-effects models are unchanged except for the sign of the group beta (positive = High-risk higher, negative = Low-risk higher).
+
+# The group beta of an interaction model is the group difference at age 0. To report it at a meaningful age instead, set this to a number of weeks (for example 31);
+# NULL keeps the manuscript's current uncentered models.
+tableAgeCenter <- NULL
+
+# The anterior fusiform pair: the script's label file puts the LEFT region at position 15 and the RIGHT at 16 ('script'); Table S1 and S4 had them the other way
+# round ('S1'). Check which is right (see the hemisphere check), and set this once it is settled.
+fusiformPair <- 'script'
+
+# The regions at positions 44 and 45 are called 'Putamen' in Table S1 and 'Pallidum' in Table 2 and S4 (the script's names are Lentiform_R and Lentiform_L).
+lentiformLabel <- 'Pallidum'
+
+manuscriptTables <- list()
+saveManuscriptTable <- function(tbl, name, footnotes) {
+  manuscriptTables[[name]] <<- list(table = tbl, footnotes = footnotes)
+  if (saveTables) {
+    outDir <- file.path(tableDir, 'manuscript'); dir.create(outDir, showWarnings = FALSE, recursive = TRUE)
+    write.csv(tbl, file.path(outDir, paste0(name, '.csv')), row.names = FALSE, fileEncoding = 'UTF-8')
+    writeLines(footnotes, file.path(outDir, paste0(name, '_footnotes.txt')), useBytes = TRUE)
+  }
+  cat('\n', name, '\n', sep = ''); oldWidth <- options(width = 220); print(tbl, row.names = FALSE); options(oldWidth); cat(paste(footnotes, collapse = '\n'), '\n')
+  invisible(tbl)
+}
+beta <- '\u03b2'
+makeTable <- function(columns, headers) { tbl <- as.data.frame(columns, stringsAsFactors = FALSE); names(tbl) <- headers; tbl }      # headers may contain the Greek beta
+tableFixed <- function(x, digits) { s <- formatC(x, format = 'f', digits = digits); zero <- formatC(0, format = 'f', digits = digits); s[s == paste0('-', zero)] <- zero; s }
+tableP <- function(p, adjusted = NULL) {
+  text <- ifelse(p < .001, '<.001', sub('^0', '', sprintf('%.3f', p)))
+  if (is.null(adjusted)) text else paste0(text, ifelse(adjusted < .05, 'b', ifelse(adjusted < .10, 'c', '')))
+}
+standardFootnotes <- c('a Low-risk group is the reference group (beta = High-risk minus Low-risk)', 'b Significant at p < .05 FDR corrected', 'c Trending at p < .10 FDR corrected')
+
+# Refit the normalized-volume interaction models with Low-risk as the reference group (and, if tableAgeCenter is set, age centered there)
+lowRiskReference <- function(d) {
+  d$mchat_result <- relevel(factor(d$mchat_result), ref = 'Pass')
+  if (!is.null(tableAgeCenter)) { d$scanAge <- d$scanAge - tableAgeCenter }
+  d
+}
+
+## Regional volumes: Table 2, S1 and S4
+
+regionalLowRef <- cached('manuscript_regional_lowref',
+                         inputs = list(regionalData, regionalDataRaw, fetalMatched, regionalExclude, tableAgeCenter, 'low-risk reference v1',
+                                       deparse(prepVolumeAnalysis), deparse(fitRoiModels), deparse(runRoiModels)),
+                         compute = function() runRoiModels(colnames(regionalData),
+                                                           function(i) lowRiskReference(prepVolumeAnalysis(regionalData[, i, drop = FALSE], fetalMatched, regionalDataRaw, excludeIDs = regionalExclude, dropInf = TRUE)),
+                                                           rawVar = 'Volume', normVar = 'VolNormed')$NormedItx)
+regionalLowRef <- addFDR(regionalLowRef)
+
+# The 45 regions in the order of the model results (the order of regionalData), named as in Table S1
+regionNames <- c('Hippocampus (Left)', 'Hippocampus (Right)', 'Amygdala (Left)', 'Amygdala (Right)', 'Medial Temporal Lobe, Anterior (Left)', 'Medial Temporal Lobe, Anterior (Right)',
+                 'Lateral Temporal Lobe, Anterior (Left)', 'Lateral Temporal Lobe, Anterior (Right)', 'Parahippocampal Gyrus, Anterior (Left)', 'Parahippocampal Gyrus, Anterior (Right)',
+                 'Superior Temporal Gyrus, Middle (Left)', 'Superior Temporal Gyrus, Middle (Right)', 'Medial Inferior Temporal Lobe, Anterior (Left)', 'Medial Inferior Temporal Lobe, Anterior (Right)',
+                 'Fusiform Gyrus, Anterior (Right)', 'Fusiform Gyrus, Anterior (Left)', 'Brainstem', 'Insula (Right)', 'Insula (Left)', 'Occipital Lobe (Right)', 'Occipital Lobe (Left)',
+                 'Parahippocampal Gyrus, Posterior (Left)', 'Parahippocampal Gyrus, Posterior (Right)', 'Fusiform Gyrus, Posterior (Right)', 'Fusiform Gyrus, Posterior (Left)',
+                 'Medial Inferior Temporal Lobe, Posterior (Right)', 'Medial Inferior Temporal Lobe, Posterior (Left)', 'Superior Temporal Gyrus, Posterior (Right)', 'Superior Temporal Gyrus, Posterior (Left)',
+                 'Anterior Cingulate (Right)', 'Anterior Cingulate (Left)', 'Posterior Cingulate (Right)', 'Posterior Cingulate (Left)', 'Frontal Lobe (Right)', 'Frontal Lobe (Left)',
+                 'Parietal Lobe (Right)', 'Parietal Lobe (Left)', 'Caudate (Right)', 'Caudate (Left)', 'Thalamus (Right)', 'Thalamus (Left)', 'Subthalamic (Right)', 'Subthalamic (Left)',
+                 'Putamen (Right)', 'Putamen (Left)')
+regionNames[44:45] <- paste0(lentiformLabel, c(' (Right)', ' (Left)'))
+if (fusiformPair == 'script') { regionNames[15:16] <- c('Fusiform Gyrus, Anterior (Left)', 'Fusiform Gyrus, Anterior (Right)') }
+stopifnot(length(regionNames) == nrow(regionalLowRef))
+
+# Audit: does the hemisphere in each table name agree with the script's column name (_L / _R)?
+regionAudit <- data.frame(Number = seq_along(regionNames), TableName = regionNames, ScriptColumn = regionalLowRef$ROI, stringsAsFactors = FALSE)
+nameSide <- ifelse(grepl('\\(Left\\)', regionAudit$TableName), 'L', ifelse(grepl('\\(Right\\)', regionAudit$TableName), 'R', NA))
+scriptSide <- ifelse(grepl('_L$', regionAudit$ScriptColumn), 'L', ifelse(grepl('_R$', regionAudit$ScriptColumn), 'R', NA))
+regionAudit$HemisphereAgrees <- ifelse(is.na(nameSide) | is.na(scriptSide), NA, nameSide == scriptSide)
+saveTable(regionAudit, 'manuscript_regional_label_audit')
+if (any(regionAudit$HemisphereAgrees %in% FALSE)) {
+  message('REGION LABELS: the hemisphere in the table name disagrees with the script column name for position(s) ', paste(which(regionAudit$HemisphereAgrees %in% FALSE), collapse = ', '),
+          ' (see manuscript_regional_label_audit). Resolve this before using the tables.')
+}
+message('The anterior fusiform hemisphere is not yet verified against the segmentation labels (fusiformPair = "', fusiformPair, '"); the tables follow that setting.')
+
+regionRows <- data.frame(Number = seq_along(regionNames), Region = regionNames, regionalLowRef, stringsAsFactors = FALSE)
+shortName <- function(x) gsub('\\(Right\\)', '(R)', gsub('\\(Left\\)', '(L)', x))
+
+# Table S1
+saveManuscriptTable(makeTable(list(regionRows$Number, regionRows$Region), c('Number', 'Region')), 'Table_S1_regional_ROI', character(0))
+
+# Table 2: the regions with a group effect at FDR p < .10, in the order of Table S1
+t2 <- regionRows[regionRows$Grp.p.Adj < .10, ]
+t2Names <- sub('^Fusiform Gyrus, Anterior', 'Anterior Fusiform', t2$Region)
+saveManuscriptTable(makeTable(list(t2Names, tableFixed(t2$Grp.B, 3), tableP(t2$Grp.p, t2$Grp.p.Adj), tableFixed(t2$scanGA.B, 6), tableP(t2$scanGA.p, t2$scanGA.p.Adj),
+                                   tableFixed(t2$Itx.B, 5), tableP(t2$Itx.p, t2$Itx.p.Adj)),
+                              c('Region', paste('Group', beta), 'Group p', paste('GA at Scan', beta), 'GA at Scan p', paste('Group * GA', beta), 'Group * GA p')),
+                    'Table_2_group_differences_regional_volumes',
+                    c(standardFootnotes, if (is.null(tableAgeCenter)) 'Group beta is the difference at gestational week 0 (age is not centered); GA at Scan beta is the slope in the Low-risk group' else paste0('Age is centered at ', tableAgeCenter, ' weeks: Group beta is the difference at that age; GA at Scan beta is the slope in the Low-risk group')))
+
+# Table S4: every region
+saveManuscriptTable(makeTable(list(shortName(regionRows$Region), tableFixed(regionRows$Grp.B, 4), tableP(regionRows$Grp.p, regionRows$Grp.p.Adj), tableFixed(regionRows$scanGA.B, 5),
+                                   tableP(regionRows$scanGA.p, regionRows$scanGA.p.Adj), tableFixed(regionRows$Itx.B, 5), tableP(regionRows$Itx.p, regionRows$Itx.p.Adj)),
+                              c('ROI', paste('Group', beta), 'Group p', paste('Scan GA', beta), 'Scan GA p', paste('Interaction', beta), 'Interaction p')),
+                    'Table_S4_complete_regional_volume_differences', c('Right and left hemisphere denoted by (R) and (L) respectively', standardFootnotes))
+
+## Tissue volumes: Table S3
+
+tissueReported <- c(CorticalGrayMatter = 'Cortical Gray Matter', CorticalWhiteMatter = 'Cortical White Matter', Cerebellum = 'Cerebellum', SubcorticalGray = 'Subcortical Gray', Brainstem = 'Brainstem')
+tissueLowRef <- cached('manuscript_tissue_lowref',
+                       inputs = list(tissueData, tissueDataRaw, fetalMatched, tissueExclude, tableAgeCenter, 'low-risk reference v1',
+                                     deparse(prepVolumeAnalysis), deparse(fitRoiModels), deparse(runRoiModels)),
+                       compute = function() runRoiModels(names(tissueReported),
+                                                         function(i) lowRiskReference(prepVolumeAnalysis(tissueData[, names(tissueReported)[i], drop = FALSE], fetalMatched, tissueDataRaw, excludeIDs = tissueExclude)),
+                                                         rawVar = 'Volume', normVar = 'VolNormed')$NormedItx)
+tissueLowRef <- addFDR(tissueLowRef)      # FDR across the five tissues reported
+saveManuscriptTable(makeTable(list(unname(tissueReported[tissueLowRef$ROI]), tableFixed(tissueLowRef$TD.Mean, 6), tableFixed(tissueLowRef$ASD.Mean, 6), tableFixed(tissueLowRef$Grp.B, 3),
+                                   tableP(tissueLowRef$Grp.p, tissueLowRef$Grp.p.Adj), tableFixed(tissueLowRef$scanGA.B, 5), tableP(tissueLowRef$scanGA.p, tissueLowRef$scanGA.p.Adj),
+                                   tableFixed(tissueLowRef$Itx.B, 5), tableP(tissueLowRef$Itx.p, tissueLowRef$Itx.p.Adj)),
+                              c('ROI', 'Low-risk Mean', 'High-risk Mean', paste('Group', beta), 'Group p', paste('Scan GA', beta), 'Scan GA p', paste('Interaction', beta), 'Interaction p')),
+                    'Table_S3_complete_tissue_volume_differences', standardFootnotes)
+
+## Functional ROIs and connections: Table S2 and S5
+
+# Table S2: every parcel with its name and network (the complete membership: hand-built lists, otherwise the Yeo mock-up)
+atlasLabelFile <- file.path(baseDir, 'functional', 'atlasParcellattion', 'r200_Net.csv')
+s2Names <- atlasParcels$Label
+if (file.exists(atlasLabelFile)) {
+  atlasLabelTable <- read.csv(atlasLabelFile, stringsAsFactors = FALSE)
+  s2Names <- paste(atlasLabelTable$Hemisphere, atlasLabelTable$ROIName)[match(atlasParcels$Parcel, atlasLabelTable$ROINum)]
+  s2Names <- gsub('Calcerine', 'Calcarine', gsub('Gryus', 'Gyrus', s2Names))      # spelling corrected, as in the manuscript
+}
+saveManuscriptTable(makeTable(list(atlasParcels$Parcel, s2Names, atlasParcels$NetworkComplete), c('Number', 'Name', 'Network Membership')),
+                    'Table_S2_functional_ROI_labels',
+                    c('a Names of ROI are based on anatomical landmarks of the centroid of the ROI. As the parcellation is functionally derived, some ROI share the same anatomical label and while there are 100 ROI in each hemisphere, there are not equivalent labels in each hemisphere',
+                      'b Network membership is the hand-built list where a parcel is in one (Cerebellar, Limbic, Default Mode, Somatomotor, Subcortical, Auditory, Visual); every other parcel takes the network of the Yeo 7-network atlas it overlaps most (approximate placement, see membership_yeo_proposed.csv)'))
+
+# Table S5: every connection with a group difference before FDR correction (p < .05), in the networks run through Tier 2; Low-risk is the reference
+if (!is.null(tier2)) {
+  s5 <- tier2[tier2$unit %in% c('CRB', 'DMN', 'Limbic', 'SubCort') & tier2$Grp.p < .05, ]
+  s5$unit <- factor(s5$unit, levels = c('CRB', 'DMN', 'Limbic', 'SubCort'))
+  s5 <- s5[order(s5$unit, s5$label, s5$Grp.p), ]
+  saveManuscriptTable(makeTable(list(s5$label, tableFixed(-s5$Grp.B, 3), tableP(s5$Grp.p, s5$Grp.p.adjust), tableFixed(s5$GA.B, 3), tableP(s5$GA.p, s5$GA.p.adjust)),
+                                c('Connection', paste('Group', beta), 'Group p', paste('GA at Scan', beta), 'GA at Scan p')),
+                      'Table_S5_complete_significant_network_connections',
+                      c('All connections with a significant difference before FDR correction are reported. Connections are grouped by network (Cerebellar, Default Mode, Limbic, Subcortical). Note consistent with Table S2, redundancy of labels represents multiple parcels within the same anatomical region',
+                        'a Low-risk group is the reference group (beta = High-risk minus Low-risk: a negative beta means connectivity is stronger in the Low-risk group)',
+                        'b Significant at p < .05 FDR corrected within the network', 'c Trending at p < .10 FDR corrected within the network'))
+}
