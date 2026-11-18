@@ -2882,7 +2882,7 @@ tableAgeCenter <- NULL
 # round ('S1'). Check which is right (see the hemisphere check), and set this once it is settled.
 fusiformPair <- 'script'
 
-# The regions at positions 44 and 45 are called 'Putamen' in Table S1 and 'Pallidum' in Table 2 and S4 (the script's names are Lentiform_R and Lentiform_L).
+# The regions at positions 44 and 45 (the script's Lentiform_R and Lentiform_L) are called 'Pallidum' in every table (Table S1 used to say 'Putamen').
 lentiformLabel <- 'Pallidum'
 
 manuscriptTables <- list()
