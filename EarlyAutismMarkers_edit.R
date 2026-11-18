@@ -1724,6 +1724,9 @@ fitScore <- function(d) {
              LowRisk.Mean = adj$emmean[adj$Grp == 'TD'], LowRisk.SE = adj$SE[adj$Grp == 'TD'],
              HighRisk.Mean = adj$emmean[adj$Grp == 'ASD'], HighRisk.SE = adj$SE[adj$Grp == 'ASD'],
              Diff.LowMinusHigh = tt['GrpTD', 'Value'], Diff.SE = tt['GrpTD', 'Std.Error'], Diff.df = tt['GrpTD', 'DF'],
+             Grp.B = tt['GrpTD', 'Value'], Grp.t = tt['GrpTD', 't-value'],      # the group estimate (Low-risk minus High-risk), as named in the other tables, and its t-value
+             Grp.CI.low = tt['GrpTD', 'Value'] - qt(.975, tt['GrpTD', 'DF']) * tt['GrpTD', 'Std.Error'],      # 95% confidence interval of the group estimate
+             Grp.CI.high = tt['GrpTD', 'Value'] + qt(.975, tt['GrpTD', 'DF']) * tt['GrpTD', 'Std.Error'],
              Diff.inSD = tt['GrpTD', 'Value'] / sd(d$FC), Grp.p = tt['GrpTD', 'p-value'], GA.B = tt['ScanGA', 'Value'], GA.p = tt['ScanGA', 'p-value'],
              stringsAsFactors = FALSE)
 }
@@ -1749,10 +1752,10 @@ betweenIds <- setNames(lapply(pairs, function(p) data.frame(network = paste(p, c
                                                              label = paste(networkLabel(p[1]), '-', networkLabel(p[2])), stringsAsFactors = FALSE)), pairNames)
 tier1Between <- runScores(betweenMasks, betweenIds)
 
-showColumns <- c('label', 'nConnections', 'nScans', 'LowRisk.Mean', 'HighRisk.Mean', 'Diff.LowMinusHigh', 'Diff.inSD', 'Grp.p', 'Grp.p.adjust', 'GA.p')
+showColumns <- c('label', 'nConnections', 'nScans', 'LowRisk.Mean', 'HighRisk.Mean', 'Grp.B', 'Grp.CI.low', 'Grp.CI.high', 'Grp.t', 'Diff.inSD', 'Grp.p', 'Grp.p.adjust', 'GA.p')
 tierWidth <- options(width = 220)
 cat('\n=== TIER 1: network averages (score = ', networkScore, ') ===\n', sep = '')
-cat('Diff.LowMinusHigh: Low-risk minus High-risk, age-adjusted (positive = Low-risk higher); Diff.inSD: in SD of the scores.\n',
+cat('Grp.B (= Diff.LowMinusHigh): Low-risk minus High-risk, age-adjusted (positive = Low-risk higher), with its 95% CI and t-value; Diff.inSD: in SD of the scores.\n',
     'p.adj: FDR within the table (', nrow(tier1Within$fits), ' networks; ', nrow(tier1Between$fits), ' network pairs). Gate for Tier 2: p.adj < ', tier1Gate, '\n', sep = '')
 cat('\nWITHIN networks\n'); print(format(tier1Within$fits[, showColumns], digits = 3), row.names = FALSE)
 cat('\nBETWEEN networks\n'); print(format(tier1Between$fits[, showColumns], digits = 3), row.names = FALSE)
