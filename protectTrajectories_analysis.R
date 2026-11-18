@@ -221,10 +221,11 @@ cue_col <- c(fetal = "#a3101f", preterm = "#5a9be8")
 # luma about 88% temporal (light yellow), 66% frontal (pink), 45% parietal (green), 22% occipital (deep blue). Used for the lobe sidebars and chord sectors
 # of Figs. 2 and 3, the strip of Fig. 2C, and the nodes and key of Fig. 4A.
 lobe_pal_cue <- c(Frontal = "#f4849e", Temporal = "#ffdf95", Parietal = "#05a97e", Occipital = "#09495e")
-# Fig. 4 B and C cues: the preterm groups keep their blue family but are spread in brightness (luma about 38% EPT, 62% VPT, 16% MPT), with a different line
-# pattern each: EPT short dashes, VPT long dashes, MPT solid. Lines are a little thicker, and only the solid MPT line keeps a white halo (a halo under a
-# dashed line would cut white gaps through the points and the other lines).
-cols_pt_cue  <- c(EPT = "#0d8294", VPT = "#73a6e4", MPT = "#0b2e5b")
+# Fig. 4 B and C cues: three clearly different hues for the preterm groups, on a brightness ladder (luma about 64% EPT amber, 42% VPT bluish green, 19% MPT
+# deep blue; the amber and bluish green are from the Okabe-Ito color-blind-safe palette), plus a line pattern each: EPT short dashes, VPT long dashes, MPT
+# solid. Lines are a little thicker, and only the solid MPT line keeps a white halo (a halo under a dashed line would cut white gaps through the points and the
+# other lines). They stay apart in grayscale and for red-green color blindness.
+cols_pt_cue  <- c(EPT = "#e69f00", VPT = "#009e73", MPT = "#1b2a8a")
 cue_ltys     <- c(EPT = "22", VPT = "73", MPT = "solid")
 cue_line_w   <- 1.1
 cue_lines    <- FALSE        # TRUE only while the cue version of Fig. 4 B and C is being built (read by edge_plot and pt_legend_plot)
