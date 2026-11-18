@@ -2744,7 +2744,7 @@ showFigure(atlasSliceFigure(parcelCompleteColors, bottom = completeKey), 'supple
 # The same atlas painted onto the brain surface (the mesh used for the glass brains), so the parcels sit on a smooth, folded brain. Every point of the surface
 # takes the label of the parcel that dominates around it (each parcel is blurred slightly first, so the borders between parcels are smooth).
 # Needs the rgl and png packages and a screen (like the glass brains). Same colors as the slices.
-# Eight views: left and right lateral, left and right medial (one hemisphere each), top, bottom, front and back.
+# Eight views: left and right lateral, left and right medial (one hemisphere each), dorsal, ventral, anterior and posterior.
 paintAtlasOnSurface <- function(blurVoxels = 1, minimumScore = .15) {
   mesh <- readMz3(brainMeshFile)
   vertices <- as.matrix(standardCoordinates(mesh$vertices))                                      # the same orientation as the glass brains
@@ -2833,13 +2833,13 @@ if (canRender3D) {
   painted <- paintAtlasOnSurface()
 
   threeDFigure <- function(colors, unlabeledColor, bottom = NULL, bottomHeight = .07) {
-    # Eight views. Top row: left lateral, right lateral, top, front. Bottom row: left medial, right medial, bottom, back.
+    # Eight views. Top row: left lateral, right lateral, dorsal (from above), anterior (from the front). Bottom row: left medial, right medial, ventral (from below), posterior (from behind).
     # The medial views draw one hemisphere only (left hemisphere seen from the right, right hemisphere seen from the left).
     draw <- function(view, hemisphere = NULL) atlasRender(painted, view, colors, hemisphere, unlabeledColor)
     views <- list(draw('left'), draw('right'), draw('top'), draw('front'),
                   draw('right', 'left'), draw('left', 'right'), draw('underside'), draw('back'))
     grid <- ggpubr::ggarrange(plotlist = views, nrow = 2, ncol = 4, font.label = list(size = 14, face = 'bold'),
-                              labels = c('A  Left lateral', 'B  Right lateral', 'C  Top', 'D  Front', 'E  Left medial', 'F  Right medial', 'G  Bottom', 'H  Back'))
+                              labels = c('A  Left lateral', 'B  Right lateral', 'C  Dorsal', 'D  Anterior', 'E  Left medial', 'F  Right medial', 'G  Ventral', 'H  Posterior'))
     if (!is.null(bottom)) { grid <- ggpubr::ggarrange(grid, bottom, nrow = 2, heights = c(1, bottomHeight)) }
     grid + theme(plot.background = element_rect(fill = 'white', color = NA))
   }
