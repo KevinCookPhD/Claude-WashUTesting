@@ -72,6 +72,7 @@ library(ggpubr)     # ggarrange() for the multi-panel Fig. 4B
 ## ---- Switches --------------------------------------------------------------
 SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
 FIG_FORMATS               <- c("tiff", "svg", "pdf", "eps")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf","eps" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
+GRAYSCALE_VERSIONS        <- FALSE  # TRUE: ALSO write the figures with non-color cues (marker shapes, outlines, brightness-separated colors) to <figureDir>/grayscale/, as <name>_color.* (for online) and <name>_grayscale.tiff (for print). The standard figure files are not touched. Needs Python with Pillow for the grayscale TIFF (as make_flowchart.py does)
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
@@ -187,9 +188,9 @@ theme_paper <- function(grid_y = TRUE, grid_x = FALSE, legend = "none") {
 #              Text stays live text; install the fonts or convert text to outlines on opening.
 #   pdf      : vector via cairo_pdf (fonts embedded; accepted by most journals and LaTeX).
 # install.packages(c("ragg", "svglite")) once for the best output.
-show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS) {
+show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS, dir = figureDir, formats = FIG_FORMATS) {
   if (!save) { draw(); return(invisible(NULL)) }
-  base <- file.path(figureDir, tools::file_path_sans_ext(file))
+  base <- file.path(dir, tools::file_path_sans_ext(file))
   open_dev <- function(fmt) {
     path <- paste0(base, ".", fmt)
     switch(fmt,
@@ -203,11 +204,33 @@ show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS) {
       eps  = cairo_ps(path, width = w, height = h, onefile = FALSE, fallback_resolution = 600),   # EPS has no transparency: semi-transparent layers are rasterized (here at 600 dpi)
       stop("Unknown figure format: ", fmt))
   }
-  for (fmt in FIG_FORMATS) {
+  for (fmt in formats) {
     open_dev(fmt)
     tryCatch(draw(), finally = dev.off())
   }
   invisible(NULL)
+}
+
+# ---- Color and grayscale versions with non-color cues (flag GRAYSCALE_VERSIONS) ----
+# show_fig_cues() writes the cue version of a figure to <figureDir>/grayscale/<name>_color.* (every format in FIG_FORMATS, plus a TIFF) and a grayscale
+# copy of the TIFF, <name>_grayscale.tiff (8-bit grayscale, ITU-R 601 luma, 600 dpi tag, LZW). Nothing outside that folder is written or replaced.
+# cue_col: fetal and preterm colors for the bars of Fig. 2C, separated in brightness (about 24% vs. 57% luma) so they stay apart in grayscale.
+cue_col <- c(fetal = "#a3101f", preterm = "#5a9be8")
+make_gray_tiff <- function(from, to) {
+  py <- Sys.which(c("python3", "python", "py")); py <- unname(py[nzchar(py)])[1]
+  if (is.na(py)) { message("Grayscale TIFF not written (Python not found). Run: python3 make_print_gray.py ", dirname(from)); return(invisible(FALSE)) }
+  code <- "import sys; from PIL import Image; Image.MAX_IMAGE_PIXELS = None; im = Image.open(sys.argv[1]); im.convert('L').save(sys.argv[2], compression = 'tiff_lzw', dpi = im.info.get('dpi', (600, 600)))"
+  out <- suppressWarnings(system2(py, c("-c", shQuote(code), shQuote(from), shQuote(to)), stdout = TRUE, stderr = TRUE))
+  ok <- file.exists(to)
+  if (!ok) message("Grayscale TIFF not written (is Pillow installed? pip install pillow): ", paste(out, collapse = " "))
+  invisible(ok)
+}
+show_fig_cues <- function(file, w, h, draw, res = 600) {
+  if (!GRAYSCALE_VERSIONS) return(invisible(NULL))
+  gdir <- file.path(figureDir, "grayscale"); dir.create(gdir, showWarnings = FALSE, recursive = TRUE)
+  nm <- tools::file_path_sans_ext(file)
+  show_fig(paste0(nm, "_color"), w, h, draw, res = res, save = TRUE, dir = gdir, formats = union(FIG_FORMATS, "tiff"))
+  make_gray_tiff(file.path(gdir, paste0(nm, "_color.tiff")), file.path(gdir, paste0(nm, "_grayscale.tiff")))
 }
 
 # Trims the white border off a picture (a height x width x 3 array from png::readPNG), keeping m px of white.
@@ -1084,6 +1107,11 @@ if (homo_show_stars) {       # * = FDR-corrected p < .05 (say so in the caption)
     annotate("text", x = star_x, y = row_pos[homo_sig], label = "*", hjust = 0.5, vjust = homo_star_vjust,
              size = homo_star_pt / ggplot2::.pt, color = "#000000")
 }
+# Cue version of panel C (flag GRAYSCALE_VERSIONS): fetal bars darker and preterm bars lighter, so the two stay apart in grayscale (the legend then
+# needs to say "upper bar = preterm, lower bar = fetal"). Same plot otherwise.
+p_homo_cue <- suppressMessages(p_homo_h +
+  scale_color_manual(values = c(Fetal = cue_col[["fetal"]], Preterm = cue_col[["preterm"]])) +
+  scale_fill_manual(values = c(Fetal = paste0(cue_col[["fetal"]], "e6"), Preterm = paste0(cue_col[["preterm"]], "e6"))))
 show_fig("Fig2_part_HomotopicBars", 6.2, 10, function() print(p_homo_h))
 
 ## ---- 4f. Figure 2 assembled: A = preterm (top), B = fetal (bottom), C = homotopic bars -------------
@@ -1156,6 +1184,13 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
     txt("C", xc + 0.1, 0.05 + 2 * box_h + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
   }
   show_fig("Fig2_FetalVsPreterm", W2, H2, draw_fig2, save = TRUE)   # always written to file: drawing this many large pictures in the RStudio plot pane times out
+  if (GRAYSCALE_VERSIONS) {                      # same figure with the panel C bars separated in brightness; A and B are unchanged. draw_fig2 reads hm, homo_w, right_w and W2 when it runs
+    hm_std <- hm
+    hm     <- trim_white(render_piece(function() print(p_homo_cue), 6.2, 10))
+    homo_w <- homo_h * asp(hm); right_w <- homo_w + 2 * fig2_pad_in; W2c <- left_w + fig2_gap_in + right_w + 0.1
+    show_fig_cues("Fig2_FetalVsPreterm", W2c, H2, draw_fig2)
+    hm <- hm_std; homo_w <- homo_h * asp(hm); right_w <- homo_w + 2 * fig2_pad_in          # restore the standard values
+  }
 }
 
 ## ---- 4g. SI Fig. 2: mean connectivity matrices, one per group (Fetal, EPT, VPT, MPT) ----
@@ -4094,6 +4129,22 @@ if (RUN_TWO_GROUP_INTERACTION) {
     labs(x = "Fetal Connectivity Change (per week)", y = "Preterm Connectivity Change (per week)") + theme_classic(base_size = 9)
   fig3 <- ggpubr::ggarrange(pM, pD, ncol = 2, nrow = 1, labels = c("A", "B"))
   show_fig("Fig3_GroupByPma", 9, 4.5, function() print(fig3))
+  if (GRAYSCALE_VERSIONS) {
+    # Cue version: in A, the cells where the fetal slope is steeper (negative slope difference) get a black outline, so the sign reads without color;
+    # in B, those points are triangles and the preterm-steeper points are circles. Colors are as in the standard figure.
+    pM_cue <- suppressMessages(pM + geom_tile(data = function(d) d[d$beta < 0, ], aes(x, y), fill = NA, color = "#000000", linewidth = 0.25, width = 1, height = 1))
+    pD_cue <- ggplot(res_two, aes(slope_fetal, slope_preterm)) +
+      geom_hline(yintercept = 0, linewidth = 0.3) + geom_vline(xintercept = 0, linewidth = 0.3) + geom_abline(linetype = "dashed", linewidth = 0.3) +
+      geom_point(color = "#d9d9d9", size = 0.5, alpha = 0.6, stroke = 0) +
+      geom_point(data = dd, aes(fill = dir, shape = dir), color = "#000000", stroke = 0.15, size = 2.1, alpha = 0.95) +
+      scale_fill_manual(values = dir_cols4, guide = "none") +
+      scale_shape_manual(values = c("Preterm slope steeper" = 21, "Fetal slope steeper" = 24), guide = "none") +     # circles = preterm steeper, triangles = fetal steeper
+      scale_x_continuous(breaks = seq(-0.06, 0.06, 0.02), labels = function(x) sprintf("%.2f", x)) +
+      scale_y_continuous(breaks = seq(-0.06, 0.06, 0.02), labels = function(x) sprintf("%.2f", x)) +
+      coord_fixed(xlim = fig3B_xlim, ylim = fig3B_ylim) +
+      labs(x = "Fetal Connectivity Change (per week)", y = "Preterm Connectivity Change (per week)") + theme_classic(base_size = 9)
+    show_fig_cues("Fig3_GroupByPma", 9, 4.5, function() print(ggpubr::ggarrange(pM_cue, pD_cue, ncol = 2, nrow = 1, labels = c("A", "B"))))
+  }
 
   # ---- Where the interactions are: lobe, hemisphere and distance (descriptive; edges share ROIs, so p-values are optimistic) ----
   # (1) enrichment of significant interactions within vs. between lobes, within vs. between hemispheres (Fisher test, odds ratios);
