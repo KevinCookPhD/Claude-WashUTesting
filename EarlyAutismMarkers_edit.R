@@ -998,12 +998,15 @@ tissueData <- subset(tissueData, select = -c(longID))
 # fetus_02178_01 was reviewed and has a valid segmentation, so it is included.
 tissueExclude <- c('rescue_0175_01', 'rescue_0184_01')
 
+# The five tissues analyzed (as in the manuscript). The amygdala-hippocampus volume is not analyzed on its own, but it stays in total brain volume (TBV).
+tissueAnalyzed <- c('CorticalGrayMatter', 'CorticalWhiteMatter', 'Cerebellum', 'SubcorticalGray', 'Brainstem')
+
 # The fits are cached: recomputed only if the data, the exclusions or the model code change (or rerun is TRUE)
 tissueModels <- cached('structural_tissue_models',
-                       inputs = list(tissueData, tissueDataRaw, fetalMatched, tissueExclude,
+                       inputs = list(tissueData, tissueDataRaw, fetalMatched, tissueExclude, tissueAnalyzed,
                                      deparse(prepVolumeAnalysis), deparse(fitRoiModels), deparse(runRoiModels)),
-                       compute = function() runRoiModels(colnames(tissueData),
-                                                         function(i) prepVolumeAnalysis(tissueData[,i, drop=FALSE], fetalMatched, tissueDataRaw,
+                       compute = function() runRoiModels(tissueAnalyzed,
+                                                         function(i) prepVolumeAnalysis(tissueData[, tissueAnalyzed[i], drop=FALSE], fetalMatched, tissueDataRaw,
                                                                                         excludeIDs=tissueExclude),
                                                          rawVar='Volume', normVar='VolNormed'))
 
