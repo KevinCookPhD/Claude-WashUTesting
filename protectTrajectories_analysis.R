@@ -222,11 +222,12 @@ cue_col <- c(fetal = "#a3101f", preterm = "#5a9be8")
 # of Figs. 2 and 3, the strip of Fig. 2C, and the nodes and key of Fig. 4A.
 lobe_pal_cue <- c(Frontal = "#f4849e", Temporal = "#ffdf95", Parietal = "#05a97e", Occipital = "#09495e")
 # Fig. 4 B and C cues: three clearly different hues for the preterm groups, on a brightness ladder (luma about 64% EPT amber, 42% VPT bluish green, 19% MPT
-# deep blue; the amber and bluish green are from the Okabe-Ito color-blind-safe palette), plus a line pattern each: EPT short dashes, VPT long dashes, MPT
-# solid. Lines are a little thicker, and only the solid MPT line keeps a white halo (a halo under a dashed line would cut white gaps through the points and the
-# other lines). They stay apart in grayscale and for red-green color blindness.
+# deep blue; the amber and bluish green are from the Okabe-Ito color-blind-safe palette). All lines are solid, so each runs the full span of that group's
+# data; the groups are also marked by a shape at the two ends of each line (EPT circle, VPT triangle, MPT square), which keeps them apart in grayscale.
 cols_pt_cue  <- c(EPT = "#e69f00", VPT = "#009e73", MPT = "#1b2a8a")
-cue_ltys     <- c(EPT = "22", VPT = "73", MPT = "solid")
+cue_shapes   <- c(EPT = 21, VPT = 24, MPT = 22)       # filled shapes: fill = group color, white outline
+cue_end_size <- 2.4
+cue_ends     <- function(d) do.call(rbind, lapply(split(d, d$BirthCat), function(g) g[c(which.min(g$ScanPMA), which.max(g$ScanPMA)), ]))   # first and last point of each fitted line
 cue_line_w   <- 1.1
 cue_lines    <- FALSE        # TRUE only while the cue version of Fig. 4 B and C is being built (read by edge_plot and pt_legend_plot)
 make_gray_tiff <- function(from, to) {
@@ -1655,12 +1656,12 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
                  color = "transparent", stroke = 0, alpha = pt_alpha)
     if (show_ci) p <- p + geom_ribbon(data = dl, aes(ScanPMA, ymin = lo, ymax = hi, fill = BirthCat), alpha = .15)
     p +
-      geom_line(data = if (cue_lines) dl[dl$BirthCat == "MPT", ] else dl, aes(ScanPMA, val, group = BirthCat), color = "#ffffff", linewidth = (if (cue_lines) cue_line_w else line_w) + halo_w) +
-      (if (cue_lines) geom_line(data = dl, aes(ScanPMA, val, color = BirthCat, linetype = BirthCat), linewidth = cue_line_w)
-       else           geom_line(data = dl, aes(ScanPMA, val, color = BirthCat), linewidth = line_w)) +
+      geom_line(data = dl, aes(ScanPMA, val, group = BirthCat), color = "#ffffff", linewidth = (if (cue_lines) cue_line_w else line_w) + halo_w) +
+      geom_line(data = dl, aes(ScanPMA, val, color = BirthCat), linewidth = if (cue_lines) cue_line_w else line_w) +
+      (if (cue_lines) geom_point(data = cue_ends(dl), aes(ScanPMA, val, fill = BirthCat, shape = BirthCat), color = "#ffffff", size = cue_end_size, stroke = 0.4) else NULL) +
       scale_color_manual(values = if (cue_lines) cols_pt_cue else cols_pt, labels = grp_labels) +
       scale_fill_manual(values = if (cue_lines) cols_pt_cue else cols_pt, labels = grp_labels) +
-      (if (cue_lines) scale_linetype_manual(values = cue_ltys, labels = grp_labels) else NULL) +
+      (if (cue_lines) scale_shape_manual(values = cue_shapes, labels = grp_labels) else NULL) +
       scale_x_continuous(breaks = xbreaks) +
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
       coord_cartesian(xlim = xlim, ylim = ylim) +
@@ -1687,12 +1688,14 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
 pt_legend_plot <- function() {
   d <- data.frame(g = factor(rep(names(cols_pt), each = 2), levels = names(cols_pt)), x = rep(1:2, 3), y = 1)
   p <- ggplot(d, aes(x, y, color = g, group = g)) +
-    (if (cue_lines) geom_line(aes(linetype = g), linewidth = cue_line_w) else geom_line(linewidth = line_w)) + geom_point(size = 2.2) +   # key = line with a dot (dots are scans, lines are model fits)
+    geom_line(linewidth = if (cue_lines) cue_line_w else line_w) +
+    (if (cue_lines) geom_point(aes(shape = g, fill = g), color = "#ffffff", size = cue_end_size + 0.4, stroke = 0.4) else geom_point(size = 2.2)) +   # key = line with a dot (dots are scans, lines are model fits)
     scale_color_manual(values = if (cue_lines) cols_pt_cue else cols_pt, labels = grp_labels, name = NULL) +
-    (if (cue_lines) scale_linetype_manual(values = cue_ltys, labels = grp_labels, name = NULL) else NULL) +
+    (if (cue_lines) scale_fill_manual(values = cols_pt_cue, labels = grp_labels, name = NULL) else NULL) +
+    (if (cue_lines) scale_shape_manual(values = cue_shapes, labels = grp_labels, name = NULL) else NULL) +
     guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4, size = 2.2))) +
     theme_void() + theme(legend.position = "left", legend.text = element_text(size = legend_text_size, color = "#000000"),
-                         legend.key.width = unit(if (cue_lines) 0.8 else 0.45, "in"), legend.key.height = unit(0.24, "in"),
+                         legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"),
                          legend.background = element_rect(color = "#000000", fill = "#ffffff", linewidth = 0.3),   # box around the legend
                          legend.margin = margin(7, 10, 7, 10))
   ggpubr::as_ggplot(ggpubr::get_legend(p))
