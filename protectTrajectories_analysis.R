@@ -72,7 +72,7 @@ library(ggpubr)     # ggarrange() for the multi-panel Fig. 4B
 ## ---- Switches --------------------------------------------------------------
 SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
 FIG_FORMATS               <- c("tiff", "svg", "pdf", "eps")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf","eps" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
-GRAYSCALE_VERSIONS        <- FALSE  # TRUE: ALSO write the figures with non-color cues (marker shapes, outlines, brightness-separated colors) to <figureDir>/grayscale/, as <name>_color.* (for online) and <name>_grayscale.tiff (for print). The standard figure files are not touched. Needs Python with Pillow for the grayscale TIFF (as make_flowchart.py does)
+GRAYSCALE_VERSIONS        <- FALSE  # TRUE: ALSO write the figures with non-color cues (marker shapes, outlines, brightness-separated colors) to <figureDir>/grayscale/, as <name>_color.* (for online) and <name>_grayscale.tiff (for print). The standard figure files are not touched. The grayscale TIFF needs the magick package or Python with Pillow
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
@@ -217,13 +217,23 @@ show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS, dir = figure
 # cue_col: fetal and preterm colors for the bars of Fig. 2C, separated in brightness (about 24% vs. 57% luma) so they stay apart in grayscale.
 cue_col <- c(fetal = "#a3101f", preterm = "#5a9be8")
 make_gray_tiff <- function(from, to) {
-  py <- Sys.which(c("python3", "python", "py")); py <- unname(py[nzchar(py)])[1]
-  if (is.na(py)) { message("Grayscale TIFF not written (Python not found). Run: python3 make_print_gray.py ", dirname(from)); return(invisible(FALSE)) }
+  # 1. the magick package (install.packages("magick"); it bundles ImageMagick on Windows and macOS), 2. Python with Pillow, else a message.
+  # Both write 8-bit grayscale (ITU-R 601 luma), LZW, and keep the 600 dpi tag.
+  if (requireNamespace("magick", quietly = TRUE)) {
+    ok <- tryCatch({
+      img <- magick::image_convert(magick::image_read(from), colorspace = "Rec601Luma", type = "Grayscale")
+      magick::image_write(img, to, format = "tiff", compression = "LZW", density = "600x600", depth = 8); file.exists(to)
+    }, error = function(e) { message("magick could not write the grayscale TIFF: ", conditionMessage(e)); FALSE })
+    if (isTRUE(ok)) return(invisible(TRUE))
+  }
+  py <- Sys.which(c("python3", "python", "py")); py <- unname(py[nzchar(py)])
   code <- "import sys; from PIL import Image; Image.MAX_IMAGE_PIXELS = None; im = Image.open(sys.argv[1]); im.convert('L').save(sys.argv[2], compression = 'tiff_lzw', dpi = im.info.get('dpi', (600, 600)))"
-  out <- suppressWarnings(system2(py, c("-c", shQuote(code), shQuote(from), shQuote(to)), stdout = TRUE, stderr = TRUE))
-  ok <- file.exists(to)
-  if (!ok) message("Grayscale TIFF not written (is Pillow installed? pip install pillow): ", paste(out, collapse = " "))
-  invisible(ok)
+  for (cmd in py) {
+    out <- suppressWarnings(tryCatch(system2(cmd, c("-c", shQuote(code), shQuote(from), shQuote(to)), stdout = TRUE, stderr = TRUE), error = function(e) conditionMessage(e)))
+    if (file.exists(to)) return(invisible(TRUE))
+  }
+  message("Grayscale TIFF NOT written for ", basename(from), ". Install the magick package (install.packages('magick')) and rerun, or run: python3 make_print_gray.py ", dirname(from))
+  invisible(FALSE)
 }
 show_fig_cues <- function(file, w, h, draw, res = 600) {
   if (!GRAYSCALE_VERSIONS) return(invisible(NULL))
