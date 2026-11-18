@@ -1659,7 +1659,6 @@ bn_surface_alpha <- 0.12              # surface opacity (lower = see the nodes t
 bn_fov           <- 10                # 0 = orthographic (nodes the same size at any depth, like a glass-brain figure); 30-60 = perspective
 bn_zoom          <- c(right_lateral = 0.6, left_lateral = 0.6, dorsal = 0.7, ventral = 0.7, anterior = 0.6, posterior = 0.6)
                                       # per view; SMALLER = brain fills more of the image. The dorsal view is taller than the lateral ones, so it needs a larger value
-bn_keep_window   <- FALSE             # FALSE: close the rgl window when the figure is done; TRUE: leave it open to rotate by hand
 bn_png_px        <- c(2000, 1600)    # snapshot width x height, pixels (= the rgl window size; keep it within your screen: a window larger than the screen is cut off)
 # Views to save: theta (rotation about the vertical axis, degrees) and phi (elevation, degrees).
 # If left and right come out swapped, swap the signs of theta in the two lateral views.
@@ -1837,9 +1836,7 @@ if (RUN_BRAIN_RENDER && !all(c(requireNamespace("rgl", quietly = TRUE), requireN
     }
     show_fig("Fig4_PmaByPrematurity", fig4_w, fig4_h, draw_fig4)
   }
-  # All snapshots are saved by now, so the window can be closed. Set bn_keep_window <- TRUE (with the other bn_ settings) to keep it open:
-  # rotate it by hand, or use rgl::view3d(theta, phi) to try other angles.
-  if (!bn_keep_window) rgl::close3d()
+  rgl::close3d()                                                                  # all snapshots are saved: close the rgl window
 }
 
 
