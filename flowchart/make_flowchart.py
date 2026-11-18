@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# NOTE: Fig. 1 is now drawn in the R script (section 1b, protectTrajectories_analysis.R), which writes Fig1_Flowchart.* with the other figures.
+# This Python version is kept only for reference; edit the counts in the R script, not here.
 """
 Participant flow diagram (fetal and preterm samples), drawn in the CONSORT / STROBE style:
   * rectangular boxes, thin outlines, black text, "n =" counts

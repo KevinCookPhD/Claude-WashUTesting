@@ -1,7 +1,7 @@
 # Analysis map: which code section and which output answers which question
 
 Script: `protectTrajectories_analysis.R` (section headers are the lines starting with `# <number>.`; line numbers below are
-from the version at the time of writing and will drift, so search for the header text). Flowchart: `flowchart/make_flowchart.py`.
+from the version at the time of writing and will drift, so search for the header text). Flowchart: section 1b of the R script (`flowchart/make_flowchart.py` is the older Python version and is no longer needed).
 Draft captions: `figure_captions_draft.md`.
 
 **Output naming** (files are written to `figure/` when `SAVE_FIGS` / `SAVE_TABLES` are on):
@@ -27,7 +27,7 @@ SI numbers are set in one place, the `SI_ID` registry in section 0, so renumberi
 
 | Question | Code section | Output | Key result |
 |---|---|---|---|
-| Who is in the sample and how was it formed? | 1 (QA), 3a to 3e | `Fig1_Flowchart` (flowchart script); `Table1_ByScan`, `Table1_ByParticipant` (section 3d) | 179 preterm infants / 346 scans, 161 fetal infants / 192 scans; groups EPT 72, VPT 73, MPT 34 |
+| Who is in the sample and how was it formed? | 1 (QA), 3a to 3e | `Fig1_Flowchart` (section 1b of the R script; counts typed there); `Table1_ByScan`, `Table1_ByParticipant` (section 3d) | 179 preterm infants / 346 scans, 161 fetal infants / 192 scans; groups EPT 72, VPT 73, MPT 34 |
 | Is the data harmonized properly (scanner effects removed, biology kept)? | 2 | SI03 | see section 2 comments |
 | How do fetal and preterm connectivity differ across all edges? | 4 (model), 4a tallies, 4b matrices, 4c chords | `Fig2_FetalVsPreterm` (A, B); `Data_FetalVsPreterm_AllEdges` | 1,404 FDR edges: 1,118 preterm > fetal, 286 fetal > preterm |
 | Which homotopic (left-right) regions differ? | 4d, 4e | `Fig2_FetalVsPreterm` (C); `Table2_HomotopicFetalVsPreterm` | |

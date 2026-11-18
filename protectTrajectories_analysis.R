@@ -75,6 +75,7 @@ FIG_FORMATS               <- c("tiff", "svg", "pdf", "eps")   # formats written 
 GRAYSCALE_VERSIONS        <- FALSE  # TRUE: ALSO write the figures with non-color cues (marker shapes, outlines, brightness-separated colors) to <figureDir>/grayscale/, as <name>_color.* (for online) and <name>_grayscale.tiff (for print). The standard figure files are not touched. The grayscale TIFF needs the magick package or Python with Pillow
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
+RUN_FLOWCHART            <- TRUE   # Fig. 1 participant flow diagram (section 1b; counts are typed in there)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
 RUN_SENSITIVITY           <- TRUE   # section 9: five lmer scans over all edges (slow serially; fast with N_CORES, cached)
 RUN_EXTRA_CONTROLS        <- TRUE   # sections 9f-9h: age-matched fetal vs. preterm, postnatal-age check, unharmonized data
@@ -412,6 +413,112 @@ if (RUN_QA_PLOTS) {
     xlab("Final Volumes") + theme_paper() + theme(axis.title.y = element_blank())
 
   print(p_qa_all); print(p_qa_hist); print(p_qa_vol)
+}
+
+
+###############################################################################
+# 1b. FIG. 1: PARTICIPANT FLOW DIAGRAM
+#     Drawn here with grid (it replaces flowchart/make_flowchart.py): CONSORT / STROBE style, rectangular boxes, "n =" counts, a vertical main flow with
+#     arrows, and exclusion boxes that branch off to the side and state the reason and the numbers excluded. Counts reconcile at every step (checked).
+#     Written by show_fig() as Fig1_Flowchart.* in every format in FIG_FORMATS (7.2 in wide); with GRAYSCALE_VERSIONS also to figure/grayscale/.
+#     Edit the counts and the wording below. Counts are of participants and scans from the raw scan QA table.
+###############################################################################
+
+if (RUN_FLOWCHART) {
+  NB <- "~"                                         # stands for a space that must not wrap ("< 120 volumes", "n = 25"); ASCII so it is the same in any locale; drawn and measured as a plain space
+  fc_pre <- list(dataset = c(participants = 217, scans = 551), qa = c(participants = 29, scans = 191),       # qa: insufficient usable data, including scans that failed processing or had high motion
+                 usable  = c(participants = 188, scans = 360), injury = c(participants = 9, scans = 14), final = c(participants = 179, scans = 346))
+  fc_fet <- list(dataset = c(participants = 385, scans = 535), qa = c(participants = 224, scans = 343), final = c(participants = 161, scans = 192))
+  stopifnot(all(fc_pre$dataset - fc_pre$qa == fc_pre$usable), all(fc_pre$usable - fc_pre$injury == fc_pre$final), all(fc_fet$dataset - fc_fet$qa == fc_fet$final))
+  fc_reason_pre <- paste0("Insufficient usable data after preprocessing (<", NB, "120", NB, "volumes, <", NB, "4", NB, "min at TR", NB, "=", NB, "2", NB, "s)")
+  fc_reason_fet <- paste0("Insufficient usable data after preprocessing (<", NB, "80", NB, "volumes, <", NB, "4", NB, "min at TR", NB, "=", NB, "3", NB, "s)")
+
+  # Palette (as in the figures) and geometry, in points (1 pt = 1/72 in); final width 7.2 in
+  fc_red <- "#cc2936"; fc_red_tint <- "#f2c9cd"; fc_blue <- "#2a78d6"; fc_blue_tint <- "#cadff5"
+  fc_W <- 518.4; fc_margin <- 10; fc_excl_w <- 118; fc_arrow_gap <- 16; fc_main_w <- 104
+  fc_center_gap <- fc_W - 2 * fc_margin - 2 * (fc_excl_w + fc_arrow_gap + fc_main_w)
+  fc_pad <- 6; fc_fs <- 7; fc_fs_title <- 8; fc_lead <- 1.28; fc_vgap <- 34; fc_lw <- 1.0; fc_head_l <- 5.5; fc_head_w <- 4.6
+
+  # Font: Arial if the system has it (the wrapping below is measured with Helvetica, which has the same metrics as Arial and Liberation Sans)
+  fc_family <- "sans"
+  if (requireNamespace("systemfonts", quietly = TRUE)) {
+    fc_have <- unique(systemfonts::system_fonts()$family)
+    fc_pick <- intersect(c("Arial", "Helvetica", "Liberation Sans", "Nimbus Sans"), fc_have)
+    if (length(fc_pick)) fc_family <- fc_pick[1]
+  }
+  fc_dev <- grDevices::dev.cur()
+  grDevices::pdf(NULL); graphics::plot.new()          # a scratch device just for measuring text
+  fc_width <- function(s, size, bold = FALSE) { s <- gsub(NB, " ", s, fixed = TRUE); graphics::par(ps = size); graphics::strwidth(s, units = "inches", font = if (bold) 2 else 1, family = "Helvetica") * 72 }
+  fc_wrap <- function(s, size, width, bold = FALSE) {  # greedy wrap on plain spaces only, so non-breaking spaces keep words together
+    words <- strsplit(s, " ", fixed = TRUE)[[1]]; lines <- character(0); cur <- ""
+    for (w in words) { t <- trimws(paste(cur, w))
+      if (fc_width(t, size, bold) <= width || !nzchar(cur)) cur <- t else { lines <- c(lines, cur); cur <- w } }
+    c(lines, if (nzchar(cur)) cur)
+  }
+  fc_box_lines <- function(title, body, width) {       # list of (text, size, bold), wrapped to the box's inner width
+    inner <- width - 2 * fc_pad
+    out <- lapply(fc_wrap(title, fc_fs_title, inner, TRUE), function(l) list(l, fc_fs_title, TRUE))
+    for (b in body) out <- c(out, lapply(fc_wrap(b, fc_fs, inner, FALSE), function(l) list(l, fc_fs, FALSE)))
+    out
+  }
+  fc_prims <- list()                                    # rect: list("rect", x, y, w, h, fill, stroke) | text: list("text", x, y_baseline, s, size, bold) | arrow: list("arrow", x1, y1, x2, y2, color); y runs down
+  fc_box_h <- function(lines) 2 * fc_pad + sum(vapply(lines, function(l) l[[2]] * fc_lead, 0))
+  fc_add_box <- function(x, y, w, lines, fill, stroke) {
+    h <- fc_box_h(lines); fc_prims[[length(fc_prims) + 1]] <<- list("rect", x, y, w, h, fill, stroke)
+    cy <- y + fc_pad
+    for (l in lines) { sz <- l[[2]]; cy <- cy + sz * fc_lead
+      fc_prims[[length(fc_prims) + 1]] <<- list("text", x + fc_pad, cy - sz * (fc_lead - 1) - sz * 0.22, l[[1]], sz, l[[3]]) }
+    h
+  }
+  fc_n_lines <- function(d) c(paste0("Participants: n", NB, "=", NB, d[["participants"]]), paste0("Scans: n", NB, "=", NB, d[["scans"]]))
+  fc_x_pt_excl <- fc_margin; fc_x_pt_main <- fc_x_pt_excl + fc_excl_w + fc_arrow_gap
+  fc_x_f_main <- fc_x_pt_main + fc_main_w + fc_center_gap; fc_x_f_excl <- fc_x_f_main + fc_main_w + fc_arrow_gap
+
+  L1 <- fc_box_lines("Preterm dataset", fc_n_lines(fc_pre$dataset), fc_main_w); L2 <- fc_box_lines("Usable preterm data", fc_n_lines(fc_pre$usable), fc_main_w)
+  L3 <- fc_box_lines("Final preterm sample", fc_n_lines(fc_pre$final), fc_main_w); F1 <- fc_box_lines("Fetal dataset", fc_n_lines(fc_fet$dataset), fc_main_w)
+  F3 <- fc_box_lines("Final fetal sample", fc_n_lines(fc_fet$final), fc_main_w)
+  h1 <- fc_box_h(L1); h2 <- fc_box_h(L2); h3 <- fc_box_h(L3); hf1 <- fc_box_h(F1)
+  y1 <- fc_margin; y2 <- y1 + h1 + fc_vgap; y3 <- y2 + h2 + fc_vgap
+  fc_add_box(fc_x_pt_main, y1, fc_main_w, L1, fc_blue_tint, fc_blue); fc_add_box(fc_x_pt_main, y2, fc_main_w, L2, fc_blue_tint, fc_blue)
+  fc_add_box(fc_x_pt_main, y3, fc_main_w, L3, fc_blue_tint, fc_blue); fc_add_box(fc_x_f_main, y1, fc_main_w, F1, fc_red_tint, fc_red)
+  fc_add_box(fc_x_f_main, y3, fc_main_w, F3, fc_red_tint, fc_red)
+  cx_pt <- fc_x_pt_main + fc_main_w / 2; cx_f <- fc_x_f_main + fc_main_w / 2
+  fc_arrow <- function(x1, y1, x2, y2, col) fc_prims[[length(fc_prims) + 1]] <<- list("arrow", x1, y1, x2, y2, col)
+  fc_arrow(cx_pt, y1 + h1, cx_pt, y2, fc_blue); fc_arrow(cx_pt, y2 + h2, cx_pt, y3, fc_blue); fc_arrow(cx_f, y1 + hf1, cx_f, y3, fc_red)
+  fc_excl <- function(title, reason, d, who) fc_box_lines(title, c(reason, paste0("Scans: n", NB, "=", NB, d[["scans"]]), paste0(who, ": n", NB, "=", NB, d[["participants"]])), fc_excl_w)
+  E1 <- fc_excl("Excluded: data quality", fc_reason_pre, fc_pre$qa, "Participants excluded")
+  E2 <- fc_excl("Excluded: brain injury", NULL, fc_pre$injury, "Participants")      # no reason line: heading, scans, participants only
+  E3 <- fc_excl("Excluded: data quality", fc_reason_fet, fc_fet$qa, "Participants excluded")
+  j1 <- y1 + h1 + fc_vgap / 2; j2 <- y2 + h2 + fc_vgap / 2                          # junction heights (middle of each arrow)
+  for (e in list(list(E1, j1, fc_x_pt_excl, cx_pt, fc_blue, "left"), list(E2, j2, fc_x_pt_excl, cx_pt, fc_blue, "left"), list(E3, j1, fc_x_f_excl, cx_f, fc_red, "right"))) {
+    hh <- fc_box_h(e[[1]]); fc_add_box(e[[3]], e[[2]] - hh / 2, fc_excl_w, e[[1]], "#ffffff", e[[5]])
+    fc_arrow(e[[4]], e[[2]], if (e[[6]] == "left") e[[3]] + fc_excl_w else e[[3]], e[[2]], e[[5]])
+  }
+  fc_H <- y3 + h3 + fc_margin
+  grDevices::dev.off(); if (fc_dev > 1) grDevices::dev.set(fc_dev)                     # close the scratch device
+
+  draw_flowchart <- function() {
+    grid::grid.newpage()
+    ix <- function(x) grid::unit(x / 72, "in"); iy <- function(y) grid::unit((fc_H - y) / 72, "in")    # points from the top-left -> inches from the bottom-left
+    lwd <- fc_lw * 96 / 72                                                                          # R's lwd 1 = 1/96 in; the spec is in points
+    for (p in fc_prims) {
+      if (p[[1]] == "rect") {
+        grid::grid.rect(x = ix(p[[2]]), y = iy(p[[3]]), width = ix(p[[4]]), height = grid::unit(p[[5]] / 72, "in"), just = c("left", "top"),
+                        gp = grid::gpar(fill = p[[6]], col = p[[7]], lwd = lwd, linejoin = "mitre"))
+      } else if (p[[1]] == "arrow") {
+        x1 <- p[[2]]; y1_ <- p[[3]]; x2 <- p[[4]]; y2_ <- p[[5]]; L <- sqrt((x2 - x1)^2 + (y2_ - y1_)^2); ux <- (x2 - x1) / L; uy <- (y2_ - y1_) / L
+        bx <- x2 - ux * fc_head_l; by <- y2_ - uy * fc_head_l; px <- -uy; py <- ux                  # base of the arrowhead and its perpendicular
+        grid::grid.lines(x = ix(c(x1, bx)), y = iy(c(y1_, by)), gp = grid::gpar(col = p[[6]], lwd = lwd, lineend = "butt"))
+        grid::grid.polygon(x = ix(c(x2, bx + px * fc_head_w / 2, bx - px * fc_head_w / 2)), y = iy(c(y2_, by + py * fc_head_w / 2, by - py * fc_head_w / 2)),
+                           gp = grid::gpar(fill = p[[6]], col = NA))
+      } else {
+        grid::grid.text(gsub(NB, " ", p[[4]], fixed = TRUE), x = ix(p[[2]]), y = iy(p[[3]]), just = c("left", "bottom"),             # "bottom" = the baseline for a line of text in grid
+                        gp = grid::gpar(fontsize = p[[5]], fontface = if (p[[6]]) "bold" else "plain", fontfamily = fc_family, col = "#000000"))
+      }
+    }
+  }
+  show_fig("Fig1_Flowchart", fc_W / 72, fc_H / 72, draw_flowchart)
+  show_fig_cues("Fig1_Flowchart", fc_W / 72, fc_H / 72, draw_flowchart)      # also to figure/grayscale/ when GRAYSCALE_VERSIONS is TRUE (the boxes carry text labels, so no cue is needed)
 }
 
 
