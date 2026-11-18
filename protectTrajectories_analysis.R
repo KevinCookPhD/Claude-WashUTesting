@@ -282,7 +282,7 @@ fmt3 <- function(x) sub("^-(0\\.000)$", "\\1", sprintf("%.3f", x))
 #   full results   Data_<Name>.csv                   (edge-wise results behind the main figures and tables)
 #   supplement     SI<nn>_Fig_<Name>.tiff/.svg/.pdf/.eps SI<nn>_Table_<Name>.csv    (one SI number per topic; its tables and figures sort together)
 # <Name> is UpperCamelCase; sub-parts are separated by underscores. The SI numbers live only in this registry: renumber here
-# (e.g. SI_ID[["gt32"]] <- "SI12") and every file name follows. Fig. 1 (flowchart) is made by flowchart/make_flowchart.py.
+# (e.g. SI_ID[["gt32"]] <- "SI12") and every file name follows. Fig. 1 (flowchart) is drawn in section 1b.
 SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03", posthoc = "SI04",
            clinical = "SI05", continuous_GA = "SI06", gt32 = "SI07", within_between = "SI08",
            volumes = "SI09", motion_covariate = "SI10", age_matched = "SI11", postnatal = "SI12",
@@ -418,7 +418,7 @@ if (RUN_QA_PLOTS) {
 
 ###############################################################################
 # 1b. FIG. 1: PARTICIPANT FLOW DIAGRAM
-#     Drawn here with grid (it replaces flowchart/make_flowchart.py): CONSORT / STROBE style, rectangular boxes, "n =" counts, a vertical main flow with
+#     Drawn here with grid (it replaced an older Python script): CONSORT / STROBE style, rectangular boxes, "n =" counts, a vertical main flow with
 #     arrows, and exclusion boxes that branch off to the side and state the reason and the numbers excluded. Counts reconcile at every step (checked).
 #     Written by show_fig() as Fig1_Flowchart.* in every format in FIG_FORMATS (7.2 in wide); with GRAYSCALE_VERSIONS also to figure/grayscale/.
 #     Edit the counts and the wording below. Counts are of participants and scans from the raw scan QA table.

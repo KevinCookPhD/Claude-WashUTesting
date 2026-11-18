@@ -1,7 +1,7 @@
 # Analysis map: which code section and which output answers which question
 
 Script: `protectTrajectories_analysis.R` (section headers are the lines starting with `# <number>.`; line numbers below are
-from the version at the time of writing and will drift, so search for the header text). Flowchart: section 1b of the R script (`flowchart/make_flowchart.py` is the older Python version and is no longer needed).
+from the version at the time of writing and will drift, so search for the header text). Flowchart: section 1b of the R script.
 Draft captions: `figure_captions_draft.md`.
 
 **Output naming** (files are written to `figure/` when `SAVE_FIGS` / `SAVE_TABLES` are on):
