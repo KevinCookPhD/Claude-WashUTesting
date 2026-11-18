@@ -217,10 +217,16 @@ show_fig <- function(file, w, h, draw, res = 600, save = SAVE_FIGS, dir = figure
 # copy of the TIFF, <name>_grayscale.tiff (8-bit grayscale, ITU-R 601 luma, 600 dpi tag, LZW). Nothing outside that folder is written or replaced.
 # cue_col: fetal and preterm colors for the bars of Fig. 2C, separated in brightness (about 24% vs. 57% luma) so they stay apart in grayscale.
 cue_col <- c(fetal = "#a3101f", preterm = "#5a9be8")
-# Fig. 4 cues: line styles for the preterm groups (EPT dotted, VPT dashed, MPT solid; the colors stay) and lobe colors separated in brightness
-# (luma about 23 / 88 / 64 / 42% for frontal / temporal / parietal / occipital) for the nodes and the lobe key of panel A.
-cue_ltys     <- c(EPT = "dotted", VPT = "dashed", MPT = "solid")
-lobe_pal_cue <- c(Frontal = "#9e0b35", Temporal = "#ffe08a", Parietal = "#2fdcaa", Occipital = "#118ab2")
+# Lobe colors for the cue versions: the same hue families (pink, yellow, green, blue) on a light-to-dark ladder, so lobes stay apart in grayscale:
+# luma about 88% temporal (light yellow), 66% frontal (pink), 45% parietal (green), 22% occipital (deep blue). Used for the lobe sidebars and chord sectors
+# of Figs. 2 and 3, the strip of Fig. 2C, and the nodes and key of Fig. 4A.
+lobe_pal_cue <- c(Frontal = "#f4849e", Temporal = "#ffdf95", Parietal = "#05a97e", Occipital = "#09495e")
+# Fig. 4 B and C cues: the preterm groups keep their blue family but are spread in brightness (luma about 38% EPT, 62% VPT, 16% MPT), with a different line
+# pattern each: EPT short dashes, VPT long dashes, MPT solid. Lines are a little thicker, and only the solid MPT line keeps a white halo (a halo under a
+# dashed line would cut white gaps through the points and the other lines).
+cols_pt_cue  <- c(EPT = "#0d8294", VPT = "#73a6e4", MPT = "#0b2e5b")
+cue_ltys     <- c(EPT = "22", VPT = "73", MPT = "solid")
+cue_line_w   <- 1.1
 cue_lines    <- FALSE        # TRUE only while the cue version of Fig. 4 B and C is being built (read by edge_plot and pt_legend_plot)
 make_gray_tiff <- function(from, to) {
   # 1. the magick package (install.packages("magick"); it bundles ImageMagick on Windows and macOS), 2. Python with Pillow, else a message.
@@ -1082,9 +1088,6 @@ tri_heat <- function(keep, ramp, lim = heat_lim, margin_pt = c(8, 8, 46, 50)) {
 }
 p_tri_fetal   <- tri_heat(cp$B < 0 & cp$pAdj < .05, pal$heat_fetal)
 p_tri_preterm <- tri_heat(cp$B > 0 & cp$pAdj < .05, pal$heat_preterm)
-# Cue version (flag GRAYSCALE_VERSIONS): a fetal ramp matched in brightness to the preterm ramp at its low, mid and high ends (luma 87 / 42 / 19%), so the same beta
-# is equally dark in A and B once printed in grayscale. (The standard red ramp is a few points darker than the blue one at every level.)
-p_tri_fetal_cue <- tri_heat(cp$B < 0 & cp$pAdj < .05, c("#f9d4d1", "#d83b48", "#741119"))
 show_fig("Fig2_part_MatrixFetal",   6, 6, function() print(p_tri_fetal))
 show_fig("Fig2_part_MatrixPreterm", 6, 6, function() print(p_tri_preterm))
 
@@ -1310,14 +1313,25 @@ if (RUN_FIG2_ASSEMBLY && all(vapply(c("ragg", "png"), requireNamespace, NA, quie
     txt("C", xc + 0.1, 0.05 + 2 * box_h + fig2_gap_in - 0.08, fig2_letter_pt, just = c("left", "top"))
   }
   show_fig("Fig2_FetalVsPreterm", W2, H2, draw_fig2, save = TRUE)   # always written to file: drawing this many large pictures in the RStudio plot pane times out
-  if (GRAYSCALE_VERSIONS) {                      # same figure with the panel C bars separated in brightness; A and B are unchanged. draw_fig2 reads hm, homo_w, right_w and W2 when it runs
-    hm_std <- hm; mx_std <- mx; ch_std <- ch
-    hm     <- trim_white(render_piece(function() print(p_homo_cue), 6.2, 10))
-    mx     <- trim_white(list(render_piece(function() print(p_tri_preterm), 6, 6), render_piece(function() print(p_tri_fetal_cue), 6, 6)))   # fetal matrix on the brightness-matched ramp
-    ch     <- trim_white(list(render_piece(function() draw_chord(chord_col_preterm), 9, 9), render_piece(function() draw_chord(chord_col_fetal_cue), 9, 9)))   # fetal chords matched in brightness
+  if (GRAYSCALE_VERSIONS) {
+    # Cue version: lobe colors on the light-to-dark ladder (lobe_pal_cue) on the matrix sidebars, chord sectors and the strip of panel C; the fetal matrix ramp
+    # and chords matched in brightness to the preterm ones (luma 87 / 42 / 19%); panel C fetal bars darker and preterm bars lighter. draw_fig2 reads hm, mx, ch,
+    # homo_w, right_w when it runs, so they are swapped here and restored afterwards.
+    hm_std <- hm; mx_std <- mx; ch_std <- ch; lobe_std <- lobe_pal; roi_std <- roiColor
+    lobe_pal <- lobe_pal_cue
+    roiColor <- unlist(lapply(names(lobe_rois), function(l)
+      setNames(rep(lobe_pal[[l]], 2 * length(lobe_rois[[l]])), c(paste0(lobe_rois[[l]], "-L"), paste0(lobe_rois[[l]], "-R")))))
+    p_tri_preterm_c <- tri_heat(cp$B > 0 & cp$pAdj < .05, pal$heat_preterm)
+    p_tri_fetal_c   <- tri_heat(cp$B < 0 & cp$pAdj < .05, c("#f9d4d1", "#d83b48", "#741119"))
+    p_homo_c <- suppressMessages(p_homo_cue + annotate("rect", xmin = strip_left, xmax = strip_right, ymin = strip_ymin, ymax = strip_ymax,
+                                                       fill = unname(lobe_pal_cue[homo_runs$values])))      # redraws the lobe strip in the cue colors
+    hm <- trim_white(render_piece(function() print(p_homo_c), 6.2, 10))
+    mx <- trim_white(list(render_piece(function() print(p_tri_preterm_c), 6, 6), render_piece(function() print(p_tri_fetal_c), 6, 6)))
+    ch <- trim_white(list(render_piece(function() draw_chord(chord_col_preterm), 9, 9), render_piece(function() draw_chord(chord_col_fetal_cue), 9, 9)))
     homo_w <- homo_h * asp(hm); right_w <- homo_w + 2 * fig2_pad_in; W2c <- left_w + fig2_gap_in + right_w + 0.1
     show_fig_cues("Fig2_FetalVsPreterm", W2c, H2, draw_fig2)
-    hm <- hm_std; mx <- mx_std; ch <- ch_std; homo_w <- homo_h * asp(hm); right_w <- homo_w + 2 * fig2_pad_in          # restore the standard values
+    hm <- hm_std; mx <- mx_std; ch <- ch_std; lobe_pal <- lobe_std; roiColor <- roi_std
+    homo_w <- homo_h * asp(hm); right_w <- homo_w + 2 * fig2_pad_in          # restore the standard values
   }
 }
 
@@ -1640,11 +1654,11 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
                  color = "transparent", stroke = 0, alpha = pt_alpha)
     if (show_ci) p <- p + geom_ribbon(data = dl, aes(ScanPMA, ymin = lo, ymax = hi, fill = BirthCat), alpha = .15)
     p +
-      geom_line(data = dl, aes(ScanPMA, val, group = BirthCat), color = "#ffffff", linewidth = line_w + halo_w) +
-      (if (cue_lines) geom_line(data = dl, aes(ScanPMA, val, color = BirthCat, linetype = BirthCat), linewidth = line_w)
+      geom_line(data = if (cue_lines) dl[dl$BirthCat == "MPT", ] else dl, aes(ScanPMA, val, group = BirthCat), color = "#ffffff", linewidth = (if (cue_lines) cue_line_w else line_w) + halo_w) +
+      (if (cue_lines) geom_line(data = dl, aes(ScanPMA, val, color = BirthCat, linetype = BirthCat), linewidth = cue_line_w)
        else           geom_line(data = dl, aes(ScanPMA, val, color = BirthCat), linewidth = line_w)) +
-      scale_color_manual(values = cols_pt, labels = grp_labels) +
-      scale_fill_manual(values = cols_pt, labels = grp_labels) +
+      scale_color_manual(values = if (cue_lines) cols_pt_cue else cols_pt, labels = grp_labels) +
+      scale_fill_manual(values = if (cue_lines) cols_pt_cue else cols_pt, labels = grp_labels) +
       (if (cue_lines) scale_linetype_manual(values = cue_ltys, labels = grp_labels) else NULL) +
       scale_x_continuous(breaks = xbreaks) +
       scale_y_continuous(breaks = scales::breaks_width(0.5)) +
@@ -1672,12 +1686,12 @@ make_panel_b <- function(edges, ncol = panel_ncol_split, data = pt, xlim = c(24,
 pt_legend_plot <- function() {
   d <- data.frame(g = factor(rep(names(cols_pt), each = 2), levels = names(cols_pt)), x = rep(1:2, 3), y = 1)
   p <- ggplot(d, aes(x, y, color = g, group = g)) +
-    (if (cue_lines) geom_line(aes(linetype = g), linewidth = line_w) else geom_line(linewidth = line_w)) + geom_point(size = 2.2) +   # key = line with a dot (dots are scans, lines are model fits)
-    scale_color_manual(values = cols_pt, labels = grp_labels, name = NULL) +
+    (if (cue_lines) geom_line(aes(linetype = g), linewidth = cue_line_w) else geom_line(linewidth = line_w)) + geom_point(size = 2.2) +   # key = line with a dot (dots are scans, lines are model fits)
+    scale_color_manual(values = if (cue_lines) cols_pt_cue else cols_pt, labels = grp_labels, name = NULL) +
     (if (cue_lines) scale_linetype_manual(values = cue_ltys, labels = grp_labels, name = NULL) else NULL) +
     guides(color = guide_legend(ncol = 1, byrow = TRUE, override.aes = list(linewidth = 1.4, size = 2.2))) +
     theme_void() + theme(legend.position = "left", legend.text = element_text(size = legend_text_size, color = "#000000"),
-                         legend.key.width = unit(0.45, "in"), legend.key.height = unit(0.24, "in"),
+                         legend.key.width = unit(if (cue_lines) 0.8 else 0.45, "in"), legend.key.height = unit(0.24, "in"),
                          legend.background = element_rect(color = "#000000", fill = "#ffffff", linewidth = 0.3),   # box around the legend
                          legend.margin = margin(7, 10, 7, 10))
   ggpubr::as_ggplot(ggpubr::get_legend(p))
@@ -4253,10 +4267,11 @@ if (RUN_TWO_GROUP_INTERACTION) {
   cp_int <- cp; cp_int$B <- res_two$int_b; cp_int$pAdj <- res_two$int_pAdj
   tri_int <- tri_heat                                                              # tri_heat, reading the signed interaction coefficients (abs() switched off in this copy)
   environment(tri_int) <- list2env(list(cp = cp_int, abs = function(x) x), parent = environment(tri_heat))
-  pM <- suppressMessages(tri_int(sig4, pal$heat_preterm, lim = 0.6) +          # lim here only feeds the scale that is replaced just below (its breaks need lim >= 0.1)
+  build_pM <- function() suppressMessages(tri_int(sig4, pal$heat_preterm, lim = 0.6) +          # lim here only feeds the scale that is replaced just below (its breaks need lim >= 0.1)
     scale_fill_gradient2(low = col_fetal, mid = "white", high = col_preterm, midpoint = 0, limits = c(-fig3_cap, fig3_cap), oob = scales::squish,
                          breaks = seq(-fig3_cap, fig3_cap, length.out = 5), labels = function(x) sprintf("%.2f", x)) +
     labs(fill = "Slope"))
+  pM <- build_pM()
   dir_cols4 <- c("Preterm slope steeper" = col_preterm, "Fetal slope steeper" = col_fetal)
   lim_s <- ceiling(max(abs(c(res_two$slope_fetal, res_two$slope_preterm)), na.rm = TRUE) * 100) / 100
   fig3B_xlim <- c(-0.05, 0.035); fig3B_ylim <- c(-0.03, 0.055)      # axis limits of panel B (Fisher z per week); same span on both axes so the plot stays square. Data: fetal slopes -0.047 to 0.028, preterm -0.018 to 0.051
@@ -4278,7 +4293,8 @@ if (RUN_TWO_GROUP_INTERACTION) {
   if (GRAYSCALE_VERSIONS) {
     # Cue version: in A, the cells where the fetal slope is steeper (negative slope difference) get a black outline, so the sign reads without color;
     # in B, those points are triangles and the preterm-steeper points are circles. Colors are as in the standard figure.
-    pM_cue <- suppressMessages(pM + geom_tile(data = function(d) d[d$beta < 0, ], aes(x, y), fill = NA, color = "#000000", linewidth = 0.25, width = 1, height = 1))
+    lobe_std <- lobe_pal; lobe_pal <- lobe_pal_cue; pM_c <- build_pM(); lobe_pal <- lobe_std                 # the matrix with the cue lobe colors on its sidebars
+    pM_cue <- suppressMessages(pM_c + geom_tile(data = function(d) d[d$beta < 0, ], aes(x, y), fill = NA, color = "#000000", linewidth = 0.25, width = 1, height = 1))
     pD_cue <- ggplot(res_two, aes(slope_fetal, slope_preterm)) +
       geom_hline(yintercept = 0, linewidth = 0.3) + geom_vline(xintercept = 0, linewidth = 0.3) + geom_abline(linetype = "dashed", linewidth = 0.3) +
       geom_point(color = "#d9d9d9", size = 0.5, alpha = 0.6, stroke = 0) +
