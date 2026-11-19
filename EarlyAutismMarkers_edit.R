@@ -2882,7 +2882,8 @@ subset(fetalMatched, mchat_result=='Fail')$longID[!c(subset(fetalMatched, mchat_
 tableAgeCenter <- NULL
 
 # The anterior fusiform pair: the script's label file puts the LEFT region at position 15 and the RIGHT at 16 ('script'); Table S1 and S4 had them the other way
-# round ('S1'). Check which is right (see the hemisphere check), and set this once it is settled.
+# round ('S1'). DECIDED: the script's labels are used ('script'), as in Table 2, so the significant anterior fusiform effect is on the RIGHT. Table S1 and S4 follow.
+# (Not checked against the segmentation images; set 'S1' only to reproduce the old S1/S4 labels.)
 fusiformPair <- 'script'
 
 # The regions at positions 44 and 45 (the script's Lentiform_R and Lentiform_L) are called 'Pallidum' in every table (Table S1 used to say 'Putamen').
@@ -2949,7 +2950,7 @@ if (any(regionAudit$HemisphereAgrees %in% FALSE)) {
   message('REGION LABELS: the hemisphere in the table name disagrees with the script column name for position(s) ', paste(which(regionAudit$HemisphereAgrees %in% FALSE), collapse = ', '),
           ' (see manuscript_regional_label_audit). Resolve this before using the tables.')
 }
-message('The anterior fusiform hemisphere is not yet verified against the segmentation labels (fusiformPair = "', fusiformPair, '"); the tables follow that setting.')
+if (fusiformPair != 'script') { message('NOTE: fusiformPair = "', fusiformPair, '" gives the anterior fusiform the opposite hemisphere from Table 2.') }
 
 regionRows <- data.frame(Number = seq_along(regionNames), Region = regionNames, regionalLowRef, stringsAsFactors = FALSE)
 shortName <- function(x) gsub('\\(Right\\)', '(R)', gsub('\\(Left\\)', '(L)', x))
