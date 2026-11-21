@@ -72,7 +72,7 @@ library(ggpubr)     # ggarrange() for the multi-panel Fig. 4B
 ## ---- Switches --------------------------------------------------------------
 SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
 FIG_FORMATS               <- c("tiff", "svg", "pdf", "eps")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf","eps" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
-GRAYSCALE_VERSIONS        <- FALSE  # TRUE: ALSO write the figures with non-color cues (marker shapes, outlines, brightness-separated colors) to <figureDir>/grayscale/, as <name>_color.* (for online) and <name>_grayscale.tiff (for print). The standard figure files are not touched. The grayscale TIFF needs the magick package or Python with Pillow
+GRAYSCALE_VERSIONS        <- FALSE  # TRUE: ALSO write each figure, in every format in FIG_FORMATS (tiff, svg, pdf, eps), with non-color cues, to <figureDir>/grayscale/: <name>_color.* (for online) and <name>_grayscale.* (for print). Standard figure files are not touched. Grayscale TIFF: magick package (or Python + Pillow); grayscale PDF/EPS: Ghostscript if installed, otherwise R's grayscale devices
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_FLOWCHART            <- TRUE   # Fig. 1 participant flow diagram (section 1b; counts are typed in there)
@@ -249,12 +249,54 @@ make_gray_tiff <- function(from, to) {
   message("Grayscale TIFF NOT written for ", basename(from), ". Install the magick package (install.packages('magick')) and rerun, or run: python3 make_print_gray.py ", dirname(from))
   invisible(FALSE)
 }
+# Grayscale copies of the vector formats, so the grayscale folder holds the same formats as the color one:
+#   svg : every #rrggbb colour in the file is replaced by its gray (ITU-R 601 luma); the text, shapes and embedded images are unchanged.
+#   pdf : Ghostscript converts the colour space of the PDF to DeviceGray.
+#   eps : Ghostscript writes a grayscale EPS from the color EPS (eps2write), so it keeps the same layout and embedded fonts.
+# If Ghostscript is not installed, pdf and eps are drawn again on R's own grayscale devices (pdf(colormodel = "gray") and postscript(colormodel = "gray")):
+# same figure, same layout, but translucent points are drawn opaque in the EPS fallback. Install Ghostscript for the best grayscale EPS.
+gs_exe <- function() { g <- unname(Sys.which(c("gs", "gswin64c", "gswin32c"))); g <- g[nzchar(g)]; if (length(g)) g[1] else NA_character_ }
+gray_svg <- function(from, to) {
+  x <- paste(readLines(from, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  m <- gregexpr("#[0-9A-Fa-f]{6}", x)
+  cols <- regmatches(x, m)[[1]]
+  if (length(cols)) {
+    rgb  <- t(vapply(cols, function(h) strtoi(c(substr(h, 2, 3), substr(h, 4, 5), substr(h, 6, 7)), 16L), numeric(3)))
+    g    <- as.integer(round(0.299 * rgb[, 1] + 0.587 * rgb[, 2] + 0.114 * rgb[, 3]))
+    regmatches(x, m) <- list(sprintf("#%02x%02x%02x", g, g, g))
+  }
+  writeLines(x, to, useBytes = TRUE)
+  invisible(file.exists(to))
+}
+gray_gs <- function(from, to, device) {
+  gs <- gs_exe(); if (is.na(gs)) return(FALSE)
+  out <- suppressWarnings(system2(gs, c("-q", "-dNOSAFER", "-dBATCH", "-dNOPAUSE", paste0("-sDEVICE=", device),
+                                        "-dProcessColorModel=/DeviceGray", "-sColorConversionStrategy=Gray",
+                                        paste0("-sOutputFile=", to), from), stdout = TRUE, stderr = TRUE))
+  ok <- file.exists(to) && file.size(to) > 0
+  if (!ok) message("Grayscale ", device, " not written for ", basename(from), ": ", paste(out, collapse = " "))
+  ok
+}
+gray_draw <- function(draw, to, w, h, fmt) {          # no Ghostscript: draw the figure on R's grayscale devices (R converts the colors)
+  if (fmt == "pdf") grDevices::pdf(to, width = w, height = h, colormodel = "gray")
+  else grDevices::postscript(to, width = w, height = h, onefile = FALSE, horizontal = FALSE, paper = "special", colormodel = "gray")
+  tryCatch(draw(), finally = grDevices::dev.off())
+  invisible(file.exists(to))
+}
 show_fig_cues <- function(file, w, h, draw, res = 600) {
   if (!GRAYSCALE_VERSIONS) return(invisible(NULL))
   gdir <- file.path(figureDir, "grayscale"); dir.create(gdir, showWarnings = FALSE, recursive = TRUE)
   nm <- tools::file_path_sans_ext(file)
   show_fig(paste0(nm, "_color"), w, h, draw, res = res, save = TRUE, dir = gdir, formats = union(FIG_FORMATS, "tiff"))
-  make_gray_tiff(file.path(gdir, paste0(nm, "_color.tiff")), file.path(gdir, paste0(nm, "_grayscale.tiff")))
+  base_c <- file.path(gdir, paste0(nm, "_color")); base_g <- file.path(gdir, paste0(nm, "_grayscale"))
+  make_gray_tiff(paste0(base_c, ".tiff"), paste0(base_g, ".tiff"))
+  if (file.exists(paste0(base_c, ".svg"))) gray_svg(paste0(base_c, ".svg"), paste0(base_g, ".svg"))
+  if (file.exists(paste0(base_c, ".pdf")) && !gray_gs(paste0(base_c, ".pdf"), paste0(base_g, ".pdf"), "pdfwrite"))
+    gray_draw(draw, paste0(base_g, ".pdf"), w, h, "pdf")
+  if (file.exists(paste0(base_c, ".eps")) && !gray_gs(paste0(base_c, ".eps"), paste0(base_g, ".eps"), "eps2write"))
+    gray_draw(draw, paste0(base_g, ".eps"), w, h, "eps")
+  if (file.exists(paste0(base_c, ".png"))) make_gray_tiff(paste0(base_c, ".png"), paste0(base_g, ".png"))
+  invisible(NULL)
 }
 
 # Trims the white border off a picture (a height x width x 3 array from png::readPNG), keeping m px of white.
