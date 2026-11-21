@@ -74,6 +74,7 @@ SAVE_FIGS                 <- FALSE  # TRUE: write figure files to figureDir
 FIG_FORMATS               <- c("tiff", "svg", "pdf", "eps")   # formats written when SAVE_FIGS is TRUE: any of "tiff","png","svg","pdf","eps" (TIFF/PNG are written at 600 dpi: `res` in show_fig)
 GRAYSCALE_VERSIONS        <- FALSE  # TRUE: ALSO write each figure, in every format in FIG_FORMATS (tiff, svg, pdf, eps), with non-color cues, to <figureDir>/grayscale/: <name>_color.* (for online) and <name>_grayscale.* (for print). Standard figure files are not touched. Grayscale TIFF: magick package (or Python + Pillow); grayscale PDF/EPS: Ghostscript if installed, otherwise R's grayscale devices
 SAVE_TABLES               <- FALSE  # TRUE: write .csv result tables to figureDir
+P_FORMAT                  <- "journal"  # how p-values are written in the tables: "journal" = 2 significant figures, "<0.0001" below that (Tables 2 and 3 and every SI table); "apa" = the earlier format, ".034" and "<.001" in Tables 2 and 3, SI tables left numeric; "raw" = no formatting anywhere (numeric, full precision)
 RUN_QA_PLOTS              <- TRUE   # scan-QA figures (section 1)
 RUN_FLOWCHART            <- TRUE   # Fig. 1 participant flow diagram (section 1b; counts are typed in there)
 RUN_HARMONIZATION_CHECKS  <- TRUE   # scanner effect / PCA / PMA preservation (section 2)
@@ -321,7 +322,11 @@ trim_white <- function(im, m = 6, thr = .99) {
 
 # p-value formatting for tables: "<.001" or ".034"
 # p-values in tables: two significant figures, and "<0.0001" below that (journal format); NA stays NA
-fmt_p <- function(p) ifelse(is.na(p), NA_character_, ifelse(p < 0.0001, "<0.0001", formatC(signif(p, 2), format = "fg", digits = 2, flag = "#")))
+fmt_p <- function(p) {
+  if (P_FORMAT == "raw") return(p)                                                                                                     # numeric, as computed
+  if (P_FORMAT == "apa") return(ifelse(is.na(p), NA_character_, ifelse(p < .001, "<.001", sub("^0", "", sprintf("%.3f", p)))))         # the earlier format: .034, <.001
+  ifelse(is.na(p), NA_character_, ifelse(p < 0.0001, "<0.0001", formatC(signif(p, 2), format = "fg", digits = 2, flag = "#")))        # journal: 2 significant figures
+}
 # TRUE for a numeric column of p-values, judged by its name ("p", "pAdj", "FDR p", "int_p", "joint_pAdj", "Holm p", ...) and range [0, 1];
 # counts such as "FDR p < .05" are excluded.
 is_pcol <- function(nm, x) {
@@ -348,7 +353,7 @@ SI_ID <- c(usable_scans = "SI01", mean_matrices = "SI02", harmonization = "SI03"
 si_name  <- function(x) gsub("(^|_)([a-z])", "\\1\\U\\2", x, perl = TRUE)          # clinicalCutoffs_summary -> ClinicalCutoffs_Summary
 si_table <- function(df, key, name) {
   df <- as.data.frame(df)
-  if (!grepl("AllEdges", name))                                                                    # the full edge-wise files keep numeric p-values (they are data files)
+  if (P_FORMAT == "journal" && !grepl("AllEdges", name))                                                                    # the full edge-wise files keep numeric p-values (they are data files)
     for (j in seq_along(df)) if (is_pcol(names(df)[j], df[[j]])) df[[j]] <- fmt_p(df[[j]])      # other tables: p-values to 2 significant figures, <0.0001
   if (SAVE_TABLES) write.csv(df, file.path(figureDir, paste0(SI_ID[[key]], "_Table_", si_name(name), ".csv")), row.names = FALSE)
   invisible(df)

@@ -104,6 +104,7 @@ Slow steps (the interaction, spline and motion models, and the three permutation
 ## Where to change things
 
 - Switches for every analysis (`RUN_*`, `SAVE_FIGS`, `SAVE_TABLES`, `FIG_FORMATS`): top of section 0.
+- p-value format in the tables: `P_FORMAT` (section 0). "journal" = 2 significant figures and "<0.0001" (Tables 2 and 3 and every SI table); "apa" = the earlier format (".034", "<.001" in Tables 2 and 3, SI tables numeric); "raw" = numeric, full precision, everywhere. The `Data_*` and `*AllEdges*` files are always numeric.
 - Birth-group rule: `birth_cat()` in section 0 (EPT <= 28, VPT > 28 to <= 32, MPT > 32).
 - Inclusion rule (4 minutes of data: 120 volumes at TR 2 s, 80 at TR 3 s): section 1 (`good4Min`, preterm scans) and the fetal controls in section 2; the flowchart script (`QA_REASON_*`) states it.
 - Clinical data for Table 1: `clin_file` in section 3d (workbook `2026-08-03_KC_fetal_preterm.xlsx`).
