@@ -278,8 +278,15 @@ gray_gs <- function(from, to, device) {
   ok
 }
 gray_draw <- function(draw, to, w, h, fmt) {          # no Ghostscript: draw the figure on R's grayscale devices (R converts the colors)
-  if (fmt == "pdf") grDevices::pdf(to, width = w, height = h, colormodel = "gray")
-  else grDevices::postscript(to, width = w, height = h, onefile = FALSE, horizontal = FALSE, paper = "special", colormodel = "gray")
+  # These devices only know the standard PostScript fonts, so a figure that names a system font (the flowchart uses Arial, or Liberation Sans) would fail:
+  # alias those names to Helvetica, which has the same metrics.
+  fams <- unique(c("Arial", "Liberation Sans", "Nimbus Sans", if (exists("fc_family")) fc_family))
+  for (fam in fams) {
+    if (is.null(grDevices::pdfFonts()[[fam]]))        do.call(grDevices::pdfFonts,        setNames(list(grDevices::pdfFonts()$Helvetica), fam))
+    if (is.null(grDevices::postscriptFonts()[[fam]])) do.call(grDevices::postscriptFonts, setNames(list(grDevices::postscriptFonts()$Helvetica), fam))
+  }
+  if (fmt == "pdf") grDevices::pdf(to, width = w, height = h, colormodel = "gray", fonts = fams)
+  else grDevices::postscript(to, width = w, height = h, onefile = FALSE, horizontal = FALSE, paper = "special", colormodel = "gray", fonts = fams)
   tryCatch(draw(), finally = grDevices::dev.off())
   invisible(file.exists(to))
 }
